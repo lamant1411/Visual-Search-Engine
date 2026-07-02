@@ -1,36 +1,38 @@
-import { createBrowserRouter } from 'react-router'
+import { createBrowserRouter, RouterProvider, Navigate } from 'react-router';
+import { AppShell } from '@/components/layout/AppShell';
+import { AdminShell } from '@/components/layout/AdminShell';
+// import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
+// import { AdminGuard } from '@/components/layout/AdminGuard';
 
-import { AppShell } from '../components/layout/AppShell'
-
-export const router = createBrowserRouter([
+const router = createBrowserRouter([
   {
-    path: '/',
-    element: <AppShell />,
+    element: <AppShell />, // Header only
     children: [
-    //   {
-    //     index: true,
-    //     element: <SearchPage />,
-    //   },
-    //   {
-    //     path: 'search',
-    //     element: <SearchPage />,
-    //   },
-    //   {
-    //     path: 'history',
-    //     element: <SearchHistoryPage />,
-    //   },
-    //   {
-    //     path: 'admin',
-    //     element: <AdminDashboardPage />,
-    //   },
+      // "/" chưa có page riêng -> tự chuyển hướng sang /search
+      { index: true, element: <Navigate to="/search" replace /> },
+      { path: '/login', element: <div>Login page</div> },
+      { path: '/register', element: <div>Register page</div> },
+      { path: '/search', element: <div>Search page</div> },
+      {
+        path: '/history',
+        element: <div>History page</div>,
+        // element: <ProtectedRoute><HistoryPage /></ProtectedRoute>, // bật sau khi có AuthContext
+      },
     ],
   },
-//   {
-//     path: '/login',
-//     element: <LoginPage />,
-//   },
-//   {
-//     path: '/register',
-//     element: <RegisterPage />,
-//   },
-])
+  {
+    element: <AdminShell />, // Header + Sidebar
+    // element: <ProtectedRoute><AdminGuard><AdminShell /></AdminGuard></ProtectedRoute>,
+    children: [
+      { path: '/admin', element: <div>Admin overview</div> },
+      { path: '/admin/indexing', element: <div>Indexing status</div> },
+      { path: '/admin/users', element: <div>User list</div> },
+    ],
+  },
+  // Bắt mọi đường dẫn không khớp route nào ở trên (thay vì 404 mặc định của React Router)
+  { path: '*', element: <div>404 - Không tìm thấy trang</div> },
+]);
+
+export function AppRouter() {
+  return <RouterProvider router={router} />;
+}
