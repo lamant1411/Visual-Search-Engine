@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel
 
+from app.schemas.user import UserOut
+
 
 class Token(BaseModel):
     # Dạng phản hồi chuẩn cho bearer token.
@@ -11,3 +13,10 @@ class Token(BaseModel):
 
 class TokenPayload(BaseModel):
     sub: str | None = None
+
+
+class LoginResponse(BaseModel):
+    # Login trả token kèm user để FE lấy role ngay sau đăng nhập.
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut

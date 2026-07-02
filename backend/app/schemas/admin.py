@@ -4,6 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from app.schemas.common import BatchStatus
+
 
 class IndexingBatchOut(BaseModel):
     # Phản chiếu bảng indexing_batches để dashboard có thể đọc tiến độ.
@@ -11,7 +13,7 @@ class IndexingBatchOut(BaseModel):
 
     id: int
     batch_id: str
-    status: str
+    status: BatchStatus
     total_images: int
     processed_images: int
     failed_images: int

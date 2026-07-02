@@ -1,5 +1,6 @@
 from app.schemas.admin import IndexingBatchOut
-from app.schemas.auth import Token, TokenPayload
-from app.schemas.image import ImageCreate, ImageOut
-from app.schemas.search import SearchRequest, SearchType
+from app.schemas.auth import LoginResponse, Token, TokenPayload
+from app.schemas.common import BatchStatus, ImageSourceType, ImageStatus, SearchQueryType, UserRole
+from app.schemas.image import ImageCreate, ImageOut, ImageSearchRequest
+from app.schemas.search import SearchRequest, SearchResponse, SearchResultItem, SearchResultMetadata
 from app.schemas.user import UserCreate, UserOut

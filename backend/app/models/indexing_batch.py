@@ -2,10 +2,11 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, Text, func
+from sqlalchemy import DateTime, Enum as SAEnum, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.schemas.common import BatchStatus
 
 
 class IndexingBatch(Base):
@@ -14,7 +15,11 @@ class IndexingBatch(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     batch_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="queued")
+    status: Mapped[BatchStatus] = mapped_column(
+        SAEnum(BatchStatus, name="batch_status", native_enum=False, create_constraint=True),
+        nullable=False,
+        default=BatchStatus.queued,
+    )
     total_images: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     processed_images: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     failed_images: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
