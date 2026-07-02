@@ -2,7 +2,6 @@
 
 from datetime import datetime
 
-from fastapi import UploadFile
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 from app.schemas.common import ImageSourceType, ImageStatus
@@ -30,11 +29,9 @@ class ImageOut(ImageCreate):
     updated_at: datetime | None = None
 
 
-class ImageSearchRequest(BaseModel):
-    # File upload sẽ được nhận bằng multipart/form-data ở endpoint.
-    model_config = ConfigDict(arbitrary_types_allowed=True, populate_by_name=True)
+class ImageSearchParams(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
 
-    file: UploadFile | None = None
     image_id: int | None = None
     image_url: HttpUrl | None = Field(default=None, alias="imageUrl")
     page: int = 1
