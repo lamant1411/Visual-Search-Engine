@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router'
 import { Input } from '@/components/base/input'
 import { Button } from '@/components/base/button'
 import { AuthCard } from '@/components/feature/auth/AuthCard'
+import { useAuth } from '@/contexts/AuthContext'
 
 // ---- Icons ----
 
@@ -96,6 +97,7 @@ interface RegisterErrors {
 
 export default function RegisterPage() {
   const navigate = useNavigate()
+  const { login } = useAuth()
   const [form, setForm] = useState<RegisterForm>({
     fullName: '',
     email: '',
@@ -147,9 +149,19 @@ export default function RegisterPage() {
 
     setLoading(true)
     try {
-      // TODO: gọi API register thực tế
+      // TODO: thay bằng API call thực tế, ví dụ:
+      // const res = await apiClient.post('/auth/register', { fullName: form.fullName, email: form.email, password: form.password })
+      // login({ accessToken: res.data.accessToken, refreshToken: res.data.refreshToken, user: res.data.user })
+
+      // --- Mock (xoá khi có API) ---
       await new Promise(r => setTimeout(r, 1200))
-      navigate('/login')
+      login({
+        accessToken: 'mock-jwt-token',
+        user: { id: '1', email: form.email, fullName: form.fullName, role: 'user' },
+      })
+      // --- End mock ---
+
+      navigate('/search') // auto-login sau khi đăng ký
     } catch {
       setErrors({ general: 'Đã xảy ra lỗi. Vui lòng thử lại sau.' })
     } finally {

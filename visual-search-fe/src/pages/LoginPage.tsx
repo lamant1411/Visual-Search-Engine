@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router'
 import { Input } from '@/components/base/input'
 import { Button } from '@/components/base/button'
 import { AuthCard } from '@/components/feature/auth/AuthCard'
+import { useAuth } from '@/contexts/AuthContext'
 
 // ---- icons (inline SVG nhỏ gọn, không cần thư viện) ----
 
@@ -62,6 +63,7 @@ interface LoginErrors {
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const { login } = useAuth()
   const [form, setForm] = useState<LoginForm>({ email: '', password: '' })
   const [errors, setErrors] = useState<LoginErrors>({})
   const [showPassword, setShowPassword] = useState(false)
@@ -98,8 +100,14 @@ export default function LoginPage() {
 
     setLoading(true)
     try {
-      // TODO: gọi API login thực tế
+      // --- Mock (xoá khi có API) ---
       await new Promise(r => setTimeout(r, 1200))
+      login({
+        accessToken: 'mock-jwt-token',
+        user: { id: '1', email: form.email, fullName: 'User', role: 'user' },
+      })
+      // --- End mock ---
+
       navigate('/search')
     } catch {
       setErrors({ general: 'Email hoặc mật khẩu không đúng. Vui lòng thử lại.' })
