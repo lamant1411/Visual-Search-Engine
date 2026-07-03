@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useLocation } from 'react-router'
 import { Input } from '@/components/base/input'
 import { Button } from '@/components/base/button'
 import { AuthCard } from '@/components/feature/auth/AuthCard'
@@ -63,7 +63,10 @@ interface LoginErrors {
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { login } = useAuth()
+  // Nếu user bị redirect từ ProtectedRoute, lấy URL cũ để quay lại sau khi login
+  const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? '/search'
   const [form, setForm] = useState<LoginForm>({ email: '', password: '' })
   const [errors, setErrors] = useState<LoginErrors>({})
   const [showPassword, setShowPassword] = useState(false)
@@ -108,7 +111,7 @@ export default function LoginPage() {
       })
       // --- End mock ---
 
-      navigate('/search')
+      navigate(from, { replace: true })
     } catch {
       setErrors({ general: 'Email hoặc mật khẩu không đúng. Vui lòng thử lại.' })
     } finally {

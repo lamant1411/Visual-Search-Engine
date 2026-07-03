@@ -2,43 +2,54 @@ import { createBrowserRouter, RouterProvider, Navigate } from 'react-router';
 import { AppShell } from '@/components/layout/AppShell';
 import { AdminShell } from '@/components/layout/AdminShell';
 import { AuthShell } from '@/components/layout/AuthShell';
+import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
+import { GuestRoute } from '@/components/layout/GuestRoute';
+import { AdminGuard } from '@/components/layout/AdminGuard';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
-// import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
-// import { AdminGuard } from '@/components/layout/AdminGuard';
 
 const router = createBrowserRouter([
-  // ── Auth routes (no Header) ──────────────────────────────────────
+  // ── Auth routes: chỉ dành cho khách chưa login ───────────────────
   {
-    element: <AuthShell />,
+    element: <GuestRoute />,      // redirect về /search nếu đã login
     children: [
-      { path: '/login', element: <LoginPage /> },
-      { path: '/register', element: <RegisterPage /> },
-    ],
-  },
-
-  // ── App routes (with Header) ─────────────────────────────────────
-  {
-    element: <AppShell />,
-    children: [
-      { index: true, element: <Navigate to="/search" replace /> },
-      { path: '/search', element: <div>Search page</div> },
       {
-        path: '/history',
-        element: <div>History page</div>,
-        // element: <ProtectedRoute><HistoryPage /></ProtectedRoute>,
+        element: <AuthShell />,   // layout nền tím, không Header
+        children: [
+          { path: '/login', element: <LoginPage /> },
+          { path: '/register', element: <RegisterPage /> },
+        ],
       },
     ],
   },
 
-  // ── Admin routes (Header + Sidebar) ─────────────────────────────
+  // ── App routes: yêu cầu đăng nhập ───────────────────────────────
   {
-    element: <AdminShell />,
-    // element: <ProtectedRoute><AdminGuard><AdminShell /></AdminGuard></ProtectedRoute>,
+    element: <ProtectedRoute />,  // redirect về /login nếu chưa login
     children: [
-      { path: '/admin', element: <div>Admin overview</div> },
-      { path: '/admin/indexing', element: <div>Indexing status</div> },
-      { path: '/admin/users', element: <div>User list</div> },
+      {
+        element: <AppShell />,    // layout có Header
+        children: [
+          { index: true, element: <Navigate to="/search" replace /> },
+          { path: '/search', element: <div>Search page</div> },
+          { path: '/history', element: <div>History page</div> },
+        ],
+      },
+    ],
+  },
+
+  // ── Admin routes: yêu cầu login + role admin ─────────────────────
+  {
+    element: <AdminGuard />,      // redirect /login nếu chưa login, /search nếu không phải admin
+    children: [
+      {
+        element: <AdminShell />,  // layout có Header + Sidebar
+        children: [
+          { path: '/admin', element: <div>Admin overview</div> },
+          { path: '/admin/indexing', element: <div>Indexing status</div> },
+          { path: '/admin/users', element: <div>User list</div> },
+        ],
+      },
     ],
   },
 
