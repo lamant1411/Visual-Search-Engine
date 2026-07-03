@@ -1,9 +1,9 @@
 import { apiClient } from '@/lib/api/client'
+import { mockSearchResponse } from '@/mocks/searchMockData'
 
-import { mockSearchResponse } from '../mockData'
 import type { ImageSearchParams, SearchResponse, TextSearchParams } from '../types'
 
-const shouldUseMock = import.meta.env.VITE_ENABLE_MOCK === 'true'
+const shouldUseMock = import.meta.env.VITE_ENABLE_MOCK !== 'false'
 
 export async function searchByText(params: TextSearchParams): Promise<SearchResponse> {
   if (shouldUseMock) {

@@ -1,4 +1,4 @@
-import type { SearchResult, SearchResponse } from './types'
+import type { SearchResult, SearchResponse } from '@/features/search/types'
 
 export const mockSearchResults: SearchResult[] = [
   {
