@@ -1,10 +1,13 @@
 export type UserRole = 'user' | 'admin'
 
 export type User = {
-  id: string
+  id: number
   email: string
-  name?: string
   role: UserRole
+  isActive?: boolean
+  createdAt?: string
+  updatedAt?: string | null
+  lastLoginAt?: string | null
 }
 
 export type LoginRequest = {
@@ -19,6 +22,7 @@ export type RegisterRequest = {
 }
 
 export type AuthResponse = {
-  accessToken: string
+  access_token: string
+  token_type: 'bearer'
   user: User
 }

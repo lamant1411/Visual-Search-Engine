@@ -2,7 +2,7 @@ import type { SearchResult, SearchResponse } from './types'
 
 export const mockSearchResults: SearchResult[] = [
   {
-    id: 'img-001',
+    id: 1,
     thumbnailUrl:
       'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=480&q=80',
     imageUrl:
@@ -16,7 +16,7 @@ export const mockSearchResults: SearchResult[] = [
     },
   },
   {
-    id: 'img-002',
+    id: 2,
     thumbnailUrl:
       'https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=480&q=80',
     imageUrl:
@@ -29,7 +29,7 @@ export const mockSearchResults: SearchResult[] = [
     },
   },
   {
-    id: 'img-003',
+    id: 3,
     thumbnailUrl:
       'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=480&q=80',
     imageUrl:

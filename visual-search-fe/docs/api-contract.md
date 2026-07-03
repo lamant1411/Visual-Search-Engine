@@ -20,12 +20,16 @@ Response:
 
 ```json
 {
-  "accessToken": "jwt-token",
+  "access_token": "jwt-token",
+  "token_type": "bearer",
   "user": {
-    "id": "user-1",
+    "id": 1,
     "email": "user@example.com",
-    "name": "Demo User",
-    "role": "user"
+    "role": "user",
+    "isActive": true,
+    "createdAt": "2026-07-03T00:00:00Z",
+    "updatedAt": null,
+    "lastLoginAt": null
   }
 }
 ```
@@ -50,7 +54,9 @@ Response is the same shape as register.
 Request:
 
 - `multipart/form-data`
-- `file`: JPG, PNG, or WebP image
+- `file`: optional JPG, PNG, or WebP image
+- `image_id`: optional existing image id
+- `imageUrl`: optional remote image URL
 - `page`: optional, default `1`
 - `limit`: optional, default `20`
 
@@ -60,7 +66,7 @@ Response:
 {
   "items": [
     {
-      "id": "img-001",
+      "id": 1,
       "thumbnailUrl": "https://cdn.example.com/thumbs/img-001.jpg",
       "imageUrl": "https://cdn.example.com/images/img-001.jpg",
       "similarityScore": 94.2,

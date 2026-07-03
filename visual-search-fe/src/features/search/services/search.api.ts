@@ -10,12 +10,17 @@ export async function searchByText(params: TextSearchParams): Promise<SearchResp
     return mockSearchResponse
   }
 
-  const response = await apiClient.get<SearchResponse>('/search/text', { params })
+  const response = await apiClient.get<SearchResponse>('/search/text', {
+    params,
+  })
+
   return response.data
 }
 
 export async function searchByImage({
   file,
+  imageId,
+  imageUrl,
   page = 1,
   limit = 20,
 }: ImageSearchParams): Promise<SearchResponse> {
@@ -23,16 +28,27 @@ export async function searchByImage({
     return mockSearchResponse
   }
 
+  if (!file && !imageId && !imageUrl) {
+    throw new Error('Image search requires file, imageId, or imageUrl.')
+  }
+
   const formData = new FormData()
-  formData.append('file', file)
+  if (file) {
+    formData.append('file', file)
+  }
+
+  if (imageId !== undefined) {
+    formData.append('image_id', String(imageId))
+  }
+
+  if (imageUrl) {
+    formData.append('imageUrl', imageUrl)
+  }
+
   formData.append('page', String(page))
   formData.append('limit', String(limit))
 
-  const response = await apiClient.post<SearchResponse>('/search/image', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  })
+  const response = await apiClient.post<SearchResponse>('/search/image', formData)
 
   return response.data
 }
