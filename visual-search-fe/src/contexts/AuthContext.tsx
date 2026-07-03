@@ -8,14 +8,15 @@ import {
   type ReactNode,
 } from 'react'
 import { saveTokens, clearTokens, getAccessToken } from '@/lib/auth/tokenStorage'
+import { authApi } from '@/lib/api/auth'
 
 // ── Types ─────────────────────────────────────────────────────────
 
+/** Khớp với response của GET /me */
 export interface AuthUser {
   id: string
   email: string
-  fullName: string
-  role: 'user' | 'admin'
+  is_active: boolean
 }
 
 interface AuthState {
@@ -26,7 +27,9 @@ interface AuthState {
 }
 
 interface LoginPayload {
+  /** access_token từ POST /login */
   accessToken: string
+  /** refresh_token từ POST /login (tuỳ chọn) */
   refreshToken?: string
   user: AuthUser
 }
@@ -34,8 +37,8 @@ interface LoginPayload {
 interface AuthContextValue extends AuthState {
   /** Gọi sau khi API trả về token thành công. */
   login: (payload: LoginPayload) => void
-  /** Xoá token khỏi localStorage và reset state. */
-  logout: () => void
+  /** Gọi POST /logout + xoá token khỏi localStorage. */
+  logout: () => Promise<void>
 }
 
 // ── Context ───────────────────────────────────────────────────────
@@ -47,18 +50,29 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [accessToken, setAccessToken] = useState<string | null>(null)
-  // isLoading = true khi đang restore session từ localStorage khi app khởi động
   const [isLoading, setIsLoading] = useState(true)
 
-  // Khi app mount: kiểm tra xem đã có token chưa để restore session
+  // Khi app mount: nếu có token trong localStorage → gọi /me để xác minh
+  // và lấy thông tin user (tránh dùng token hết hạn)
   useEffect(() => {
     const storedToken = getAccessToken()
-    if (storedToken) {
-      // Token có trong localStorage → đặt vào state
-      // TODO: tuỳ chọn gọi API /me để xác minh token còn hạn và lấy user info
-      setAccessToken(storedToken)
+    if (!storedToken) {
+      setIsLoading(false)
+      return
     }
-    setIsLoading(false)
+
+    authApi.me()
+      .then((meData) => {
+        setAccessToken(storedToken)
+        setUser(meData)
+      })
+      .catch(() => {
+        // Token không hợp lệ hoặc hết hạn → xoá đi
+        clearTokens()
+      })
+      .finally(() => {
+        setIsLoading(false)
+      })
   }, [])
 
   const login = useCallback((payload: LoginPayload) => {
@@ -67,10 +81,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(payload.user)
   }, [])
 
-  const logout = useCallback(() => {
-    clearTokens()
-    setAccessToken(null)
-    setUser(null)
+  const logout = useCallback(async () => {
+    try {
+      await authApi.logout()
+    } catch {
+      // Bỏ qua lỗi logout phía server, vẫn xoá token local
+    } finally {
+      clearTokens()
+      setAccessToken(null)
+      setUser(null)
+    }
   }, [])
 
   const value = useMemo<AuthContextValue>(

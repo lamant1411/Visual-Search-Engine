@@ -4,6 +4,7 @@ import { Input } from '@/components/base/input'
 import { Button } from '@/components/base/button'
 import { AuthCard } from '@/components/feature/auth/AuthCard'
 import { useAuth } from '@/contexts/AuthContext'
+import { authApi } from '@/lib/api/auth'
 
 // ---- icons (inline SVG nhỏ gọn, không cần thư viện) ----
 
@@ -103,13 +104,18 @@ export default function LoginPage() {
 
     setLoading(true)
     try {
-      // --- Mock (xoá khi có API) ---
-      await new Promise(r => setTimeout(r, 1200))
+      // Bước 1: lấy token
+      const tokenRes = await authApi.login({ email: form.email, password: form.password })
+
+      // Bước 2: lấy thông tin user
+      const meRes = await authApi.me()
+
+      // Bước 3: lưu vào context + localStorage
       login({
-        accessToken: 'mock-jwt-token',
-        user: { id: '1', email: form.email, fullName: 'User', role: 'user' },
+        accessToken: tokenRes.access_token,
+        refreshToken: tokenRes.refresh_token,
+        user: meRes,
       })
-      // --- End mock ---
 
       navigate(from, { replace: true })
     } catch {
