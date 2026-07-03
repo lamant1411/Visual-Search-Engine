@@ -1,27 +1,39 @@
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router';
 import { AppShell } from '@/components/layout/AppShell';
 import { AdminShell } from '@/components/layout/AdminShell';
+import { AuthShell } from '@/components/layout/AuthShell';
+import LoginPage from '@/pages/LoginPage';
+import RegisterPage from '@/pages/RegisterPage';
 // import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 // import { AdminGuard } from '@/components/layout/AdminGuard';
 
 const router = createBrowserRouter([
+  // ── Auth routes (no Header) ──────────────────────────────────────
   {
-    element: <AppShell />, // Header only
+    element: <AuthShell />,
     children: [
-      // "/" chưa có page riêng -> tự chuyển hướng sang /search
+      { path: '/login', element: <LoginPage /> },
+      { path: '/register', element: <RegisterPage /> },
+    ],
+  },
+
+  // ── App routes (with Header) ─────────────────────────────────────
+  {
+    element: <AppShell />,
+    children: [
       { index: true, element: <Navigate to="/search" replace /> },
-      { path: '/login', element: <div>Login page</div> },
-      { path: '/register', element: <div>Register page</div> },
       { path: '/search', element: <div>Search page</div> },
       {
         path: '/history',
         element: <div>History page</div>,
-        // element: <ProtectedRoute><HistoryPage /></ProtectedRoute>, // bật sau khi có AuthContext
+        // element: <ProtectedRoute><HistoryPage /></ProtectedRoute>,
       },
     ],
   },
+
+  // ── Admin routes (Header + Sidebar) ─────────────────────────────
   {
-    element: <AdminShell />, // Header + Sidebar
+    element: <AdminShell />,
     // element: <ProtectedRoute><AdminGuard><AdminShell /></AdminGuard></ProtectedRoute>,
     children: [
       { path: '/admin', element: <div>Admin overview</div> },
@@ -29,7 +41,7 @@ const router = createBrowserRouter([
       { path: '/admin/users', element: <div>User list</div> },
     ],
   },
-  // Bắt mọi đường dẫn không khớp route nào ở trên (thay vì 404 mặc định của React Router)
+
   { path: '*', element: <div>404 - Không tìm thấy trang</div> },
 ]);
 
