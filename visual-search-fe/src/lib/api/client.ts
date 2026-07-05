@@ -1,6 +1,4 @@
 import axios from 'axios'
-import { getAccessToken } from '@/lib/auth/tokenStorage'
-
 import { getAccessToken } from '@/lib/auth/authStorage'
 
 export const apiClient = axios.create({
