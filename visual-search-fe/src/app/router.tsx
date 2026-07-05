@@ -7,12 +7,20 @@ import { GuestRoute } from '@/components/layout/GuestRoute';
 import { AdminGuard } from '@/components/layout/AdminGuard';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
+import { SearchPage } from '@/features/search/pages/SearchPage';
+// import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
+// import { AdminGuard } from '@/components/layout/AdminGuard';
 
 const router = createBrowserRouter([
   // ── Auth routes: chỉ dành cho khách chưa login ───────────────────
   {
     element: <GuestRoute />,      // redirect về /search nếu đã login
     children: [
+      // "/" chưa có page riêng -> tự chuyển hướng sang /search
+      { index: true, element: <Navigate to="/search" replace /> },
+      { path: '/login', element: <div>Login page</div> },
+      { path: '/register', element: <div>Register page</div> },
+      { path: '/search', element: <SearchPage /> },
       {
         element: <AuthShell />,   // layout nền tím, không Header
         children: [
