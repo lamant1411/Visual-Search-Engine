@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr
 
 from app.schemas.common import UserRole
 
@@ -16,13 +16,18 @@ class UserCreate(UserBase):
     password: str
 
 
-class UserOut(UserBase):
+class UserResponse(UserBase):
     # from_attributes cho phép Pydantic đọc dữ liệu từ ORM SQLAlchemy.
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
+    username: str
     role: UserRole
-    is_active: bool = Field(alias="isActive")
-    created_at: datetime = Field(alias="createdAt")
-    updated_at: datetime | None = Field(default=None, alias="updatedAt")
-    last_login_at: datetime | None = Field(default=None, alias="lastLoginAt")
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime | None = None
+    last_login_at: datetime | None = None
+
+
+UserOut = UserResponse
+
