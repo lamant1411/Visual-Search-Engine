@@ -13,6 +13,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     # Mật khẩu dạng thô chỉ được nhận ở tầng API.
+    full_name: str
     password: str
 
 
@@ -22,6 +23,7 @@ class UserResponse(UserBase):
 
     id: int
     username: str
+    full_name: str
     role: UserRole
     is_active: bool
     created_at: datetime
@@ -30,4 +32,3 @@ class UserResponse(UserBase):
 
 
 UserOut = UserResponse
-

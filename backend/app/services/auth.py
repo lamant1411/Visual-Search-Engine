@@ -28,14 +28,18 @@ def _validate_password_strength(password: str) -> None:
 
 async def register_user(db: AsyncSession, payload: UserCreate) -> UserResponse:
     email = payload.email.lower().strip()
+    full_name = payload.full_name.strip()
     _validate_password_strength(payload.password)
     existing_user = await db.scalar(select(User).where(User.email == email))
     if existing_user is not None:
         raise ValueError("Email đã tồn tại")
+    if not full_name:
+        raise ValueError("Họ và tên không được để trống")
 
     user = User(
         email=email,
         username=email,
+        full_name=full_name,
         password_hash=hash_password(payload.password),
         role=UserRole.user,
     )
