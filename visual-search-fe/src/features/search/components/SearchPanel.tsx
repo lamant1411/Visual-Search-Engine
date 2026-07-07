@@ -70,7 +70,7 @@ export function SearchPanel({
 
       <div className="mt-5">
         <Button disabled={!canSearch} fullWidth leftIcon={<Search className="h-5 w-5" />} size="lg" type="submit">
-          Search mock data
+          Search
         </Button>
       </div>
     </form>

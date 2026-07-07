@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api/client'
-import { mockSearchResponse } from '@/mocks/searchMockData'
+import { createMockSearchResponse } from '@/mocks/searchMockData'
 
 import type { ImageSearchParams, SearchResponse, TextSearchParams } from '../types'
 
@@ -7,7 +7,7 @@ const shouldUseMock = import.meta.env.VITE_ENABLE_MOCK !== 'false'
 
 export async function searchByText(params: TextSearchParams): Promise<SearchResponse> {
   if (shouldUseMock) {
-    return mockSearchResponse
+    return createMockSearchResponse(params.page, params.limit)
   }
 
   const response = await apiClient.get<SearchResponse>('/search/text', {
@@ -25,7 +25,7 @@ export async function searchByImage({
   limit = 20,
 }: ImageSearchParams): Promise<SearchResponse> {
   if (shouldUseMock) {
-    return mockSearchResponse
+    return createMockSearchResponse(page, limit)
   }
 
   if (!file && !imageId && !imageUrl) {

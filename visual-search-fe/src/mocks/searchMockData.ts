@@ -1,6 +1,6 @@
 import type { SearchResult, SearchResponse } from '@/features/search/types'
 
-export const mockSearchResults: SearchResult[] = [
+const baseMockSearchResults: SearchResult[] = [
   {
     id: 1,
     thumbnailUrl:
@@ -44,9 +44,27 @@ export const mockSearchResults: SearchResult[] = [
   },
 ]
 
-export const mockSearchResponse: SearchResponse = {
-  items: mockSearchResults,
-  page: 1,
-  limit: 20,
-  total: mockSearchResults.length,
+export const mockSearchResults: SearchResult[] = Array.from({ length: 24 }, (_, index) => {
+  const baseResult = baseMockSearchResults[index % baseMockSearchResults.length]
+  const pageGroup = Math.floor(index / baseMockSearchResults.length)
+
+  return {
+    ...baseResult,
+    id: index + 1,
+    similarityScore: Math.max(62, baseResult.similarityScore - pageGroup * 4),
+  }
+})
+
+export function createMockSearchResponse(page = 1, limit = 20): SearchResponse {
+  const safePage = Math.max(1, page)
+  const safeLimit = Math.max(1, limit)
+  const start = (safePage - 1) * safeLimit
+  const end = start + safeLimit
+
+  return {
+    items: mockSearchResults.slice(start, end),
+    page: safePage,
+    limit: safeLimit,
+    total: mockSearchResults.length,
+  }
 }
