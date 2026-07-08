@@ -53,22 +53,22 @@ export interface LoginRequest {
 export const authApi = {
   /** POST /register — tạo tài khoản mới */
   register: (data: RegisterRequest) =>
-    apiClient.post<RegisterResponse>('/register', data).then(r => r.data),
+    apiClient.post<RegisterResponse>('/auth/register', data).then(r => r.data),
 
   /** POST /login — đăng nhập, trả về JWT */
   login: (data: LoginRequest) =>
-    apiClient.post<TokenResponse>('/login', data).then(r => r.data),
+    apiClient.post<TokenResponse>('/auth/login', data).then(r => r.data),
 
   /** POST /refresh — lấy access_token mới bằng refresh_token */
   refresh: (refreshToken: string) =>
     apiClient
-      .post<TokenResponse>('/refresh', { refresh_token: refreshToken })
+      .post<TokenResponse>('/auth/refresh', { refresh_token: refreshToken })
       .then(r => r.data),
 
   /** POST /logout — huỷ session phía server (nếu có) */
   logout: () =>
-    apiClient.post<{ message: string }>('/logout').then(r => r.data),
+    apiClient.post<{ message: string }>('/auth/logout').then(r => r.data),
 
   /** GET /me — lấy thông tin user hiện tại (dùng để restore session) */
-  me: () => apiClient.get<MeResponse>('/me').then(r => r.data),
+  me: () => apiClient.get<MeResponse>('/auth/me').then(r => r.data),
 }
