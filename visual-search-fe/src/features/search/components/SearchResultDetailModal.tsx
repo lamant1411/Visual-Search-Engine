@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import { ExternalLink, Info, Maximize2, X, Zap } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Check, Copy, ExternalLink, Info, Maximize2, X, Zap } from 'lucide-react'
 
 import { Button } from '@/components/base/button'
 
@@ -11,6 +11,7 @@ type SearchResultDetailModalProps = {
 }
 
 export function SearchResultDetailModal({ result, onClose }: SearchResultDetailModalProps) {
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle')
   const sizeLabel =
     result.metadata.width && result.metadata.height
       ? `${result.metadata.width} x ${result.metadata.height}`
@@ -87,7 +88,23 @@ export function SearchResultDetailModal({ result, onClose }: SearchResultDetailM
             </div>
           )}
 
-          <div className="mt-auto pt-6">
+          <div className="mt-auto space-y-3 pt-6">
+            <Button
+              fullWidth
+              leftIcon={
+                copyStatus === 'copied' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />
+              }
+              type="button"
+              variant="secondary"
+              onClick={handleCopyImageUrl}
+            >
+              {copyStatus === 'copied' ? 'Copied URL' : 'Copy image URL'}
+            </Button>
+
+            {copyStatus === 'error' && (
+              <p className="text-center text-xs font-medium text-red-600">Could not copy this URL.</p>
+            )}
+
             <a
               className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-[10px] border border-slate-300 bg-transparent px-4 py-2 text-sm font-semibold text-slate-700 transition-all duration-200 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
               href={result.imageUrl}
@@ -102,6 +119,15 @@ export function SearchResultDetailModal({ result, onClose }: SearchResultDetailM
       </section>
     </div>
   )
+
+  async function handleCopyImageUrl() {
+    try {
+      await navigator.clipboard.writeText(result.imageUrl)
+      setCopyStatus('copied')
+    } catch {
+      setCopyStatus('error')
+    }
+  }
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
