@@ -1,8 +1,6 @@
 import type { FormEvent } from 'react'
 import { ArrowRight, Search } from 'lucide-react'
 
-import { Button } from '@/components/base/button'
-
 import { ImageUploadZone } from './ImageUploadZone'
 import type { SearchMode } from '../types'
 
@@ -20,8 +18,8 @@ type SearchPanelProps = {
 }
 
 const placeholderByMode: Record<Exclude<SearchMode, 'image'>, string> = {
-  semantic: 'Example: sunset on the beach',
-  ocr: 'Example: SALE 50%',
+  semantic: 'Search by description',
+  ocr: 'Search text in images',
 }
 
 export function SearchPanel({
@@ -46,7 +44,7 @@ export function SearchPanel({
   return (
     <form
       onSubmit={handleSubmit}
-      className="rounded-lg border border-white/80 bg-white/95 p-3 shadow-2xl shadow-slate-300/35 backdrop-blur"
+      className="rounded-lg border border-slate-200/80 bg-white/95 p-2.5 shadow-lg shadow-slate-200/80 backdrop-blur"
     >
       {isImageMode ? (
         <>
@@ -59,24 +57,27 @@ export function SearchPanel({
           />
 
           <div className="mt-4">
-            <Button
-              className="h-12 rounded-full bg-slate-950 hover:bg-slate-800 active:bg-slate-900"
-              disabled={!canSearch}
-              fullWidth
-              rightIcon={<ArrowRight className="h-5 w-5" />}
-              size="lg"
+            <button
               type="submit"
+              className={[
+                'inline-flex h-12 w-full items-center justify-center gap-2.5 rounded-full border text-base font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white',
+                canSearch
+                  ? 'border-slate-950 bg-slate-950 text-white hover:bg-slate-800 active:bg-slate-900'
+                  : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400',
+              ].join(' ')}
+              disabled={!canSearch}
             >
-              Search
-            </Button>
+              <span>Search</span>
+              <ArrowRight className="h-5 w-5" />
+            </button>
           </div>
         </>
       ) : (
         <div className="flex items-center gap-2">
-          <div className="flex h-14 flex-1 items-center gap-3 rounded-full bg-surface-0 px-5">
-            <Search className="h-5 w-5 shrink-0 text-ink-muted" />
+          <div className="flex h-14 flex-1 items-center gap-3 rounded-full border border-transparent bg-slate-50 px-5 transition focus-within:border-slate-300 focus-within:bg-white">
+            <Search className="h-5 w-5 shrink-0 text-slate-400" strokeWidth={2.25} />
             <input
-              className="h-full w-full bg-transparent text-base font-medium text-ink-primary outline-none placeholder:text-ink-muted sm:text-lg"
+              className="h-full w-full bg-transparent text-base font-semibold text-slate-950 outline-none placeholder:font-medium placeholder:text-slate-400 sm:text-lg"
               onChange={(event) => onQueryChange(event.target.value)}
               placeholder={placeholderByMode[mode]}
               value={query}
@@ -85,7 +86,7 @@ export function SearchPanel({
 
           <button
             aria-label="Search"
-            className="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-slate-950 text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-slate-950 text-white shadow-sm shadow-slate-300/80 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
             disabled={!canSearch}
             type="submit"
           >

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { useNavigate } from 'react-router'
 import { Search, Sparkles } from 'lucide-react'
 
 import { PageContainer } from '@/components/layout/PageContainer'
@@ -81,39 +81,34 @@ export function SearchPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f6f7f8]">
-      <PageContainer size="wide" className="max-w-7xl space-y-7 py-5 sm:py-7">
-        <header className="flex items-center justify-between gap-4 rounded-lg border border-white bg-white/80 px-3 py-3 shadow-sm shadow-slate-200/70 backdrop-blur sm:px-4">
+    <main className="min-h-screen bg-[#f7f8fa]">
+      <PageContainer size="wide" className="max-w-7xl space-y-8 py-5 sm:py-7">
+        <header className="flex items-center border-b border-slate-200/80 pb-5">
           <div className="flex items-center gap-3">
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-slate-950 text-white shadow-sm">
-              <Search className="h-5 w-5" />
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-950 shadow-sm shadow-slate-200/70">
+              <Search className="h-5 w-5" strokeWidth={2.25} />
             </span>
             <div>
-              <p className="text-lg font-extrabold text-ink-primary">VisualSearch</p>
-              <p className="text-xs font-medium uppercase text-ink-muted">Image search engine</p>
+              <p className="text-lg font-bold text-slate-950">VisualSearch</p>
+              <p className="text-[11px] font-semibold uppercase text-slate-400">Image search engine</p>
             </div>
           </div>
-          <nav className="hidden items-center gap-6 text-sm font-semibold text-ink-secondary sm:flex">
-            <Link className="hover:text-ink-primary" to="/search">Search</Link>
-            <Link className="hover:text-ink-primary" to="/history">History</Link>
-            <Link className="hover:text-ink-primary" to="/admin">Admin</Link>
-          </nav>
         </header>
 
-        <section className="mx-auto max-w-5xl pt-3 text-center sm:pt-6">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-sm font-semibold text-ink-secondary shadow-sm">
-            <Sparkles className="h-4 w-4 text-accent-600" />
-            Semantic, OCR, and image-to-image search
+        <section className="mx-auto max-w-5xl pt-2 text-center sm:pt-5">
+          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-semibold text-slate-500 shadow-sm shadow-slate-200/70">
+            <Sparkles className="h-3.5 w-3.5 text-accent-600" strokeWidth={2.25} />
+            Semantic, OCR, and image-to-image
           </div>
 
-          <h1 className="mx-auto mt-5 max-w-4xl text-4xl font-extrabold leading-tight tracking-normal text-ink-primary sm:text-6xl">
-            Search images by what they look like and what they mean.
+          <h1 className="mx-auto mt-4 max-w-3xl text-4xl font-semibold leading-[1.08] tracking-normal text-slate-950 sm:text-5xl lg:text-[56px]">
+            Search images by meaning, text, or visual similarity.
           </h1>
-          <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-ink-secondary sm:text-lg">
+          <p className="mx-auto mt-4 max-w-2xl text-base font-medium leading-7 text-slate-500 sm:text-lg">
             Type a natural-language idea, find text inside images, or upload a reference image to discover similar results.
           </p>
 
-          <div className="mx-auto mt-6 max-w-3xl space-y-4 text-left">
+          <div className="mx-auto mt-6 max-w-2xl space-y-4 text-left">
             <div className="flex justify-center">
               <SearchModeTabs value={mode} onChange={handleModeChange} />
             </div>
