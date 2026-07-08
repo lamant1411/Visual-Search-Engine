@@ -8,6 +8,7 @@ import { AdminGuard } from '@/components/layout/AdminGuard';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import { SearchPage } from '@/features/search/pages/SearchPage';
+import HistoryPage from '@/pages/HistoryPage';
 // import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 // import { AdminGuard } from '@/components/layout/AdminGuard';
 
@@ -38,10 +39,15 @@ const router = createBrowserRouter([
         children: [
           { index: true, element: <Navigate to="/search" replace /> },
           { path: '/search', element: <div>Search page</div> },
-          { path: '/history', element: <div>History page</div> },
+          // { path: '/history', element: <HistoryPage /> },
         ],
       },
     ],
+  },
+
+  {
+    element: <AppShell />,    // layout có Header
+    children: [{ path: '/history', element: <HistoryPage /> },]
   },
 
   // ── Admin routes: yêu cầu login + role admin ─────────────────────

@@ -19,9 +19,11 @@ export function Header() {
         </Link>
 
         <nav className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" leftIcon={<Clock className="h-4 w-4" />}>
-            History
-          </Button>
+          <Link to="/history">
+            <Button variant="ghost" size="sm" leftIcon={<Clock className="h-4 w-4" />}>
+              History
+            </Button>
+          </Link>
           <Button variant="ghost" size="sm" leftIcon={<Bookmark className="h-4 w-4" />}>
             Bookmarks
           </Button>
