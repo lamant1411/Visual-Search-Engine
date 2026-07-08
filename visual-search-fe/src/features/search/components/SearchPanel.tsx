@@ -1,8 +1,7 @@
 import type { FormEvent } from 'react'
-import { Search } from 'lucide-react'
+import { ArrowRight, Search } from 'lucide-react'
 
 import { Button } from '@/components/base/button'
-import { Input } from '@/components/base/input'
 
 import { ImageUploadZone } from './ImageUploadZone'
 import type { SearchMode } from '../types'
@@ -47,39 +46,53 @@ export function SearchPanel({
   return (
     <form
       onSubmit={handleSubmit}
-      className="rounded-lg border border-white/80 bg-white/90 p-4 shadow-xl shadow-slate-200/70 backdrop-blur"
+      className="rounded-lg border border-white/80 bg-white/95 p-3 shadow-2xl shadow-slate-300/35 backdrop-blur"
     >
       {isImageMode ? (
-        <ImageUploadZone
-          errorMessage={uploadError}
-          file={selectedFile}
-          previewUrl={previewUrl}
-          onClear={onClearFile}
-          onFileSelect={onFileSelect}
-        />
-      ) : (
-        <Input
-          leftIcon={<Search className="h-5 w-5" />}
-          onChange={(event) => onQueryChange(event.target.value)}
-          placeholder={placeholderByMode[mode]}
-          size="lg"
-          value={query}
-          className="h-14 border-transparent bg-surface-0 text-lg shadow-none"
-        />
-      )}
+        <>
+          <ImageUploadZone
+            errorMessage={uploadError}
+            file={selectedFile}
+            previewUrl={previewUrl}
+            onClear={onClearFile}
+            onFileSelect={onFileSelect}
+          />
 
-      <div className="mt-4">
-        <Button
-          className="h-12 bg-slate-950 hover:bg-slate-800 active:bg-slate-900"
-          disabled={!canSearch}
-          fullWidth
-          leftIcon={<Search className="h-5 w-5" />}
-          size="lg"
-          type="submit"
-        >
-          Search
-        </Button>
-      </div>
+          <div className="mt-4">
+            <Button
+              className="h-12 rounded-full bg-slate-950 hover:bg-slate-800 active:bg-slate-900"
+              disabled={!canSearch}
+              fullWidth
+              rightIcon={<ArrowRight className="h-5 w-5" />}
+              size="lg"
+              type="submit"
+            >
+              Search
+            </Button>
+          </div>
+        </>
+      ) : (
+        <div className="flex items-center gap-2">
+          <div className="flex h-14 flex-1 items-center gap-3 rounded-full bg-surface-0 px-5">
+            <Search className="h-5 w-5 shrink-0 text-ink-muted" />
+            <input
+              className="h-full w-full bg-transparent text-base font-medium text-ink-primary outline-none placeholder:text-ink-muted sm:text-lg"
+              onChange={(event) => onQueryChange(event.target.value)}
+              placeholder={placeholderByMode[mode]}
+              value={query}
+            />
+          </div>
+
+          <button
+            aria-label="Search"
+            className="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-slate-950 text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-45"
+            disabled={!canSearch}
+            type="submit"
+          >
+            <ArrowRight className="h-5 w-5" />
+          </button>
+        </div>
+      )}
     </form>
   )
 }

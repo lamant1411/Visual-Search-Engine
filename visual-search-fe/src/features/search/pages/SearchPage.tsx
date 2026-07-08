@@ -10,6 +10,8 @@ import { SearchPanel } from '../components/SearchPanel'
 import type { SearchMode } from '../types'
 import { validateSearchImageFile } from '../utils/imageValidation'
 
+const featuredImageHeights = ['h-72', 'h-96', 'h-80', 'h-64', 'h-[22rem]', 'h-72']
+
 export function SearchPage() {
   const navigate = useNavigate()
   const [mode, setMode] = useState<SearchMode>('semantic')
@@ -79,9 +81,9 @@ export function SearchPage() {
   }
 
   return (
-    <main className="min-h-screen bg-surface-0">
-      <PageContainer size="wide" className="max-w-7xl space-y-8 py-6 sm:py-8">
-        <header className="flex items-center justify-between gap-4">
+    <main className="min-h-screen bg-[#f6f7f8]">
+      <PageContainer size="wide" className="max-w-7xl space-y-7 py-5 sm:py-7">
+        <header className="flex items-center justify-between gap-4 rounded-lg border border-white bg-white/80 px-3 py-3 shadow-sm shadow-slate-200/70 backdrop-blur sm:px-4">
           <div className="flex items-center gap-3">
             <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-slate-950 text-white shadow-sm">
               <Search className="h-5 w-5" />
@@ -98,17 +100,17 @@ export function SearchPage() {
           </nav>
         </header>
 
-        <section className="mx-auto max-w-4xl pt-3 text-center sm:pt-5">
+        <section className="mx-auto max-w-5xl pt-3 text-center sm:pt-6">
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-sm font-semibold text-ink-secondary shadow-sm">
             <Sparkles className="h-4 w-4 text-accent-600" />
             Semantic, OCR, and image-to-image search
           </div>
 
-          <h1 className="mt-5 text-4xl font-extrabold leading-tight tracking-normal text-ink-primary sm:text-5xl">
-            Find the right image by meaning, text, or visual similarity.
+          <h1 className="mx-auto mt-5 max-w-4xl text-4xl font-extrabold leading-tight tracking-normal text-ink-primary sm:text-6xl">
+            Search images by what they look like and what they mean.
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-ink-secondary sm:text-lg">
-            Search across visual content with natural language, detected text, or an uploaded reference image.
+            Type a natural-language idea, find text inside images, or upload a reference image to discover similar results.
           </p>
 
           <div className="mx-auto mt-6 max-w-3xl space-y-4 text-left">
@@ -131,35 +133,13 @@ export function SearchPage() {
           </div>
         </section>
 
-        <section className="grid gap-4 sm:grid-cols-3">
-          {mockSearchResults.slice(0, 3).map((result, index) => (
-            <article
-              key={result.id}
-              className={[
-                'group relative overflow-hidden rounded-lg bg-surface-1 shadow-sm shadow-slate-200/80',
-                index === 1 ? 'sm:mt-8' : '',
-              ].join(' ')}
-            >
-              <img
-                alt={`Featured image ${result.id}`}
-                className="h-72 w-full object-cover transition duration-300 group-hover:scale-105"
-                src={result.imageUrl}
-              />
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-5 text-white">
-                <p className="text-sm font-medium opacity-90">Similarity sample</p>
-                <p className="mt-1 text-2xl font-bold">{Math.round(result.similarityScore)}% match</p>
-              </div>
-            </article>
-          ))}
-        </section>
-
-        <div className="flex flex-wrap justify-center gap-3 border-t border-border pt-6 text-sm font-medium text-ink-secondary">
+        <div className="flex flex-wrap justify-center gap-3 text-sm font-medium text-ink-secondary">
           <span className="px-1 py-2 text-ink-muted">Try</span>
           {['sunset on the beach', 'SALE 50%', 'green forest', 'product label'].map((suggestion) => (
             <button
               key={suggestion}
               type="button"
-              className="rounded-full border border-border bg-white px-4 py-2 shadow-sm hover:border-slate-400 hover:text-ink-primary"
+              className="rounded-full border border-white bg-white px-4 py-2 shadow-sm shadow-slate-200/70 hover:border-slate-300 hover:text-ink-primary"
               onClick={() => {
                 setMode(suggestion.includes('%') ? 'ocr' : 'semantic')
                 setQuery(suggestion)
@@ -169,6 +149,28 @@ export function SearchPage() {
             </button>
           ))}
         </div>
+
+        <section className="columns-1 gap-4 pt-2 sm:columns-2 lg:columns-3">
+          {mockSearchResults.slice(0, 9).map((result, index) => (
+            <article
+              key={result.id}
+              className={[
+                'group relative mb-4 break-inside-avoid overflow-hidden rounded-lg bg-surface-1 shadow-sm shadow-slate-200/80',
+                featuredImageHeights[index % featuredImageHeights.length],
+              ].join(' ')}
+            >
+              <img
+                alt={`Featured image ${result.id}`}
+                className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                src={result.imageUrl}
+              />
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-4 text-white opacity-0 transition group-hover:opacity-100">
+                <p className="text-xs font-medium opacity-90">Similarity sample</p>
+                <p className="mt-1 text-xl font-bold">{Math.round(result.similarityScore)}% match</p>
+              </div>
+            </article>
+          ))}
+        </section>
       </PageContainer>
     </main>
   )
