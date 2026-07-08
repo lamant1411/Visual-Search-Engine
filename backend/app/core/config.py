@@ -22,6 +22,14 @@ class Settings(BaseSettings):
         default="postgresql+asyncpg://postgres:postgres@postgres:5432/visual_search"
     )
     qdrant_url: str = Field(default="http://qdrant:6333")
+    backend_cors_origins: list[str] = Field(
+        default=[
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:4173",
+            "http://127.0.0.1:4173",
+        ]
+    )
 
     jwt_secret_key: str = Field(default="change-me")
     jwt_algorithm: str = "HS256"
