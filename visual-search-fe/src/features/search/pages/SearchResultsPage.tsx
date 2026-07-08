@@ -1,14 +1,13 @@
-import { type ChangeEvent, type FormEvent, useEffect, useMemo, useState } from 'react'
+import { type ChangeEvent, type FormEvent, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation, useSearchParams } from 'react-router'
-import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, ImagePlus, Search, X } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, FileText, ImagePlus, LogIn, ScanText, Search, X } from 'lucide-react'
 
 import { PageContainer } from '@/components/layout/PageContainer'
 import { Button } from '@/components/base/button'
 import { Skeleton } from '@/components/base/loader'
 
 import { ResultGrid } from '../components/ResultGrid'
-import { SearchModeTabs } from '../components/SearchModeTabs'
 import { SearchResultDetailModal } from '../components/SearchResultDetailModal'
 import { searchByImage, searchByText } from '../services/search.api'
 import type { SearchMode, SearchResponse, SearchResult } from '../types'
@@ -49,22 +48,6 @@ export function SearchResultsPage() {
     : imageId
       ? `image-${imageId}`
       : 'no-image'
-  const previewUrl = useMemo(() => {
-    if (!selectedFile) {
-      return null
-    }
-
-    return URL.createObjectURL(selectedFile)
-  }, [selectedFile])
-
-  useEffect(() => {
-    return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl)
-      }
-    }
-  }, [previewUrl])
-
   const searchQuery = useQuery({
     queryKey: ['search-results', mode, query, imageId, page, pageLimit, imageSearchKey],
     queryFn: () => runSearch({ mode, query, imageId, page, limit: pageLimit, file: state.file }),
@@ -76,129 +59,54 @@ export function SearchResultsPage() {
   const totalPages = Math.max(1, Math.ceil(total / pageLimit))
 
   return (
-    <main className="min-h-screen bg-surface-0">
-      <PageContainer size="wide" className="max-w-7xl space-y-8 py-6">
-        <header className="flex flex-col gap-4 rounded-lg border border-border bg-white px-4 py-4 shadow-sm sm:px-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-4">
-            <Link
-              to="/search"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border text-ink-secondary hover:bg-surface-1 hover:text-ink-primary"
-              aria-label="Back to search"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
+    <main className="min-h-screen bg-[#f7f8fa]">
+      <PageContainer size="wide" className="max-w-7xl space-y-7 pb-7 pt-3">
+        <header className="sticky top-0 z-30 flex items-center gap-4 border-b border-slate-200/80 bg-[#f7f8fa]/90 py-4 backdrop-blur">
+          <Link to="/search" className="flex shrink-0 items-center gap-3">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-950 shadow-sm shadow-slate-200/70">
+              <Search className="h-5 w-5" strokeWidth={2.25} />
+            </span>
 
-            <div>
-              <p className="text-sm font-semibold uppercase text-accent-600">{modeLabel[mode]}</p>
-              <h1 className="mt-1 text-2xl font-bold text-ink-primary sm:text-3xl">{resultTitle}</h1>
+            <div className="hidden sm:block">
+              <p className="text-lg font-bold text-slate-950">VisualSearch</p>
+              <p className="text-[11px] font-semibold uppercase text-slate-400">Image search engine</p>
             </div>
-          </div>
+          </Link>
 
-          <Link to="/search">
-            <Button className="bg-white" leftIcon={<Search className="h-4 w-4" />} variant="outline">
-              New search
-            </Button>
+          {renderCompactSearchForm(
+            'hidden h-12 max-w-3xl flex-1 items-center rounded-full bg-white shadow-sm shadow-slate-200/80 ring-1 ring-slate-200/80 lg:flex',
+          )}
+
+          <Link
+            to="/login"
+            className="ml-auto inline-flex h-10 w-fit shrink-0 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm shadow-slate-200/70 transition hover:border-slate-300 hover:text-slate-950"
+          >
+            <LogIn className="h-4 w-4" />
+            Login
           </Link>
         </header>
 
-        <form
-          onSubmit={handleSearchSubmit}
-          className="sticky top-3 z-20 rounded-lg border border-white/80 bg-white/95 p-3 shadow-lg shadow-slate-300/25 backdrop-blur"
-        >
-          <div className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
-            <SearchModeTabs value={draftMode} onChange={handleDraftModeChange} />
+        {renderCompactSearchForm(
+          'sticky top-[76px] z-20 flex h-12 items-center rounded-full bg-white shadow-sm shadow-slate-200/80 ring-1 ring-slate-200/80 lg:hidden',
+        )}
 
-            {draftMode === 'image' ? (
-              <div className="flex min-h-12 flex-col gap-2 lg:col-span-2">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <label className="inline-flex h-12 cursor-pointer items-center justify-center gap-2 rounded-full border border-border bg-surface-0 px-5 text-sm font-semibold text-ink-primary transition hover:border-slate-400 hover:bg-white">
-                    <ImagePlus className="h-4 w-4" />
-                    {selectedFile ? 'Change image' : 'Choose image'}
-                    <input
-                      accept="image/jpeg,image/png,image/webp"
-                      className="sr-only"
-                      type="file"
-                      onChange={handleFileInputChange}
-                    />
-                  </label>
+        {uploadError && <p className="text-sm font-medium text-red-600">{uploadError}</p>}
 
-                  <div className="flex min-h-12 flex-1 items-center justify-between gap-3 rounded-full bg-surface-0 px-4">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-ink-primary">
-                        {selectedFile?.name ?? (imageId ? `Using image #${imageId}` : 'No image selected')}
-                      </p>
-                      <p className="text-xs text-ink-muted">
-                        JPG, PNG, or WebP, up to 10MB
-                      </p>
-                    </div>
-
-                    {selectedFile && (
-                      <button
-                        aria-label="Remove selected image"
-                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-muted hover:bg-white hover:text-ink-primary"
-                        type="button"
-                        onClick={handleClearFile}
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-
-                  <button
-                    aria-label="Search by image"
-                    className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-950 text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-45"
-                    disabled={!canSubmitSearch}
-                    type="submit"
-                  >
-                    <ArrowRight className="h-5 w-5" />
-                  </button>
-                </div>
-
-                {previewUrl && selectedFile && (
-                  <img
-                    alt="Selected search preview"
-                    className="h-24 w-36 rounded-md object-cover shadow-sm"
-                    src={previewUrl}
-                  />
-                )}
-
-                {uploadError && <p className="text-sm font-medium text-red-600">{uploadError}</p>}
-              </div>
-            ) : (
-              <>
-                <div className="flex h-12 items-center gap-3 rounded-full bg-surface-0 px-4">
-                  <Search className="h-5 w-5 shrink-0 text-ink-muted" />
-                  <input
-                    className="h-full w-full bg-transparent text-base font-medium text-ink-primary outline-none placeholder:text-ink-muted"
-                    onChange={(event) => setDraftQuery(event.target.value)}
-                    placeholder={draftMode === 'semantic' ? 'Example: sunset on the beach' : 'Example: SALE 50%'}
-                    value={draftQuery}
-                  />
-                </div>
-
-                <button
-                  aria-label="Search"
-                  disabled={!canSubmitSearch}
-                  className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-950 text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-45"
-                  type="submit"
-                >
-                  <ArrowRight className="h-5 w-5" />
-                </button>
-              </>
-            )}
-          </div>
-        </form>
+        <section className="py-4 text-center">
+          <p className="text-xs font-semibold uppercase text-slate-400">{modeLabel[mode]}</p>
+          <h1 className="mt-2 text-3xl font-semibold text-slate-950">{resultTitle}</h1>
+        </section>
 
         {queryEnabled ? (
-          <div className="flex flex-col gap-3 rounded-lg border border-border bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-semibold text-ink-primary">{total} results</p>
-              <p className="mt-1 text-sm text-ink-secondary">
+              <p className="text-sm font-semibold text-slate-950">{total} results</p>
+              <p className="mt-1 text-sm text-slate-500">
                 Page {page} of {totalPages}. Sorted by highest similarity score.
               </p>
             </div>
 
-            <span className="w-fit rounded-full bg-slate-950 px-3 py-1 text-sm font-semibold text-white">
+            <span className="w-fit rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-500">
               20 photos per page
             </span>
           </div>
@@ -358,6 +266,69 @@ export function SearchResultsPage() {
     nextParams.set('limit', String(pageLimit))
 
     setSearchParams(nextParams, { state: location.state })
+  }
+
+  function renderCompactSearchForm(className: string) {
+    return (
+      <form className={className} onSubmit={handleSearchSubmit}>
+        <label className="relative flex h-full shrink-0 items-center gap-2 rounded-l-full border-r border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-800">
+          {draftMode === 'image' && <ImagePlus className="h-4 w-4 text-slate-400" />}
+          {draftMode === 'semantic' && <FileText className="h-4 w-4 text-slate-400" />}
+          {draftMode === 'ocr' && <ScanText className="h-4 w-4 text-slate-400" />}
+          <select
+            className="appearance-none bg-transparent pr-5 outline-none"
+            value={draftMode}
+            onChange={(event) => handleDraftModeChange(event.target.value as SearchMode)}
+          >
+            <option value="image">Image</option>
+            <option value="semantic">Semantic</option>
+            <option value="ocr">OCR</option>
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-slate-400" />
+        </label>
+
+        {draftMode === 'image' ? (
+          <label className="flex h-full min-w-0 flex-1 cursor-pointer items-center px-5 text-sm font-semibold text-slate-500">
+            <input
+              accept="image/jpeg,image/png,image/webp"
+              className="sr-only"
+              type="file"
+              onChange={handleFileInputChange}
+            />
+            <span className="truncate">
+              {selectedFile?.name ?? (imageId ? `Using image #${imageId}` : 'Choose an image to search')}
+            </span>
+          </label>
+        ) : (
+          <input
+            className="h-full min-w-0 flex-1 bg-transparent px-5 text-sm font-semibold text-slate-950 outline-none placeholder:font-medium placeholder:text-slate-400"
+            onChange={(event) => setDraftQuery(event.target.value)}
+            placeholder={draftMode === 'semantic' ? 'Search by description' : 'Search text in images'}
+            value={draftQuery}
+          />
+        )}
+
+        {draftMode === 'image' && selectedFile && (
+          <button
+            aria-label="Remove selected image"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-950"
+            type="button"
+            onClick={handleClearFile}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+
+        <button
+          aria-label="Search"
+          className="mr-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
+          disabled={!canSubmitSearch}
+          type="submit"
+        >
+          <Search className="h-5 w-5" />
+        </button>
+      </form>
+    )
   }
 }
 

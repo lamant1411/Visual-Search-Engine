@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router'
-import { Search, Sparkles } from 'lucide-react'
+import { Link, useNavigate } from 'react-router'
+import { ChevronDown, FileText, ImagePlus, LogIn, ScanText, Search } from 'lucide-react'
 
 import { PageContainer } from '@/components/layout/PageContainer'
 import { mockSearchResults } from '@/mocks/searchMockData'
@@ -82,8 +82,8 @@ export function SearchPage() {
 
   return (
     <main className="min-h-screen bg-[#f7f8fa]">
-      <PageContainer size="wide" className="max-w-7xl space-y-8 py-5 sm:py-7">
-        <header className="flex items-center border-b border-slate-200/80 pb-5">
+      <PageContainer size="wide" className="max-w-7xl space-y-8 pb-7 pt-3">
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-slate-200/80 bg-[#f7f8fa]/90 py-4 backdrop-blur">
           <div className="flex items-center gap-3">
             <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-950 shadow-sm shadow-slate-200/70">
               <Search className="h-5 w-5" strokeWidth={2.25} />
@@ -93,40 +93,101 @@ export function SearchPage() {
               <p className="text-[11px] font-semibold uppercase text-slate-400">Image search engine</p>
             </div>
           </div>
+
+          <form
+            className="hidden h-12 max-w-3xl flex-1 items-center rounded-full bg-white shadow-sm shadow-slate-200/80 ring-1 ring-slate-200/80 lg:flex"
+            onSubmit={(event) => {
+              event.preventDefault()
+              handleSearch()
+            }}
+          >
+            <label className="relative flex h-full shrink-0 items-center gap-2 rounded-l-full border-r border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-800">
+              {mode === 'image' && <ImagePlus className="h-4 w-4 text-slate-400" />}
+              {mode === 'semantic' && <FileText className="h-4 w-4 text-slate-400" />}
+              {mode === 'ocr' && <ScanText className="h-4 w-4 text-slate-400" />}
+              <select
+                className="appearance-none bg-transparent pr-5 outline-none"
+                value={mode}
+                onChange={(event) => handleModeChange(event.target.value as SearchMode)}
+              >
+                <option value="image">Image</option>
+                <option value="semantic">Semantic</option>
+                <option value="ocr">OCR</option>
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-slate-400" />
+            </label>
+
+            {mode === 'image' ? (
+              <label className="flex h-full min-w-0 flex-1 cursor-pointer items-center px-5 text-sm font-semibold text-slate-500">
+                <input
+                  accept="image/jpeg,image/png,image/webp"
+                  className="sr-only"
+                  type="file"
+                  onChange={(event) => {
+                    const nextFile = event.target.files?.[0]
+                    if (nextFile) {
+                      handleFileSelect(nextFile)
+                    }
+                    event.target.value = ''
+                  }}
+                />
+                <span className="truncate">{selectedFile?.name ?? 'Choose an image to search'}</span>
+              </label>
+            ) : (
+              <input
+                className="h-full min-w-0 flex-1 bg-transparent px-5 text-sm font-semibold text-slate-950 outline-none placeholder:font-medium placeholder:text-slate-400"
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={mode === 'semantic' ? 'Search by description' : 'Search text in images'}
+                value={query}
+              />
+            )}
+
+            <button
+              aria-label="Search"
+              className="mr-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
+              disabled={!canSearch}
+              type="submit"
+            >
+              <Search className="h-5 w-5" />
+            </button>
+          </form>
+
+          <Link
+            to="/login"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm shadow-slate-200/70 transition hover:border-slate-300 hover:text-slate-950"
+          >
+            <LogIn className="h-4 w-4" />
+            Login
+          </Link>
         </header>
 
         <section className="mx-auto max-w-5xl pt-2 text-center sm:pt-5">
-          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-semibold text-slate-500 shadow-sm shadow-slate-200/70">
-            <Sparkles className="h-3.5 w-3.5 text-accent-600" strokeWidth={2.25} />
-            Semantic, OCR, and image-to-image
-          </div>
-
-          <h1 className="mx-auto mt-4 max-w-3xl text-4xl font-semibold leading-[1.08] tracking-normal text-slate-950 sm:text-5xl lg:text-[56px]">
+          <h1 className="mx-auto max-w-3xl text-4xl font-semibold leading-[1.08] tracking-normal text-slate-950 sm:text-5xl lg:text-[56px]">
             Search images by meaning, text, or visual similarity.
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-base font-medium leading-7 text-slate-500 sm:text-lg">
             Type a natural-language idea, find text inside images, or upload a reference image to discover similar results.
           </p>
-
-          <div className="mx-auto mt-6 max-w-2xl space-y-4 text-left">
-            <div className="flex justify-center">
-              <SearchModeTabs value={mode} onChange={handleModeChange} />
-            </div>
-
-            <SearchPanel
-              mode={mode}
-              canSearch={canSearch}
-              previewUrl={previewUrl}
-              query={query}
-              selectedFile={selectedFile}
-              uploadError={uploadError}
-              onClearFile={handleClearFile}
-              onFileSelect={handleFileSelect}
-              onQueryChange={setQuery}
-              onSubmit={handleSearch}
-            />
-          </div>
         </section>
+
+        <div className="mx-auto max-w-2xl space-y-4 text-left">
+          <div className="flex justify-center">
+            <SearchModeTabs value={mode} onChange={handleModeChange} />
+          </div>
+
+          <SearchPanel
+            mode={mode}
+            canSearch={canSearch}
+            previewUrl={previewUrl}
+            query={query}
+            selectedFile={selectedFile}
+            uploadError={uploadError}
+            onClearFile={handleClearFile}
+            onFileSelect={handleFileSelect}
+            onQueryChange={setQuery}
+            onSubmit={handleSearch}
+          />
+        </div>
 
         <div className="flex flex-wrap justify-center gap-3 text-sm font-medium text-ink-secondary">
           <span className="px-1 py-2 text-ink-muted">Try</span>
