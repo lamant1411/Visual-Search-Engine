@@ -47,7 +47,7 @@ export function SearchPanel({
   return (
     <form
       onSubmit={handleSubmit}
-      className="rounded-xl border border-border bg-white p-5 shadow-sm"
+      className="rounded-lg border border-white/80 bg-white/90 p-4 shadow-xl shadow-slate-200/70 backdrop-blur"
     >
       {isImageMode ? (
         <ImageUploadZone
@@ -59,17 +59,24 @@ export function SearchPanel({
         />
       ) : (
         <Input
-          label={mode === 'semantic' ? 'Semantic search' : 'OCR search'}
           leftIcon={<Search className="h-5 w-5" />}
           onChange={(event) => onQueryChange(event.target.value)}
           placeholder={placeholderByMode[mode]}
           size="lg"
           value={query}
+          className="h-14 border-transparent bg-surface-0 text-lg shadow-none"
         />
       )}
 
-      <div className="mt-5">
-        <Button disabled={!canSearch} fullWidth leftIcon={<Search className="h-5 w-5" />} size="lg" type="submit">
+      <div className="mt-4">
+        <Button
+          className="h-12 bg-slate-950 hover:bg-slate-800 active:bg-slate-900"
+          disabled={!canSearch}
+          fullWidth
+          leftIcon={<Search className="h-5 w-5" />}
+          size="lg"
+          type="submit"
+        >
           Search
         </Button>
       </div>

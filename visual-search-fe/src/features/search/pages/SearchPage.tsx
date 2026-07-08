@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
+import { Search, Sparkles } from 'lucide-react'
 
 import { PageContainer } from '@/components/layout/PageContainer'
 import { mockSearchResults } from '@/mocks/searchMockData'
@@ -78,12 +79,17 @@ export function SearchPage() {
   }
 
   return (
-    <main className="min-h-screen bg-white">
-      <PageContainer size="wide" className="space-y-12 py-8 sm:py-12">
+    <main className="min-h-screen bg-surface-0">
+      <PageContainer size="wide" className="max-w-7xl space-y-8 py-6 sm:py-8">
         <header className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-lg font-extrabold text-ink-primary">VisualSearch</p>
-            <p className="text-xs font-medium uppercase text-ink-muted">Image search engine</p>
+          <div className="flex items-center gap-3">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-slate-950 text-white shadow-sm">
+              <Search className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-lg font-extrabold text-ink-primary">VisualSearch</p>
+              <p className="text-xs font-medium uppercase text-ink-muted">Image search engine</p>
+            </div>
           </div>
           <nav className="hidden items-center gap-6 text-sm font-semibold text-ink-secondary sm:flex">
             <Link className="hover:text-ink-primary" to="/search">Search</Link>
@@ -92,58 +98,68 @@ export function SearchPage() {
           </nav>
         </header>
 
-        <section className="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_430px]">
-          <div className="max-w-3xl">
-            <p className="text-sm font-semibold uppercase text-accent-600">Visual Search Engine</p>
-            <h1 className="mt-4 text-4xl font-extrabold leading-tight text-ink-primary sm:text-5xl">
-              Find the right image by meaning, text, or visual similarity.
-            </h1>
-            <p className="mt-4 max-w-2xl text-base text-ink-secondary">
-              Search across visual content with semantic text, OCR text, or an uploaded reference image.
-            </p>
-
-            <div className="mt-8 space-y-4">
-              <SearchModeTabs value={mode} onChange={handleModeChange} />
-
-              <SearchPanel
-                mode={mode}
-                canSearch={canSearch}
-                previewUrl={previewUrl}
-                query={query}
-                selectedFile={selectedFile}
-                uploadError={uploadError}
-                onClearFile={handleClearFile}
-                onFileSelect={handleFileSelect}
-                onQueryChange={setQuery}
-                onSubmit={handleSearch}
-              />
-            </div>
+        <section className="mx-auto max-w-4xl pt-3 text-center sm:pt-5">
+          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-sm font-semibold text-ink-secondary shadow-sm">
+            <Sparkles className="h-4 w-4 text-accent-600" />
+            Semantic, OCR, and image-to-image search
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
-            {mockSearchResults.slice(0, 2).map((result) => (
-              <article key={result.id} className="relative overflow-hidden rounded-2xl bg-surface-1 shadow-sm">
-                <img
-                  alt={`Featured image ${result.id}`}
-                  className="h-56 w-full object-cover"
-                  src={result.imageUrl}
-                />
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-5 text-white">
-                  <p className="text-sm font-medium opacity-90">Similarity sample</p>
-                  <p className="mt-1 text-2xl font-bold">{Math.round(result.similarityScore)}% match</p>
-                </div>
-              </article>
-            ))}
+          <h1 className="mt-5 text-4xl font-extrabold leading-tight tracking-normal text-ink-primary sm:text-5xl">
+            Find the right image by meaning, text, or visual similarity.
+          </h1>
+          <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-ink-secondary sm:text-lg">
+            Search across visual content with natural language, detected text, or an uploaded reference image.
+          </p>
+
+          <div className="mx-auto mt-6 max-w-3xl space-y-4 text-left">
+            <div className="flex justify-center">
+              <SearchModeTabs value={mode} onChange={handleModeChange} />
+            </div>
+
+            <SearchPanel
+              mode={mode}
+              canSearch={canSearch}
+              previewUrl={previewUrl}
+              query={query}
+              selectedFile={selectedFile}
+              uploadError={uploadError}
+              onClearFile={handleClearFile}
+              onFileSelect={handleFileSelect}
+              onQueryChange={setQuery}
+              onSubmit={handleSearch}
+            />
           </div>
         </section>
 
-        <div className="flex flex-wrap gap-3 border-t border-border pt-6 text-sm font-medium text-ink-secondary">
-          <span className="text-ink-muted">Try:</span>
+        <section className="grid gap-4 sm:grid-cols-3">
+          {mockSearchResults.slice(0, 3).map((result, index) => (
+            <article
+              key={result.id}
+              className={[
+                'group relative overflow-hidden rounded-lg bg-surface-1 shadow-sm shadow-slate-200/80',
+                index === 1 ? 'sm:mt-8' : '',
+              ].join(' ')}
+            >
+              <img
+                alt={`Featured image ${result.id}`}
+                className="h-72 w-full object-cover transition duration-300 group-hover:scale-105"
+                src={result.imageUrl}
+              />
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-5 text-white">
+                <p className="text-sm font-medium opacity-90">Similarity sample</p>
+                <p className="mt-1 text-2xl font-bold">{Math.round(result.similarityScore)}% match</p>
+              </div>
+            </article>
+          ))}
+        </section>
+
+        <div className="flex flex-wrap justify-center gap-3 border-t border-border pt-6 text-sm font-medium text-ink-secondary">
+          <span className="px-1 py-2 text-ink-muted">Try</span>
           {['sunset on the beach', 'SALE 50%', 'green forest', 'product label'].map((suggestion) => (
             <button
               key={suggestion}
               type="button"
-              className="rounded-full border border-border px-4 py-2 hover:border-accent-600 hover:text-accent-600"
+              className="rounded-full border border-border bg-white px-4 py-2 shadow-sm hover:border-slate-400 hover:text-ink-primary"
               onClick={() => {
                 setMode(suggestion.includes('%') ? 'ocr' : 'semantic')
                 setQuery(suggestion)

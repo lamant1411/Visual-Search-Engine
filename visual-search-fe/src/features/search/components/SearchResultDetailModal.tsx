@@ -139,6 +139,7 @@ export function SearchResultDetailModal({ result, onClose, onFindSimilar }: Sear
           <div className="mt-auto space-y-3 pt-6">
             <Button
               fullWidth
+              className="bg-slate-950 hover:bg-slate-800 active:bg-slate-900"
               leftIcon={<Search className="h-4 w-4" />}
               type="button"
               onClick={() => onFindSimilar?.(result)}

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Info, Zap } from 'lucide-react'
 
 import type { SearchResult } from '../types'
@@ -8,46 +9,54 @@ type ResultCardProps = {
 }
 
 export function ResultCard({ result, onSelect }: ResultCardProps) {
+  const [imageLoaded, setImageLoaded] = useState(false)
   const sizeLabel =
     result.metadata.width && result.metadata.height
       ? `${result.metadata.width} x ${result.metadata.height}`
       : 'Unknown size'
+  const aspectRatio =
+    result.metadata.width && result.metadata.height
+      ? `${result.metadata.width} / ${result.metadata.height}`
+      : '4 / 3'
 
   return (
     <button
       type="button"
-      className="group overflow-hidden rounded-xl border border-border bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2"
+      className="group mb-5 block w-full break-inside-avoid overflow-hidden rounded-lg bg-white text-left shadow-sm shadow-slate-200/80 transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2"
       aria-label={`Open detail for image ${result.id}`}
       onClick={() => onSelect?.(result)}
     >
-      <div className="relative aspect-[4/3] overflow-hidden bg-surface-1">
+      <div className="relative overflow-hidden bg-surface-1" style={{ aspectRatio }}>
+        {!imageLoaded && <div className="absolute inset-0 animate-pulse bg-slate-200" />}
         <img
           alt={`Search result ${result.id}`}
-          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+          className={[
+            'h-full w-full object-cover transition duration-300 group-hover:scale-105',
+            imageLoaded ? 'opacity-100' : 'opacity-0',
+          ].join(' ')}
           loading="lazy"
           src={result.thumbnailUrl}
+          onLoad={() => setImageLoaded(true)}
         />
         <span className="absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-accent-600 shadow-sm">
           <Zap className="h-3.5 w-3.5" />
           {Math.round(result.similarityScore)}%
         </span>
-      </div>
 
-      <div className="space-y-3 p-4">
-        <div>
-          <h2 className="text-sm font-semibold text-ink-primary">Image #{result.id}</h2>
-          <p className="mt-1 text-xs text-ink-secondary">
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent p-4 pt-14 text-white opacity-0 transition group-hover:opacity-100">
+          <h2 className="text-sm font-semibold">Image #{result.id}</h2>
+          <p className="mt-1 text-xs text-white/80">
             {sizeLabel}
             {result.metadata.source ? ` · ${result.metadata.source}` : ''}
           </p>
-        </div>
 
-        {result.metadata.ocrText && (
-          <p className="inline-flex items-center gap-2 rounded-lg bg-surface-1 px-3 py-2 text-xs font-medium text-ink-secondary">
-            <Info className="h-3.5 w-3.5" />
-            OCR: {result.metadata.ocrText}
-          </p>
-        )}
+          {result.metadata.ocrText && (
+            <p className="mt-3 inline-flex max-w-full items-center gap-2 rounded-md bg-white/90 px-3 py-2 text-xs font-semibold text-slate-800">
+              <Info className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">OCR: {result.metadata.ocrText}</span>
+            </p>
+          )}
+        </div>
       </div>
     </button>
   )

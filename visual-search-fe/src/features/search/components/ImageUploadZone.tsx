@@ -47,10 +47,10 @@ export function ImageUploadZone({
         onDragOver={preventDefault}
         onDrop={handleDrop}
         className={[
-          'flex min-h-56 cursor-pointer items-center justify-center rounded-xl border border-dashed bg-surface-0 p-5 text-center transition',
+          'flex min-h-56 cursor-pointer items-center justify-center rounded-lg border border-dashed bg-surface-0 p-5 text-center transition',
           errorMessage
             ? 'border-red-300 bg-red-50'
-            : 'border-border hover:border-accent-600 hover:bg-accent-50',
+            : 'border-slate-300 hover:border-slate-500 hover:bg-white',
         ].join(' ')}
       >
         <input accept="image/jpeg,image/png,image/webp" className="sr-only" type="file" onChange={handleFileChange} />
@@ -59,7 +59,7 @@ export function ImageUploadZone({
           <div className="grid w-full gap-4 text-left sm:grid-cols-[180px_1fr] sm:items-center">
             <img
               alt="Selected search image preview"
-              className="h-44 w-full rounded-lg object-cover sm:h-32"
+              className="h-44 w-full rounded-md object-cover sm:h-32"
               src={previewUrl}
             />
 
@@ -83,9 +83,9 @@ export function ImageUploadZone({
       {errorMessage && <p className="text-sm font-medium text-red-600">{errorMessage}</p>}
 
       {file && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-white px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-white px-4 py-3 shadow-sm">
           <div className="flex items-center gap-2 text-sm text-ink-secondary">
-            <Upload className="h-4 w-4 text-accent-600" />
+            <Upload className="h-4 w-4 text-slate-700" />
             <span>Ready for image search</span>
           </div>
 

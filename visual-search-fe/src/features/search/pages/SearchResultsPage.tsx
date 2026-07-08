@@ -78,13 +78,13 @@ export function SearchResultsPage() {
   const totalPages = Math.max(1, Math.ceil(total / pageLimit))
 
   return (
-    <main className="min-h-screen bg-white">
-      <PageContainer size="wide" className="space-y-8 py-6">
-        <header className="flex flex-col gap-4 border-b border-border pb-5 lg:flex-row lg:items-center lg:justify-between">
+    <main className="min-h-screen bg-surface-0">
+      <PageContainer size="wide" className="max-w-7xl space-y-8 py-6">
+        <header className="flex flex-col gap-4 rounded-lg border border-border bg-white px-4 py-4 shadow-sm sm:px-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">
             <Link
               to="/search"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border text-ink-secondary hover:bg-surface-1 hover:text-ink-primary"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border text-ink-secondary hover:bg-surface-1 hover:text-ink-primary"
               aria-label="Back to search"
             >
               <ArrowLeft className="h-5 w-5" />
@@ -92,12 +92,12 @@ export function SearchResultsPage() {
 
             <div>
               <p className="text-sm font-semibold uppercase text-accent-600">{modeLabel[mode]}</p>
-              <h1 className="mt-1 text-3xl font-bold text-ink-primary">{resultTitle}</h1>
+              <h1 className="mt-1 text-2xl font-bold text-ink-primary sm:text-3xl">{resultTitle}</h1>
             </div>
           </div>
 
           <Link to="/search">
-            <Button leftIcon={<Search className="h-4 w-4" />} variant="outline">
+            <Button className="bg-white" leftIcon={<Search className="h-4 w-4" />} variant="outline">
               New search
             </Button>
           </Link>
@@ -105,7 +105,7 @@ export function SearchResultsPage() {
 
         <form
           onSubmit={handleSearchSubmit}
-          className="space-y-4 rounded-xl border border-border bg-white p-4 shadow-sm"
+          className="space-y-4 rounded-lg border border-white/80 bg-white/90 p-4 shadow-sm shadow-slate-200/70 backdrop-blur"
         >
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <SearchModeTabs value={draftMode} onChange={handleDraftModeChange} />
@@ -113,6 +113,7 @@ export function SearchResultsPage() {
             <Button
               type="submit"
               disabled={!canSubmitSearch}
+              className="bg-slate-950 hover:bg-slate-800 active:bg-slate-900"
               leftIcon={<Search className="h-4 w-4" />}
             >
               Search
@@ -140,7 +141,7 @@ export function SearchResultsPage() {
         </form>
 
         {queryEnabled ? (
-          <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-0 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 rounded-lg border border-border bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-ink-primary">{total} results</p>
               <p className="mt-1 text-sm text-ink-secondary">
@@ -148,12 +149,12 @@ export function SearchResultsPage() {
               </p>
             </div>
 
-            <span className="w-fit rounded-full bg-white px-3 py-1 text-sm font-semibold text-accent-600">
+            <span className="w-fit rounded-full bg-slate-950 px-3 py-1 text-sm font-semibold text-white">
               20 photos per page
             </span>
           </div>
         ) : (
-          <section className="rounded-xl border border-border bg-surface-0 p-6 text-center">
+          <section className="rounded-lg border border-border bg-white p-6 text-center shadow-sm">
             <p className="font-semibold text-ink-primary">Start a search to see results</p>
             <p className="mt-2 text-sm text-ink-secondary">
               Enter a text query or upload an image, then submit the search form above.
@@ -164,14 +165,14 @@ export function SearchResultsPage() {
         {queryEnabled && searchQuery.isLoading && <ResultGridSkeleton limit={pageLimit} />}
 
         {queryEnabled && searchQuery.isError && (
-          <section className="rounded-xl border border-red-200 bg-red-50 p-6">
+          <section className="rounded-lg border border-red-200 bg-red-50 p-6">
             <p className="font-semibold text-red-700">Search failed</p>
             <p className="mt-1 text-sm text-red-600">Please try again or start a new search.</p>
           </section>
         )}
 
         {queryEnabled && searchQuery.isSuccess && response && response.items.length === 0 && (
-          <section className="rounded-xl border border-border bg-white p-8 text-center">
+          <section className="rounded-lg border border-border bg-white p-8 text-center shadow-sm">
             <p className="font-semibold text-ink-primary">No results found</p>
             <p className="mt-2 text-sm text-ink-secondary">Try a different query or another image.</p>
           </section>
@@ -361,11 +362,11 @@ function runSearch({
 
 function ResultGridSkeleton({ limit }: { limit: number }) {
   return (
-    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div className="columns-1 gap-5 sm:columns-2 lg:columns-3 xl:columns-4">
       {Array.from({ length: limit }).map((_, index) => (
-        <div key={index} className="rounded-xl border border-border bg-white p-3">
-          <Skeleton height={180} className="overflow-hidden rounded-lg" />
-          <Skeleton lines={2} className="mt-4" />
+        <div key={index} className="mb-5 break-inside-avoid rounded-lg bg-white p-2 shadow-sm">
+          <Skeleton height={index % 3 === 0 ? 260 : 190} className="overflow-hidden rounded-md" />
+          <Skeleton lines={1} className="mt-3" />
         </div>
       ))}
     </div>

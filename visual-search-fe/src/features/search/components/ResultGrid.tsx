@@ -9,7 +9,7 @@ type ResultGridProps = {
 export function ResultGrid({ results, onSelectResult }: ResultGridProps) {
   return (
     <section>
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="columns-1 gap-5 sm:columns-2 lg:columns-3 xl:columns-4">
         {results.map((result) => (
           <ResultCard key={result.id} result={result} onSelect={onSelectResult} />
         ))}
