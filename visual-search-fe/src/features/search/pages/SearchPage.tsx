@@ -7,9 +7,7 @@ import { mockSearchResults } from '@/mocks/searchMockData'
 import { SearchModeTabs } from '../components/SearchModeTabs'
 import { SearchPanel } from '../components/SearchPanel'
 import type { SearchMode } from '../types'
-
-const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp']
-const maxImageSize = 10 * 1024 * 1024
+import { validateSearchImageFile } from '../utils/imageValidation'
 
 export function SearchPage() {
   const navigate = useNavigate()
@@ -42,15 +40,10 @@ export function SearchPage() {
   }
 
   function handleFileSelect(file: File) {
-    if (!allowedImageTypes.includes(file.type)) {
+    const errorMessage = validateSearchImageFile(file)
+    if (errorMessage) {
       setSelectedFile(null)
-      setUploadError('Only JPG, PNG, or WebP images are supported.')
-      return
-    }
-
-    if (file.size > maxImageSize) {
-      setSelectedFile(null)
-      setUploadError('Image size must be 10MB or smaller.')
+      setUploadError(errorMessage)
       return
     }
 

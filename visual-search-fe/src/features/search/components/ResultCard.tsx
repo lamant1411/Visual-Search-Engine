@@ -4,11 +4,22 @@ import type { SearchResult } from '../types'
 
 type ResultCardProps = {
   result: SearchResult
+  onSelect?: (result: SearchResult) => void
 }
 
-export function ResultCard({ result }: ResultCardProps) {
+export function ResultCard({ result, onSelect }: ResultCardProps) {
+  const sizeLabel =
+    result.metadata.width && result.metadata.height
+      ? `${result.metadata.width} x ${result.metadata.height}`
+      : 'Unknown size'
+
   return (
-    <article className="group overflow-hidden rounded-xl border border-border bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <button
+      type="button"
+      className="group overflow-hidden rounded-xl border border-border bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2"
+      aria-label={`Open detail for image ${result.id}`}
+      onClick={() => onSelect?.(result)}
+    >
       <div className="relative aspect-[4/3] overflow-hidden bg-surface-1">
         <img
           alt={`Search result ${result.id}`}
@@ -26,7 +37,7 @@ export function ResultCard({ result }: ResultCardProps) {
         <div>
           <h2 className="text-sm font-semibold text-ink-primary">Image #{result.id}</h2>
           <p className="mt-1 text-xs text-ink-secondary">
-            {result.metadata.width} x {result.metadata.height}
+            {sizeLabel}
             {result.metadata.source ? ` · ${result.metadata.source}` : ''}
           </p>
         </div>
@@ -38,6 +49,6 @@ export function ResultCard({ result }: ResultCardProps) {
           </p>
         )}
       </div>
-    </article>
+    </button>
   )
 }
