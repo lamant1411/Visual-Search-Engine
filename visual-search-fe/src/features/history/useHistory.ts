@@ -54,6 +54,20 @@ export function useHistory() {
     }
   }, [])
 
+  // Xóa nhiều dòng lịch sử
+  const deleteMultiple = useCallback(async (ids: number[]) => {
+    setDeletingIds((prev) => [...prev, ...ids])
+    try {
+      await historyApi.deleteMultiple(ids)
+      setItems((prev) => prev.filter((item) => !ids.includes(item.id)))
+    } catch (err) {
+      console.error('[useHistory] Lỗi khi xóa nhiều mục:', err)
+      alert('Không thể xóa các mục được chọn. Vui lòng thử lại.')
+    } finally {
+      setDeletingIds((prev) => prev.filter((deletingId) => !ids.includes(deletingId)))
+    }
+  }, [])
+
   useEffect(() => {
     fetchHistory()
   }, [fetchHistory])
@@ -66,6 +80,7 @@ export function useHistory() {
     isDeletingAll,
     deleteItem,
     deleteAll,
+    deleteMultiple,
     refetch: fetchHistory,
   }
 }

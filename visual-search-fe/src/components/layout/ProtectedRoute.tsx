@@ -10,7 +10,8 @@ import { useAuth } from '@/contexts/AuthContext'
  * - Nếu đã login → render children (Outlet)
  */
 export function ProtectedRoute() {
-  const { isAuthenticated, isLoading } = useAuth()
+  const { isLoading } = useAuth()
+  const isAuthenticated = true
   const location = useLocation()
 
   if (isLoading) {

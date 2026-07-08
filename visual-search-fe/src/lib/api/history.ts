@@ -88,4 +88,13 @@ export const historyApi = {
     mockHistoryItems = []
     return { message: 'Đã xóa toàn bộ lịch sử tìm kiếm.' }
   },
+
+  /**
+   * Xóa nhiều mục lịch sử tìm kiếm
+   */
+  async deleteMultiple(ids: number[]): Promise<{ message: string }> {
+    await delay(400)
+    mockHistoryItems = mockHistoryItems.filter((item) => !ids.includes(item.id))
+    return { message: 'Đã xóa các mục lịch sử được chọn.' }
+  },
 }

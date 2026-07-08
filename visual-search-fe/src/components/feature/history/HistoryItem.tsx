@@ -6,9 +6,18 @@ interface HistoryItemProps {
   onDelete: (id: number) => Promise<void>
   onReSearch: (item: HistoryItemType) => void
   isDeleting?: boolean
+  isSelected?: boolean
+  onToggleSelect?: () => void
 }
 
-export function HistoryItem({ item, onDelete, onReSearch, isDeleting = false }: HistoryItemProps) {
+export function HistoryItem({
+  item,
+  onDelete,
+  onReSearch,
+  isDeleting = false,
+  isSelected = false,
+  onToggleSelect,
+}: HistoryItemProps) {
   // Format thời gian hiển thị gọn gàng
   const formatTime = (isoString: string) => {
     try {
@@ -61,6 +70,15 @@ export function HistoryItem({ item, onDelete, onReSearch, isDeleting = false }: 
         }`}
     >
       <div className="flex items-center gap-4 min-w-0 flex-1">
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={onToggleSelect}
+          disabled={isDeleting}
+          className="h-4 w-4 shrink-0 rounded-sm border-border text-accent-600 focus:ring-accent-600 accent-accent-600 cursor-pointer"
+          title="Chọn mục này"
+        />
+
         {/* Hình ảnh đại diện / Icon minh họa */}
         <div className="flex h-12 w-12 shrink-0 items-center justify-center border border-border bg-surface-1 overflow-hidden rounded-sm">
           {item.query_type === 'image' ? (

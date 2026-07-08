@@ -9,6 +9,8 @@ interface HistoryListProps {
   deletingIds: number[]
   onDelete: (id: number) => Promise<void>
   onReSearch: (item: HistoryItemType) => void
+  selectedIds: number[]
+  onToggleSelect: (id: number) => void
 }
 
 export function HistoryList({
@@ -17,6 +19,8 @@ export function HistoryList({
   deletingIds,
   onDelete,
   onReSearch,
+  selectedIds,
+  onToggleSelect,
 }: HistoryListProps) {
   // Skeleton hiển thị khi đang load
   if (isLoading) {
@@ -28,6 +32,8 @@ export function HistoryList({
             className="flex items-center justify-between border border-border bg-surface-2 p-4 rounded-sm"
           >
             <div className="flex items-center gap-4 flex-1">
+              {/* Skeleton Checkbox */}
+              <Skeleton width={16} height={16} rounded={false} />
               <Skeleton width={48} height={48} rounded={false} />
               <div className="flex-1">
                 <div className="flex gap-2 mb-2">
@@ -71,6 +77,8 @@ export function HistoryList({
           onDelete={onDelete}
           onReSearch={onReSearch}
           isDeleting={deletingIds.includes(item.id)}
+          isSelected={selectedIds.includes(item.id)}
+          onToggleSelect={() => onToggleSelect(item.id)}
         />
       ))}
     </div>
