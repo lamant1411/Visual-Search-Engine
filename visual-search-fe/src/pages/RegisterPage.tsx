@@ -1,10 +1,12 @@
 import React, { useState } from 'react'
+import axios from 'axios'
 import { Link, useNavigate } from 'react-router'
 import { Input } from '@/components/base/input'
 import { Button } from '@/components/base/button'
 import { AuthCard } from '@/components/feature/auth/AuthCard'
 import { useAuth } from '@/contexts/AuthContext'
 import { authApi } from '@/lib/api/auth'
+import { saveTokens } from '@/lib/auth/tokenStorage'
 
 // ---- Icons ----
 
@@ -123,29 +125,31 @@ export default function RegisterPage() {
 
   const validate = (): boolean => {
     const newErrors: RegisterErrors = {}
+
     if (!form.fullName.trim()) newErrors.fullName = 'Họ tên không được để trống.'
+
     if (!form.email.trim()) {
       newErrors.email = 'Email không được để trống.'
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
       newErrors.email = 'Email không hợp lệ.'
     }
-    if (!form.password) {
-      newErrors.password = 'Mật khẩu không được để trống.'
-    } else if (form.password.length < 8) {
-      newErrors.password = 'Mật khẩu phải có ít nhất 8 ký tự.'
-    } else if (!/[A-Z]/.test(form.password)) {
-      newErrors.password = 'Mật khẩu phải chứa ít nhất 1 chữ in hoa.'
-    } else if (!/[0-9]/.test(form.password)) {
-      newErrors.password = 'Mật khẩu phải chứa ít nhất 1 chữ số.'
-    } else if (!/[^A-Za-z0-9]/.test(form.password)) {
-      newErrors.password = 'Mật khẩu phải chứa ít nhất 1 ký tự đặc biệt.'
-    }
+
+    const pwdRules = [
+      { test: !form.password,                       msg: 'Mật khẩu không được để trống.' },
+      { test: form.password.length < 8,             msg: 'Mật khẩu phải có ít nhất 8 ký tự.' },
+      { test: !/[A-Z]/.test(form.password),         msg: 'Mật khẩu phải chứa ít nhất 1 chữ in hoa.' },
+      { test: !/[0-9]/.test(form.password),         msg: 'Mật khẩu phải chứa ít nhất 1 chữ số.' },
+      { test: !/[^A-Za-z0-9]/.test(form.password), msg: 'Mật khẩu phải chứa ít nhất 1 ký tự đặc biệt.' },
+    ]
+    const firstPwdError = pwdRules.find(r => r.test)
+    if (firstPwdError) newErrors.password = firstPwdError.msg
+
     if (!form.confirmPassword) {
       newErrors.confirmPassword = 'Vui lòng xác nhận mật khẩu.'
     } else if (form.confirmPassword !== form.password) {
       newErrors.confirmPassword = 'Mật khẩu xác nhận không khớp.'
     }
-    if (!form.agreeTerms) newErrors.agreeTerms = 'Bạn phải đồng ý với điều khoản dịch vụ.'
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -166,19 +170,34 @@ export default function RegisterPage() {
       // Bước 2: tự động login để lấy token
       const tokenRes = await authApi.login({ email: form.email, password: form.password })
 
-      // Bước 3: lấy thông tin user
+      // Bước 3: lưu token vào localStorage → axios interceptor tự gắn header
+      saveTokens(tokenRes.access_token, tokenRes.refresh_token)
+
+      // Bước 4: lấy thông tin user (đã có token trong header)
       const meRes = await authApi.me()
 
-      // Bước 4: lưu vào context + localStorage
+      // Bước 5: lưu vào context (1 lần duy nhất)
       login({
         accessToken: tokenRes.access_token,
         refreshToken: tokenRes.refresh_token,
         user: meRes,
       })
 
-      navigate('/search') // auto-login sau khi đăng ký
-    } catch {
-      setErrors({ general: 'Đăng ký thất bại. Email có thể đã được sử dụng.' })
+      navigate('/search')
+    } catch (err) {
+      console.error('[RegisterPage]', err)
+      if (axios.isAxiosError(err)) {
+        const status = err.response?.status
+        if (status === 409 || status === 400) {
+          setErrors({ general: 'Đăng ký thất bại. Email có thể đã được sử dụng.' })
+        } else if (status === 422) {
+          setErrors({ general: 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại.' })
+        } else {
+          setErrors({ general: 'Đăng ký thất bại. Vui lòng thử lại.' })
+        }
+      } else {
+        setErrors({ general: 'Lỗi kết nối. Vui lòng thử lại.' })
+      }
     } finally {
       setLoading(false)
     }

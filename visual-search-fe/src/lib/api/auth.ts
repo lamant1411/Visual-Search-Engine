@@ -4,10 +4,10 @@ import { apiClient } from './client'
 
 /** Trả về từ POST /register */
 export interface RegisterResponse {
-  id: string
+  id: number
   email: string
   username: string
-  full_name: string | null
+  full_name: string
   role: string
   is_active: boolean
   created_at: string
@@ -24,10 +24,10 @@ export interface TokenResponse {
 
 /** Trả về từ GET /me */
 export interface MeResponse {
-  id: string
+  id: number
   email: string
   username: string
-  full_name: string | null
+  full_name: string
   role: string
   is_active: boolean
   created_at: string
@@ -40,7 +40,7 @@ export interface MeResponse {
 export interface RegisterRequest {
   email: string
   password: string
-  full_name?: string
+  full_name: string
 }
 
 export interface LoginRequest {

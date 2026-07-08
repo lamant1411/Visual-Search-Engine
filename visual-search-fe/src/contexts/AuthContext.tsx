@@ -14,10 +14,10 @@ import { authApi } from '@/lib/api/auth'
 
 /** Khớp với response của GET /me */
 export interface AuthUser {
-  id: string
+  id: number
   email: string
   username: string
-  full_name: string | null
+  full_name: string
   role: string
   is_active: boolean
   created_at: string
