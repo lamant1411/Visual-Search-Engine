@@ -6,6 +6,13 @@ import { apiClient } from './client'
 export interface RegisterResponse {
   id: string
   email: string
+  username: string
+  full_name: string | null
+  role: string
+  is_active: boolean
+  created_at: string
+  updated_at: string | null
+  last_login_at: string | null
 }
 
 /** Trả về từ POST /login và POST /refresh */
@@ -19,7 +26,13 @@ export interface TokenResponse {
 export interface MeResponse {
   id: string
   email: string
+  username: string
+  full_name: string | null
+  role: string
   is_active: boolean
+  created_at: string
+  updated_at: string | null
+  last_login_at: string | null
 }
 
 // ── Request types ─────────────────────────────────────────────────
@@ -49,9 +62,7 @@ export const authApi = {
   /** POST /refresh — lấy access_token mới bằng refresh_token */
   refresh: (refreshToken: string) =>
     apiClient
-      .post<TokenResponse>('/refresh', null, {
-        headers: { Authorization: `Bearer ${refreshToken}` },
-      })
+      .post<TokenResponse>('/refresh', { refresh_token: refreshToken })
       .then(r => r.data),
 
   /** POST /logout — huỷ session phía server (nếu có) */

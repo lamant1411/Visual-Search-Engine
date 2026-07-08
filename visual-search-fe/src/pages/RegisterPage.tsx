@@ -133,6 +133,12 @@ export default function RegisterPage() {
       newErrors.password = 'Mật khẩu không được để trống.'
     } else if (form.password.length < 8) {
       newErrors.password = 'Mật khẩu phải có ít nhất 8 ký tự.'
+    } else if (!/[A-Z]/.test(form.password)) {
+      newErrors.password = 'Mật khẩu phải chứa ít nhất 1 chữ in hoa.'
+    } else if (!/[0-9]/.test(form.password)) {
+      newErrors.password = 'Mật khẩu phải chứa ít nhất 1 chữ số.'
+    } else if (!/[^A-Za-z0-9]/.test(form.password)) {
+      newErrors.password = 'Mật khẩu phải chứa ít nhất 1 ký tự đặc biệt.'
     }
     if (!form.confirmPassword) {
       newErrors.confirmPassword = 'Vui lòng xác nhận mật khẩu.'

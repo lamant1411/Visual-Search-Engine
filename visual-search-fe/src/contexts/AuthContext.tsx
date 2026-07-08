@@ -16,7 +16,13 @@ import { authApi } from '@/lib/api/auth'
 export interface AuthUser {
   id: string
   email: string
+  username: string
+  full_name: string | null
+  role: string
   is_active: boolean
+  created_at: string
+  updated_at: string | null
+  last_login_at: string | null
 }
 
 interface AuthState {
@@ -52,8 +58,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Khi app mount: nếu có token trong localStorage → gọi /me để xác minh
-  // và lấy thông tin user (tránh dùng token hết hạn)
+  // Khi app mount: nếu có token trong localStorage → lưu vào state trước,
+  // sau đó gọi /me để xác minh và lấy thông tin user.
   useEffect(() => {
     const storedToken = getAccessToken()
     if (!storedToken) {
@@ -61,14 +67,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
+    // Lưu token vào state trước để axios interceptor có thể gắn vào header
+    setAccessToken(storedToken)
+
     authApi.me()
       .then((meData) => {
-        setAccessToken(storedToken)
         setUser(meData)
       })
       .catch(() => {
-        // Token không hợp lệ hoặc hết hạn → xoá đi
+        // Token không hợp lệ hoặc hết hạn → xóa đi
         clearTokens()
+        setAccessToken(null)
       })
       .finally(() => {
         setIsLoading(false)
