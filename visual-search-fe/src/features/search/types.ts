@@ -3,8 +3,8 @@ export type SearchMode = 'image' | 'semantic' | 'ocr'
 export type TextSearchMode = 'semantic' | 'ocr'
 
 export type ImageMetadata = {
-  width: number
-  height: number
+  width: number | null
+  height: number | null
   source?: string
   ocrText?: string
 }

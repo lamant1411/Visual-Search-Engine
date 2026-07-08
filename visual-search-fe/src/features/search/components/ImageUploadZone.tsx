@@ -47,10 +47,10 @@ export function ImageUploadZone({
         onDragOver={preventDefault}
         onDrop={handleDrop}
         className={[
-          'flex min-h-56 cursor-pointer items-center justify-center rounded-xl border border-dashed bg-surface-0 p-5 text-center transition',
+          'flex min-h-56 cursor-pointer items-center justify-center rounded-lg border border-dashed bg-surface-0 p-5 text-center transition duration-200 focus-within:ring-4 focus-within:ring-accent-100',
           errorMessage
             ? 'border-red-300 bg-red-50'
-            : 'border-border hover:border-accent-600 hover:bg-accent-50',
+            : 'border-border hover:border-accent-600 hover:bg-white',
         ].join(' ')}
       >
         <input accept="image/jpeg,image/png,image/webp" className="sr-only" type="file" onChange={handleFileChange} />
@@ -59,7 +59,7 @@ export function ImageUploadZone({
           <div className="grid w-full gap-4 text-left sm:grid-cols-[180px_1fr] sm:items-center">
             <img
               alt="Selected search image preview"
-              className="h-44 w-full rounded-lg object-cover sm:h-32"
+              className="h-44 w-full rounded-md object-cover sm:h-32"
               src={previewUrl}
             />
 
@@ -71,7 +71,7 @@ export function ImageUploadZone({
           </div>
         ) : (
           <div>
-            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-white text-accent-600 shadow-sm">
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-white text-accent-600 shadow-sm shadow-slate-200/80">
               <ImagePlus className="h-6 w-6" />
             </span>
             <p className="mt-3 text-base font-semibold text-ink-primary">Upload an image</p>
@@ -83,7 +83,7 @@ export function ImageUploadZone({
       {errorMessage && <p className="text-sm font-medium text-red-600">{errorMessage}</p>}
 
       {file && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-white px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-white px-4 py-3 shadow-sm shadow-slate-200/70">
           <div className="flex items-center gap-2 text-sm text-ink-secondary">
             <Upload className="h-4 w-4 text-accent-600" />
             <span>Ready for image search</span>

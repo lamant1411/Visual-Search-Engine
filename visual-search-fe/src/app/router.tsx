@@ -8,6 +8,7 @@ import { AdminGuard } from '@/components/layout/AdminGuard';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import { SearchPage } from '@/features/search/pages/SearchPage';
+import { SearchResultsPage } from '@/features/search/pages/SearchResultsPage';
 // import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 // import { AdminGuard } from '@/components/layout/AdminGuard';
 
@@ -24,6 +25,8 @@ const router = createBrowserRouter([
           { path: '/register', element: <RegisterPage /> },
         ],
       },
+      { path: '/search', element: <SearchPage /> },
+      { path: '/search/results', element: <SearchResultsPage /> },
     ],
   },
 
