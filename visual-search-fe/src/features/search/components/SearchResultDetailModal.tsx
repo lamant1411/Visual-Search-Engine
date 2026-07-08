@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Check, Copy, ExternalLink, Info, Maximize2, X, Zap } from 'lucide-react'
+import { type MouseEvent, useEffect, useState } from 'react'
+import { Check, Copy, Info, Maximize2, Minus, Plus, RotateCcw, X, Zap } from 'lucide-react'
 
 import { Button } from '@/components/base/button'
 
@@ -12,6 +12,9 @@ type SearchResultDetailModalProps = {
 
 export function SearchResultDetailModal({ result, onClose }: SearchResultDetailModalProps) {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle')
+  const [zoom, setZoom] = useState(1)
+  const [zoomOrigin, setZoomOrigin] = useState('50% 50%')
+  const isZoomed = zoom > 1
   const sizeLabel =
     result.metadata.width && result.metadata.height
       ? `${result.metadata.width} x ${result.metadata.height}`
@@ -36,18 +39,62 @@ export function SearchResultDetailModal({ result, onClose }: SearchResultDetailM
       onClick={onClose}
     >
       <section
-        className="grid max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-xl bg-white shadow-2xl lg:grid-cols-[minmax(0,1.35fr)_340px]"
+        className="grid h-[92vh] w-[96vw] max-w-[1500px] overflow-hidden rounded-xl bg-white shadow-2xl lg:grid-cols-[minmax(0,1fr)_320px]"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex min-h-[320px] items-center justify-center bg-slate-950">
+        <div
+          className={[
+            'relative flex min-h-[420px] items-center justify-center overflow-hidden bg-slate-950 lg:min-h-0',
+            isZoomed ? 'cursor-zoom-out' : 'cursor-zoom-in',
+          ].join(' ')}
+          onClick={handleImageClick}
+          onMouseMove={handleImageMouseMove}
+        >
+          <div
+            className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded-full bg-black/55 p-1 text-white backdrop-blur"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              aria-label="Zoom out"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={zoom <= 1}
+              type="button"
+              onClick={() => setZoom((currentZoom) => Math.max(1, currentZoom - 0.25))}
+            >
+              <Minus className="h-4 w-4" />
+            </button>
+
+            <button
+              aria-label="Reset zoom"
+              className="inline-flex h-8 items-center justify-center gap-1 rounded-full px-2 text-xs font-semibold hover:bg-white/15"
+              type="button"
+              onClick={resetZoom}
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              {Math.round(zoom * 100)}%
+            </button>
+
+            <button
+              aria-label="Zoom in"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={zoom >= 2.5}
+              type="button"
+              onClick={() => setZoom((currentZoom) => Math.min(2.5, currentZoom + 0.25))}
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
+
           <img
             alt={`Search result ${result.id}`}
-            className="max-h-[70vh] w-full object-contain"
+            className="h-full max-h-[92vh] w-full object-contain transition-transform duration-200"
+            draggable={false}
             src={result.imageUrl}
+            style={{ transform: `scale(${zoom})`, transformOrigin: zoomOrigin }}
           />
         </div>
 
-        <aside className="flex max-h-[90vh] flex-col overflow-y-auto p-5">
+        <aside className="flex max-h-[92vh] flex-col overflow-y-auto p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase text-accent-600">Image detail</p>
@@ -104,21 +151,35 @@ export function SearchResultDetailModal({ result, onClose }: SearchResultDetailM
             {copyStatus === 'error' && (
               <p className="text-center text-xs font-medium text-red-600">Could not copy this URL.</p>
             )}
-
-            <a
-              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-[10px] border border-slate-300 bg-transparent px-4 py-2 text-sm font-semibold text-slate-700 transition-all duration-200 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
-              href={result.imageUrl}
-              rel="noreferrer"
-              target="_blank"
-            >
-              <ExternalLink className="h-4 w-4" />
-              <span>Open original</span>
-            </a>
           </div>
         </aside>
       </section>
     </div>
   )
+
+  function handleImageClick(event: MouseEvent<HTMLDivElement>) {
+    updateZoomOrigin(event)
+    setZoom((currentZoom) => (currentZoom > 1 ? 1 : 2))
+  }
+
+  function handleImageMouseMove(event: MouseEvent<HTMLDivElement>) {
+    if (isZoomed) {
+      updateZoomOrigin(event)
+    }
+  }
+
+  function resetZoom() {
+    setZoom(1)
+    setZoomOrigin('50% 50%')
+  }
+
+  function updateZoomOrigin(event: MouseEvent<HTMLDivElement>) {
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const x = clamp(((event.clientX - bounds.left) / bounds.width) * 100, 0, 100)
+    const y = clamp(((event.clientY - bounds.top) / bounds.height) * 100, 0, 100)
+
+    setZoomOrigin(`${x}% ${y}%`)
+  }
 
   async function handleCopyImageUrl() {
     try {
@@ -128,6 +189,10 @@ export function SearchResultDetailModal({ result, onClose }: SearchResultDetailM
       setCopyStatus('error')
     }
   }
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max)
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
