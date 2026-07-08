@@ -1,5 +1,5 @@
 import { type MouseEvent, useEffect, useState } from 'react'
-import { Check, Copy, Info, Maximize2, Minus, Plus, RotateCcw, X, Zap } from 'lucide-react'
+import { Check, Copy, Info, Maximize2, Minus, Plus, RotateCcw, Search, X, Zap } from 'lucide-react'
 
 import { Button } from '@/components/base/button'
 
@@ -8,9 +8,10 @@ import type { SearchResult } from '../types'
 type SearchResultDetailModalProps = {
   result: SearchResult
   onClose: () => void
+  onFindSimilar?: (result: SearchResult) => void
 }
 
-export function SearchResultDetailModal({ result, onClose }: SearchResultDetailModalProps) {
+export function SearchResultDetailModal({ result, onClose, onFindSimilar }: SearchResultDetailModalProps) {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle')
   const [zoom, setZoom] = useState(1)
   const [zoomOrigin, setZoomOrigin] = useState('50% 50%')
@@ -136,6 +137,15 @@ export function SearchResultDetailModal({ result, onClose }: SearchResultDetailM
           )}
 
           <div className="mt-auto space-y-3 pt-6">
+            <Button
+              fullWidth
+              leftIcon={<Search className="h-4 w-4" />}
+              type="button"
+              onClick={() => onFindSimilar?.(result)}
+            >
+              Find similar images
+            </Button>
+
             <Button
               fullWidth
               leftIcon={

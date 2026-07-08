@@ -36,18 +36,21 @@ export function SearchResultsPage() {
 
   const mode = parseSearchMode(searchParams.get('mode'))
   const query = searchParams.get('q') ?? ''
+  const imageId = parseOptionalPositiveNumber(searchParams.get('imageId'))
   const page = parsePositiveNumber(searchParams.get('page'), 1)
   const [draftMode, setDraftMode] = useState<SearchMode>(mode)
   const [draftQuery, setDraftQuery] = useState(query)
   const [selectedFile, setSelectedFile] = useState<File | null>(state.file ?? null)
   const [uploadError, setUploadError] = useState<string>()
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null)
-  const resultTitle = getResultTitle(mode, query, state.fileName)
-  const queryEnabled = mode === 'image' ? Boolean(state.file) : query.trim().length > 0
+  const resultTitle = getResultTitle(mode, query, state.fileName, imageId)
+  const queryEnabled = mode === 'image' ? Boolean(state.file || imageId) : query.trim().length > 0
   const canSubmitSearch = draftMode === 'image' ? Boolean(selectedFile) : draftQuery.trim().length > 0
   const imageSearchKey = state.file
     ? `${state.file.name}-${state.file.size}-${state.file.lastModified}`
-    : 'no-file'
+    : imageId
+      ? `image-${imageId}`
+      : 'no-image'
   const previewUrl = useMemo(() => {
     if (!selectedFile) {
       return null
@@ -65,8 +68,8 @@ export function SearchResultsPage() {
   }, [previewUrl])
 
   const searchQuery = useQuery({
-    queryKey: ['search-results', mode, query, page, pageLimit, imageSearchKey],
-    queryFn: () => runSearch({ mode, query, page, limit: pageLimit, file: state.file }),
+    queryKey: ['search-results', mode, query, imageId, page, pageLimit, imageSearchKey],
+    queryFn: () => runSearch({ mode, query, imageId, page, limit: pageLimit, file: state.file }),
     enabled: queryEnabled,
   })
 
@@ -208,7 +211,11 @@ export function SearchResultsPage() {
       </PageContainer>
 
       {selectedResult && (
-        <SearchResultDetailModal result={selectedResult} onClose={() => setSelectedResult(null)} />
+        <SearchResultDetailModal
+          result={selectedResult}
+          onClose={() => setSelectedResult(null)}
+          onFindSimilar={handleFindSimilarResult}
+        />
       )}
     </main>
   )
@@ -264,11 +271,29 @@ export function SearchResultsPage() {
     setSearchParams(nextParams, { state: null })
   }
 
+  function handleFindSimilarResult(result: SearchResult) {
+    const nextParams = new URLSearchParams()
+    nextParams.set('mode', 'image')
+    nextParams.set('imageId', String(result.id))
+    nextParams.set('page', '1')
+    nextParams.set('limit', String(pageLimit))
+
+    setSelectedResult(null)
+    setDraftMode('image')
+    setDraftQuery('')
+    setSelectedFile(null)
+    setUploadError(undefined)
+    setSearchParams(nextParams, { state: null })
+  }
+
   function updateSearchParams(nextPage: number) {
     const nextParams = new URLSearchParams(searchParams)
     nextParams.set('mode', mode)
     if (query) {
       nextParams.set('q', query)
+    }
+    if (imageId) {
+      nextParams.set('imageId', String(imageId))
     }
     nextParams.set('page', String(nextPage))
     nextParams.set('limit', String(pageLimit))
@@ -285,8 +310,12 @@ function parseSearchMode(value: string | null): SearchMode {
   return 'semantic'
 }
 
-function getResultTitle(mode: SearchMode, query: string, fileName?: string) {
+function getResultTitle(mode: SearchMode, query: string, fileName?: string, imageId?: number) {
   if (mode === 'image') {
+    if (imageId) {
+      return `Similar images for #${imageId}`
+    }
+
     return fileName ? `Results for ${fileName}` : 'Image search results'
   }
 
@@ -298,21 +327,28 @@ function parsePositiveNumber(value: string | null, fallback: number) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
 }
 
+function parseOptionalPositiveNumber(value: string | null) {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
+}
+
 function runSearch({
   mode,
   query,
+  imageId,
   page,
   limit,
   file,
 }: {
   mode: SearchMode
   query: string
+  imageId?: number
   page: number
   limit: number
   file?: File
 }): Promise<SearchResponse> {
   if (mode === 'image') {
-    return searchByImage({ file, page, limit })
+    return searchByImage({ file, imageId, page, limit })
   }
 
   return searchByText({
