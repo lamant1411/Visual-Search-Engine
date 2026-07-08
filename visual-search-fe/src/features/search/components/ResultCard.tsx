@@ -22,7 +22,7 @@ export function ResultCard({ result, onSelect }: ResultCardProps) {
   return (
     <button
       type="button"
-      className="group mb-5 block w-full break-inside-avoid overflow-hidden rounded-lg bg-white text-left shadow-sm shadow-slate-200/70 transition hover:-translate-y-0.5 hover:shadow-md hover:shadow-slate-200/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:ring-offset-2"
+      className="group mb-5 block w-full cursor-pointer break-inside-avoid overflow-hidden rounded-lg bg-white text-left shadow-sm shadow-slate-200/70 ring-1 ring-white/70 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/90 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0"
       aria-label={`Open detail for image ${result.id}`}
       onClick={() => onSelect?.(result)}
     >
@@ -38,12 +38,12 @@ export function ResultCard({ result, onSelect }: ResultCardProps) {
           src={result.thumbnailUrl}
           onLoad={() => setImageLoaded(true)}
         />
-        <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-xs font-bold text-slate-800 shadow-sm backdrop-blur">
+        <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-xs font-bold text-ink-primary shadow-sm shadow-slate-900/10 backdrop-blur">
           <Zap className="h-3.5 w-3.5 text-accent-600" />
           {Math.round(result.similarityScore)}%
         </span>
 
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent p-4 pt-14 text-white opacity-0 transition group-hover:opacity-100">
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent p-4 pt-14 text-white opacity-0 transition duration-200 group-hover:opacity-100 group-focus-visible:opacity-100">
           <h2 className="text-sm font-semibold">{result.metadata.source ?? 'Image result'}</h2>
           <p className="mt-1 text-xs text-white/80">
             {sizeLabel}

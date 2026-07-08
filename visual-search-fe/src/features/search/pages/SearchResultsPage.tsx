@@ -59,27 +59,27 @@ export function SearchResultsPage() {
   const totalPages = Math.max(1, Math.ceil(total / pageLimit))
 
   return (
-    <main className="min-h-screen bg-[#f7f8fa]">
+    <main className="min-h-screen bg-surface-0">
       <PageContainer size="wide" className="max-w-7xl space-y-7 pb-7 pt-3">
-        <header className="sticky top-0 z-30 flex items-center gap-4 border-b border-slate-200/80 bg-[#f7f8fa]/90 py-4 backdrop-blur">
+        <header className="sticky top-0 z-30 flex items-center gap-4 border-b border-border bg-surface-0/90 py-4 backdrop-blur">
           <Link to="/search" className="flex shrink-0 items-center gap-3">
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-950 shadow-sm shadow-slate-200/70">
+            <span className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-white text-ink-primary shadow-sm shadow-slate-200/70">
               <Search className="h-5 w-5" strokeWidth={2.25} />
             </span>
 
             <div className="hidden sm:block">
-              <p className="text-lg font-bold text-slate-950">VisualSearch</p>
+              <p className="font-display text-xl font-bold text-ink-primary">VisualSearch</p>
               <p className="text-[11px] font-semibold uppercase text-slate-400">Image search engine</p>
             </div>
           </Link>
 
           {renderCompactSearchForm(
-            'hidden h-12 max-w-3xl flex-1 items-center rounded-full bg-white shadow-sm shadow-slate-200/80 ring-1 ring-slate-200/80 lg:flex',
+            'hidden h-12 max-w-3xl flex-1 items-center rounded-full bg-white shadow-sm shadow-slate-200/80 ring-1 ring-border transition duration-200 focus-within:ring-4 focus-within:ring-accent-100 lg:flex',
           )}
 
           <Link
             to="/login"
-            className="ml-auto inline-flex h-10 w-fit shrink-0 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm shadow-slate-200/70 transition hover:border-slate-300 hover:text-slate-950"
+            className="ml-auto inline-flex h-11 w-fit shrink-0 items-center justify-center gap-2 rounded-full border border-border bg-white px-4 text-sm font-bold text-ink-primary shadow-sm shadow-slate-200/70 transition hover:border-accent-600 hover:text-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0"
           >
             <LogIn className="h-4 w-4" />
             Login
@@ -87,31 +87,31 @@ export function SearchResultsPage() {
         </header>
 
         {renderCompactSearchForm(
-          'sticky top-[76px] z-20 flex h-12 items-center rounded-full bg-white shadow-sm shadow-slate-200/80 ring-1 ring-slate-200/80 lg:hidden',
+          'sticky top-[76px] z-20 flex h-12 items-center rounded-full bg-white shadow-sm shadow-slate-200/80 ring-1 ring-border transition duration-200 focus-within:ring-4 focus-within:ring-accent-100 lg:hidden',
         )}
 
         {uploadError && <p className="text-sm font-medium text-red-600">{uploadError}</p>}
 
-        <section className="py-4 text-center">
-          <p className="text-xs font-semibold uppercase text-slate-400">{modeLabel[mode]}</p>
-          <h1 className="mt-2 text-3xl font-semibold text-slate-950">{resultTitle}</h1>
+        <section className="py-5 text-center">
+          <p className="text-xs font-bold uppercase text-accent-600">{modeLabel[mode]}</p>
+          <h1 className="font-display mt-2 text-3xl font-bold text-ink-primary sm:text-4xl">{resultTitle}</h1>
         </section>
 
         {queryEnabled ? (
-          <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-semibold text-slate-950">{total} results</p>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="text-sm font-bold text-ink-primary">{total} results</p>
+              <p className="mt-1 text-sm text-ink-secondary">
                 Page {page} of {totalPages}. Sorted by highest similarity score.
               </p>
             </div>
 
-            <span className="w-fit rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-500">
+            <span className="w-fit rounded-full border border-border bg-white px-3 py-1 text-xs font-bold text-ink-secondary shadow-sm shadow-slate-200/70">
               20 photos per page
             </span>
           </div>
         ) : (
-          <section className="rounded-lg border border-border bg-white p-6 text-center shadow-sm">
+          <section className="rounded-lg border border-border bg-white p-6 text-center shadow-sm shadow-slate-200/70">
             <p className="font-semibold text-ink-primary">Start a search to see results</p>
             <p className="mt-2 text-sm text-ink-secondary">
               Enter a text query or upload an image, then submit the search form above.
@@ -129,7 +129,7 @@ export function SearchResultsPage() {
         )}
 
         {queryEnabled && searchQuery.isSuccess && response && response.items.length === 0 && (
-          <section className="rounded-lg border border-border bg-white p-8 text-center shadow-sm">
+          <section className="rounded-lg border border-border bg-white p-8 text-center shadow-sm shadow-slate-200/70">
             <p className="font-semibold text-ink-primary">No results found</p>
             <p className="mt-2 text-sm text-ink-secondary">Try a different query or another image.</p>
           </section>
@@ -143,6 +143,7 @@ export function SearchResultsPage() {
               <Button
                 type="button"
                 variant="outline"
+                className="focus-visible:ring-accent-600"
                 disabled={page <= 1}
                 leftIcon={<ChevronLeft className="h-4 w-4" />}
                 onClick={() => updateSearchParams(page - 1)}
@@ -157,6 +158,7 @@ export function SearchResultsPage() {
               <Button
                 type="button"
                 variant="outline"
+                className="focus-visible:ring-accent-600"
                 disabled={page >= totalPages}
                 rightIcon={<ChevronRight className="h-4 w-4" />}
                 onClick={() => updateSearchParams(page + 1)}
@@ -271,12 +273,12 @@ export function SearchResultsPage() {
   function renderCompactSearchForm(className: string) {
     return (
       <form className={className} onSubmit={handleSearchSubmit}>
-        <label className="relative flex h-full shrink-0 items-center gap-2 rounded-l-full border-r border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-800">
-          {draftMode === 'image' && <ImagePlus className="h-4 w-4 text-slate-400" />}
-          {draftMode === 'semantic' && <FileText className="h-4 w-4 text-slate-400" />}
-          {draftMode === 'ocr' && <ScanText className="h-4 w-4 text-slate-400" />}
+        <label className="relative flex h-full shrink-0 cursor-pointer items-center gap-2 rounded-l-full border-r border-border bg-surface-1 px-4 text-sm font-bold text-ink-primary">
+          {draftMode === 'image' && <ImagePlus className="h-4 w-4 text-accent-600" />}
+          {draftMode === 'semantic' && <FileText className="h-4 w-4 text-accent-600" />}
+          {draftMode === 'ocr' && <ScanText className="h-4 w-4 text-accent-600" />}
           <select
-            className="appearance-none bg-transparent pr-5 outline-none"
+            className="cursor-pointer appearance-none bg-transparent pr-5 outline-none"
             value={draftMode}
             onChange={(event) => handleDraftModeChange(event.target.value as SearchMode)}
           >
@@ -301,7 +303,7 @@ export function SearchResultsPage() {
           </label>
         ) : (
           <input
-            className="h-full min-w-0 flex-1 bg-transparent px-5 text-sm font-semibold text-slate-950 outline-none placeholder:font-medium placeholder:text-slate-400"
+            className="h-full min-w-0 flex-1 bg-transparent px-5 text-sm font-bold text-ink-primary outline-none placeholder:font-medium placeholder:text-slate-400"
             onChange={(event) => setDraftQuery(event.target.value)}
             placeholder={draftMode === 'semantic' ? 'Search by description' : 'Search text in images'}
             value={draftQuery}
@@ -311,7 +313,7 @@ export function SearchResultsPage() {
         {draftMode === 'image' && selectedFile && (
           <button
             aria-label="Remove selected image"
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-950"
+            className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-slate-400 transition hover:bg-accent-50 hover:text-accent-700"
             type="button"
             onClick={handleClearFile}
           >
@@ -321,7 +323,7 @@ export function SearchResultsPage() {
 
         <button
           aria-label="Search"
-          className="mr-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
+          className="mr-2 inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-ink-primary transition hover:bg-accent-50 hover:text-accent-700 disabled:cursor-not-allowed disabled:text-slate-300"
           disabled={!canSubmitSearch}
           type="submit"
         >

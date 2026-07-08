@@ -1,5 +1,5 @@
 import { type MouseEvent, useEffect, useState } from 'react'
-import { Check, Copy, Info, Maximize2, Minus, Plus, RotateCcw, Search, X, Zap } from 'lucide-react'
+import { Check, Copy, Info, Minus, Plus, RotateCcw, Search, X, Zap } from 'lucide-react'
 
 import { Button } from '@/components/base/button'
 
@@ -9,9 +9,15 @@ type SearchResultDetailModalProps = {
   result: SearchResult
   onClose: () => void
   onFindSimilar?: (result: SearchResult) => void
+  showSimilarity?: boolean
 }
 
-export function SearchResultDetailModal({ result, onClose, onFindSimilar }: SearchResultDetailModalProps) {
+export function SearchResultDetailModal({
+  result,
+  onClose,
+  onFindSimilar,
+  showSimilarity = true,
+}: SearchResultDetailModalProps) {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle')
   const [zoom, setZoom] = useState(1)
   const [zoomOrigin, setZoomOrigin] = useState('50% 50%')
@@ -35,12 +41,12 @@ export function SearchResultDetailModal({ result, onClose, onFindSimilar }: Sear
   return (
     <div
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"
       role="dialog"
       onClick={onClose}
     >
       <section
-        className="grid h-[92vh] w-[96vw] max-w-[1500px] overflow-hidden rounded-xl bg-white shadow-2xl lg:grid-cols-[minmax(0,1fr)_320px]"
+        className="grid h-[92vh] w-[96vw] max-w-[1500px] overflow-hidden rounded-lg bg-white shadow-2xl lg:grid-cols-[minmax(0,1fr)_340px]"
         onClick={(event) => event.stopPropagation()}
       >
         <div
@@ -52,12 +58,12 @@ export function SearchResultDetailModal({ result, onClose, onFindSimilar }: Sear
           onMouseMove={handleImageMouseMove}
         >
           <div
-            className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded-full bg-black/55 p-1 text-white backdrop-blur"
+            className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded-full bg-black/60 p-1 text-white shadow-sm backdrop-blur"
             onClick={(event) => event.stopPropagation()}
           >
             <button
               aria-label="Zoom out"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 disabled:cursor-not-allowed disabled:opacity-40"
               disabled={zoom <= 1}
               type="button"
               onClick={() => setZoom((currentZoom) => Math.max(1, currentZoom - 0.25))}
@@ -67,7 +73,7 @@ export function SearchResultDetailModal({ result, onClose, onFindSimilar }: Sear
 
             <button
               aria-label="Reset zoom"
-              className="inline-flex h-8 items-center justify-center gap-1 rounded-full px-2 text-xs font-semibold hover:bg-white/15"
+              className="inline-flex h-9 cursor-pointer items-center justify-center gap-1 rounded-full px-3 text-xs font-bold transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
               type="button"
               onClick={resetZoom}
             >
@@ -77,7 +83,7 @@ export function SearchResultDetailModal({ result, onClose, onFindSimilar }: Sear
 
             <button
               aria-label="Zoom in"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 disabled:cursor-not-allowed disabled:opacity-40"
               disabled={zoom >= 2.5}
               type="button"
               onClick={() => setZoom((currentZoom) => Math.min(2.5, currentZoom + 0.25))}
@@ -95,15 +101,16 @@ export function SearchResultDetailModal({ result, onClose, onFindSimilar }: Sear
           />
         </div>
 
-        <aside className="flex max-h-[92vh] flex-col overflow-y-auto p-5">
+        <aside className="flex max-h-[92vh] flex-col overflow-y-auto bg-white p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase text-accent-600">Image detail</p>
-              <h2 className="mt-1 text-xl font-bold text-ink-primary">Image #{result.id}</h2>
+              <h2 className="font-display mt-1 text-2xl font-bold text-ink-primary">Image #{result.id}</h2>
             </div>
 
             <Button
               aria-label="Close image detail"
+              className="focus-visible:ring-accent-600"
               size="icon"
               type="button"
               variant="ghost"
@@ -113,12 +120,14 @@ export function SearchResultDetailModal({ result, onClose, onFindSimilar }: Sear
             </Button>
           </div>
 
-          <div className="mt-5 rounded-xl border border-border bg-surface-0 p-4">
-            <div className="flex items-center gap-2 text-sm font-semibold text-accent-600">
-              <Zap className="h-4 w-4" />
-              {Math.round(result.similarityScore)}% similarity
+          {showSimilarity && (
+            <div className="mt-5 rounded-lg border border-border bg-surface-0 p-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-accent-600">
+                <Zap className="h-4 w-4" />
+                {Math.round(result.similarityScore)}% similarity
+              </div>
             </div>
-          </div>
+          )}
 
           <dl className="mt-5 space-y-4 text-sm">
             <DetailRow label="Size" value={sizeLabel} />
@@ -127,7 +136,7 @@ export function SearchResultDetailModal({ result, onClose, onFindSimilar }: Sear
           </dl>
 
           {result.metadata.ocrText && (
-            <div className="mt-5 rounded-xl border border-border bg-white p-4">
+            <div className="mt-5 rounded-lg border border-border bg-white p-4 shadow-sm shadow-slate-200/70">
               <div className="flex items-center gap-2 text-sm font-semibold text-ink-primary">
                 <Info className="h-4 w-4 text-accent-600" />
                 OCR text
@@ -139,7 +148,7 @@ export function SearchResultDetailModal({ result, onClose, onFindSimilar }: Sear
           <div className="mt-auto space-y-3 pt-6">
             <Button
               fullWidth
-              className="bg-slate-950 hover:bg-slate-800 active:bg-slate-900"
+              className="!bg-ink-primary shadow-sm shadow-slate-300/70 hover:!bg-slate-800 active:!bg-slate-900 focus-visible:ring-accent-600"
               leftIcon={<Search className="h-4 w-4" />}
               type="button"
               onClick={() => onFindSimilar?.(result)}
@@ -149,6 +158,7 @@ export function SearchResultDetailModal({ result, onClose, onFindSimilar }: Sear
 
             <Button
               fullWidth
+              className="focus-visible:ring-accent-600"
               leftIcon={
                 copyStatus === 'copied' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />
               }
@@ -208,12 +218,9 @@ function clamp(value: number, min: number, max: number) {
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
-    <div>
+    <div className="rounded-lg border border-border bg-white px-4 py-3 shadow-sm shadow-slate-200/60">
       <dt className="text-xs font-semibold uppercase text-ink-muted">{label}</dt>
-      <dd className="mt-1 flex items-center gap-2 font-medium text-ink-primary">
-        <Maximize2 className="h-3.5 w-3.5 text-ink-muted" />
-        {value}
-      </dd>
+      <dd className="mt-1 font-semibold text-ink-primary">{value}</dd>
     </div>
   )
 }
