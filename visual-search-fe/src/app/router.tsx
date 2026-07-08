@@ -17,7 +17,6 @@ const router = createBrowserRouter([
     element: <GuestRoute />,      // redirect về /search nếu đã login
     children: [
       // "/" chưa có page riêng -> tự chuyển hướng sang /search
-      { index: true, element: <Navigate to="/search" replace /> },
       {
         element: <AuthShell />,   // layout nền tím, không Header
         children: [
@@ -25,7 +24,6 @@ const router = createBrowserRouter([
           { path: '/register', element: <RegisterPage /> },
         ],
       },
-      { path: '/search', element: <SearchPage /> },
     ],
   },
 
@@ -37,7 +35,7 @@ const router = createBrowserRouter([
         element: <AppShell />,    // layout có Header
         children: [
           { index: true, element: <Navigate to="/search" replace /> },
-          { path: '/search', element: <div>Search page</div> },
+          { path: '/search', element: <SearchPage /> },
           { path: '/history', element: <div>History page</div> },
         ],
       },
