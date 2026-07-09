@@ -238,18 +238,29 @@ export default function BookmarkPage() {
     <>
     <PageContainer size="wide" className="py-8 space-y-6">
       {/* Header */}
-      <div className="border-b border-border pb-6">
-        <div className="flex items-baseline gap-3">
-          <h1 className="text-2xl font-bold text-ink-primary tracking-tight">
-            Ảnh đã lưu
-          </h1>
-          {!isLoading && total > 0 && (
-            <span className="text-sm text-ink-muted font-medium">{total} ảnh</span>
-          )}
+      <div className="relative border-b border-border pb-6">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-1 border border-border text-ink-primary shadow-xs">
+              <Bookmark className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h1 className="font-display text-2xl font-bold tracking-tight text-ink-primary">
+                  Ảnh đã lưu
+                </h1>
+                {!isLoading && total > 0 && (
+                  <span className="inline-flex items-center rounded-full border border-border bg-surface-1 px-2.5 py-0.5 text-xs font-semibold text-ink-secondary shadow-2xs">
+                    {total} ảnh
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-ink-secondary mt-1 max-w-xl">
+                Lưu trữ các hình ảnh yêu thích từ kết quả tìm kiếm của bạn.
+              </p>
+            </div>
+          </div>
         </div>
-        <p className="text-sm text-ink-secondary mt-1">
-          Những hình ảnh bạn đã đánh dấu từ kết quả tìm kiếm.
-        </p>
       </div>
 
       {/* Lỗi */}
