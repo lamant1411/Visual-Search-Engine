@@ -9,6 +9,7 @@ import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import { SearchPage } from '@/features/search/pages/SearchPage';
 import HistoryPage from '@/pages/HistoryPage';
+import BookmarkPage from '@/pages/BookmarkPage';
 import { SearchResultsPage } from '@/features/search/pages/SearchResultsPage';
 // import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 // import { AdminGuard } from '@/components/layout/AdminGuard';
@@ -39,7 +40,7 @@ const router = createBrowserRouter([
           { index: true, element: <Navigate to="/search" replace /> },
           { path: '/search', element: <SearchPage /> },
           { path: '/search/results', element: <SearchResultsPage /> },
-          // { path: '/history', element: <div>History page</div> },
+          // { path: '/bookmark', element: <BookmarkPage /> },
         ],
       },
     ],
@@ -47,7 +48,9 @@ const router = createBrowserRouter([
 
   {
     element: <AppShell />,    // layout có Header
-    children: [{ path: '/history', element: <HistoryPage /> },]
+    children: [
+      { path: '/history', element: <HistoryPage /> },
+      { path: '/bookmark', element: <BookmarkPage /> },]
   },
 
   // ── Admin routes: yêu cầu login + role admin ─────────────────────
