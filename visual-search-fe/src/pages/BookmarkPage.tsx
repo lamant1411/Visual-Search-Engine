@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { AlertCircle, Bookmark, BookmarkX, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { useBookmark } from '@/features/bookmark/useBookmark'
+import { BookmarkDetailModal } from '@/components/feature/bookmark/BookmarkDetailModal'
 import type { BookmarkItem } from '@/lib/api/bookmark'
 
 // ── Skeleton một card ─────────────────────────────────────────────
@@ -37,11 +38,19 @@ interface BookmarkCardProps {
   item: BookmarkItem
   isRemoving: boolean
   onRemove: (id: number) => void
+  onOpen: (id: number) => void
 }
 
-function BookmarkCard({ item, isRemoving, onRemove }: BookmarkCardProps) {
+function BookmarkCard({ item, isRemoving, onRemove, onOpen }: BookmarkCardProps) {
   return (
-    <div className="group relative break-inside-avoid mb-3">
+    <div
+      className="group relative break-inside-avoid mb-3 cursor-pointer"
+      onClick={() => onOpen(item.id)}
+      role="button"
+      tabIndex={0}
+      aria-label={`Xem chi tiết: ${item.title}`}
+      onKeyDown={(e) => e.key === 'Enter' && onOpen(item.id)}
+    >
       <div className="relative overflow-hidden rounded-xl bg-surface-1">
         <img
           src={item.image_url}
@@ -53,12 +62,12 @@ function BookmarkCard({ item, isRemoving, onRemove }: BookmarkCardProps) {
         {/* Overlay hover */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-250 rounded-xl" />
 
-        {/* Nút xoá */}
+        {/* Nút xoá — ngăn click lan lên card */}
         <button
           type="button"
           aria-label="Xoá khỏi bookmark"
           disabled={isRemoving}
-          onClick={() => onRemove(item.id)}
+          onClick={(e) => { e.stopPropagation(); onRemove(item.id) }}
           className="absolute top-2 right-2 z-10 flex items-center justify-center w-8 h-8 rounded-full bg-white/90 hover:bg-white text-ink-secondary hover:text-red-500 shadow-sm transition-all duration-200 opacity-0 group-hover:opacity-100 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         >
           {isRemoving ? (
@@ -103,9 +112,10 @@ interface MasonryGridProps {
   items: BookmarkItem[]
   removingIds: number[]
   onRemove: (id: number) => void
+  onOpen: (id: number) => void
 }
 
-function MasonryGrid({ items, removingIds, onRemove }: MasonryGridProps) {
+function MasonryGrid({ items, removingIds, onRemove, onOpen }: MasonryGridProps) {
   if (items.length === 0) return <EmptyState />
 
   return (
@@ -116,6 +126,7 @@ function MasonryGrid({ items, removingIds, onRemove }: MasonryGridProps) {
           item={item}
           isRemoving={removingIds.includes(item.id)}
           onRemove={onRemove}
+          onOpen={onOpen}
         />
       ))}
     </div>
@@ -219,10 +230,12 @@ function Pagination({ page, totalPages, total, onChange }: PaginationProps) {
 
 export default function BookmarkPage() {
   const [page, setPage] = useState(1)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
   const { items, total, totalPages, isLoading, error, removingIds, removeItem } =
     useBookmark(page)
 
   return (
+    <>
     <PageContainer size="wide" className="py-8 space-y-6">
       {/* Header */}
       <div className="border-b border-border pb-6">
@@ -251,7 +264,12 @@ export default function BookmarkPage() {
       {isLoading ? (
         <SkeletonGrid />
       ) : (
-        <MasonryGrid items={items} removingIds={removingIds} onRemove={removeItem} />
+        <MasonryGrid
+          items={items}
+          removingIds={removingIds}
+          onRemove={removeItem}
+          onOpen={setSelectedId}
+        />
       )}
 
       {/* Pagination */}
@@ -264,6 +282,13 @@ export default function BookmarkPage() {
         />
       )}
     </PageContainer>
+
+    {/* Modal chi tiết */}
+    <BookmarkDetailModal
+      bookmarkId={selectedId}
+      onClose={() => setSelectedId(null)}
+    />
+    </>
   )
 }
 

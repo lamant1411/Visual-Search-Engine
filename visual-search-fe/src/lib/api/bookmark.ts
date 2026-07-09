@@ -7,6 +7,16 @@ export interface BookmarkItem {
   saved_at: string
 }
 
+export interface BookmarkDetail extends BookmarkItem {
+  /** Kích thước ảnh gốc */
+  width: number
+  height: number
+  /** Nguồn / tên file gốc */
+  source: string
+  /** OCR text trích xuất từ ảnh (null nếu không có) */
+  ocr_text: string | null
+}
+
 export interface BookmarkListParams {
   page?: number
   limit?: number
@@ -175,5 +185,29 @@ export const bookmarkApi = {
     await delay(300)
     mockBookmarks = mockBookmarks.filter((b) => b.id !== id)
     return { message: 'Đã xoá khỏi bookmark.' }
+  },
+
+  /** Lấy chi tiết một bookmark (metadata + OCR text) */
+  async detail(id: number): Promise<BookmarkDetail> {
+    await delay(400)
+    const item = mockBookmarks.find((b) => b.id === id)
+    if (!item) throw new Error('Bookmark không tồn tại.')
+
+    // Mock metadata — thực tế lấy từ backend
+    const mockOcrTexts: Record<number, string | null> = {
+      1: null,
+      2: 'Khu bảo tồn thiên nhiên Cát Tiên\nDiện tích: 71.920 ha',
+      3: null,
+      4: 'Vườn quốc gia Hoàng Liên\nĐộ cao: 3.143m',
+      5: 'Biển Phú Quốc - Kiên Giang\nViệt Nam',
+    }
+
+    return {
+      ...item,
+      width: [1920, 1280, 1600, 2048, 1440][id % 5],
+      height: [1080, 853, 1067, 1365, 960][id % 5],
+      source: item.image_url.includes('unsplash') ? 'Unsplash' : 'Unknown',
+      ocr_text: mockOcrTexts[id] ?? null,
+    }
   },
 }
