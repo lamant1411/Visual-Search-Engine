@@ -9,6 +9,7 @@ import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import { SearchPage } from '@/features/search/pages/SearchPage';
 import HistoryPage from '@/pages/HistoryPage';
+import { SearchResultsPage } from '@/features/search/pages/SearchResultsPage';
 // import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 // import { AdminGuard } from '@/components/layout/AdminGuard';
 
@@ -18,7 +19,6 @@ const router = createBrowserRouter([
     element: <GuestRoute />,      // redirect về /search nếu đã login
     children: [
       // "/" chưa có page riêng -> tự chuyển hướng sang /search
-      { index: true, element: <Navigate to="/search" replace /> },
       {
         element: <AuthShell />,   // layout nền tím, không Header
         children: [
@@ -26,7 +26,6 @@ const router = createBrowserRouter([
           { path: '/register', element: <RegisterPage /> },
         ],
       },
-      { path: '/search', element: <SearchPage /> },
     ],
   },
 
@@ -38,8 +37,9 @@ const router = createBrowserRouter([
         element: <AppShell />,    // layout có Header
         children: [
           { index: true, element: <Navigate to="/search" replace /> },
-          { path: '/search', element: <div>Search page</div> },
-          // { path: '/history', element: <HistoryPage /> },
+          { path: '/search', element: <SearchPage /> },
+          { path: '/search/results', element: <SearchResultsPage /> },
+          // { path: '/history', element: <div>History page</div> },
         ],
       },
     ],

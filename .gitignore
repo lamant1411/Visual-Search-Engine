@@ -1,1 +1,9 @@
-.agents
+.env
+.env.*
+.agents/
+node_modules/
+dist/
+__pycache__/
+*.pyc
+*.log
+.venv

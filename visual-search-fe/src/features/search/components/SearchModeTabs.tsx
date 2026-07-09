@@ -31,7 +31,7 @@ const searchModes = [
 
 export function SearchModeTabs({ value, onChange }: SearchModeTabsProps) {
   return (
-    <div className="flex w-full flex-col gap-2 rounded-xl border border-border bg-white p-2 shadow-sm sm:w-fit sm:flex-row">
+    <div className="flex w-full flex-col gap-1 rounded-lg border border-border bg-white/95 p-1.5 shadow-sm shadow-slate-200/70 backdrop-blur sm:w-fit sm:flex-row">
       {searchModes.map((mode) => {
         const Icon = mode.icon
         const isActive = value === mode.value
@@ -42,10 +42,10 @@ export function SearchModeTabs({ value, onChange }: SearchModeTabsProps) {
             type="button"
             onClick={() => onChange(mode.value)}
             className={[
-              'inline-flex h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold transition',
+              'inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-md px-4 text-sm font-bold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 focus-visible:ring-offset-white',
               isActive
-                ? 'bg-accent-600 text-white shadow-sm'
-                : 'text-ink-secondary hover:bg-surface-1 hover:text-ink-primary',
+                ? 'bg-ink-primary text-white shadow-sm shadow-slate-300/70'
+                : 'text-ink-secondary hover:bg-accent-50 hover:text-ink-primary',
             ]
               .filter(Boolean)
               .join(' ')}
