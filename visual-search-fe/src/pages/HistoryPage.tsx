@@ -74,8 +74,11 @@ export default function HistoryPage() {
   const handleReSearch = (item: HistoryItem) => {
     navigate('/search', {
       state: {
-        queryType: item.query_type,
-        queryValue: item.query_value,
+        // queryType: item.query_type,
+        // queryValue: item.query_value,
+        // autoSubmit: true,
+        queryType: 'ocr',
+        queryValue: 'hello',
         autoSubmit: true,
       },
     })
