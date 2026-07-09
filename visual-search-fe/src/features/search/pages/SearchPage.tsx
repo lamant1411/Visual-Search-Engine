@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
-import { ChevronDown, FileText, ImagePlus, LogIn, ScanText, Search } from 'lucide-react'
+import { useNavigate } from 'react-router'
+import { ChevronDown, FileText, ImagePlus, ScanText, Search } from 'lucide-react'
 
 import { PageContainer } from '@/components/layout/PageContainer'
 import { mockSearchResults } from '@/mocks/searchMockData'
@@ -159,13 +159,6 @@ export function SearchPage() {
             </button>
           </form>
 
-          <Link
-            to="/login"
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-border bg-white px-4 text-sm font-bold text-ink-primary shadow-sm shadow-slate-200/70 transition hover:border-accent-600 hover:text-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0"
-          >
-            <LogIn className="h-4 w-4" />
-            Login
-          </Link>
         </header>
 
         <section className="mx-auto max-w-5xl pt-4 text-center sm:pt-8">

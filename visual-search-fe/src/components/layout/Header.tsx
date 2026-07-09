@@ -1,15 +1,22 @@
-import { Link } from 'react-router';
-import { Search, Clock, Bookmark, User } from 'lucide-react';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router';
+import { Clock, LogOut, Search, Shield, User } from 'lucide-react';
 import { Button } from '@/components/base/button';
+import { useAuth } from '@/contexts/AuthContext';
 
-/**
- * Header dùng chung cho AppShell và AdminShell.
- *
- * TẠM THỜI TĨNH: chưa đọc AuthContext. Khi AuthContext xong, thay 2 chỗ:
- *  1. Ẩn "History/Bookmarks/avatar" nếu chưa login → hiện nút "Đăng nhập"
- *  2. Avatar hiển thị chữ cái đầu email thật thay vì icon User cứng
- */
 export function Header() {
+  const navigate = useNavigate();
+  const { isAuthenticated, logout, user } = useAuth();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const userInitial = user?.email?.charAt(0).toUpperCase() ?? 'U';
+
+  async function handleLogout() {
+    setIsLoggingOut(true);
+    await logout();
+    setIsLoggingOut(false);
+    navigate('/login', { replace: true });
+  }
+
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-surface-2/90 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
@@ -19,21 +26,51 @@ export function Header() {
         </Link>
 
         <nav className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" leftIcon={<Clock className="h-4 w-4" />}>
+          <Button
+            variant="ghost"
+            size="sm"
+            leftIcon={<Clock className="h-4 w-4" />}
+            onClick={() => navigate('/history')}
+          >
             History
           </Button>
-          <Button variant="ghost" size="sm" leftIcon={<Bookmark className="h-4 w-4" />}>
-            Bookmarks
-          </Button>
 
-          {/* placeholder — thay bằng avatar/email thật khi có AuthContext */}
-          <button
-            type="button"
-            className="ml-2 flex h-8 w-8 items-center justify-center rounded-full bg-accent-100 text-accent-700"
-            aria-label="Tài khoản"
-          >
-            <User className="h-4 w-4" />
-          </button>
+          {user?.role === 'admin' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={<Shield className="h-4 w-4" />}
+              onClick={() => navigate('/admin')}
+            >
+              Admin
+            </Button>
+          )}
+
+          {isAuthenticated ? (
+            <>
+              <div
+                className="ml-2 flex h-8 w-8 items-center justify-center rounded-full bg-accent-100 text-sm font-bold text-accent-700"
+                aria-label={user?.email ?? 'Tài khoản'}
+                title={user?.email ?? 'Tài khoản'}
+              >
+                {user?.email ? userInitial : <User className="h-4 w-4" />}
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                loading={isLoggingOut}
+                leftIcon={<LogOut className="h-4 w-4" />}
+                onClick={handleLogout}
+              >
+                Logout
+              </Button>
+            </>
+          ) : (
+            <Button variant="primary" size="sm" onClick={() => navigate('/login')}>
+              Login
+            </Button>
+          )}
         </nav>
       </div>
     </header>

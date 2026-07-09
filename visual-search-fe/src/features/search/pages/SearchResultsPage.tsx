@@ -1,7 +1,7 @@
 import { type ChangeEvent, type FormEvent, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation, useSearchParams } from 'react-router'
-import { ChevronDown, ChevronLeft, ChevronRight, FileText, ImagePlus, LogIn, ScanText, Search, X } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, FileText, ImagePlus, ScanText, Search, X } from 'lucide-react'
 
 import { PageContainer } from '@/components/layout/PageContainer'
 import { Button } from '@/components/base/button'
@@ -77,13 +77,6 @@ export function SearchResultsPage() {
             'hidden h-12 max-w-3xl flex-1 items-center rounded-full bg-white shadow-sm shadow-slate-200/80 ring-1 ring-border transition duration-200 focus-within:ring-4 focus-within:ring-accent-100 lg:flex',
           )}
 
-          <Link
-            to="/login"
-            className="ml-auto inline-flex h-11 w-fit shrink-0 items-center justify-center gap-2 rounded-full border border-border bg-white px-4 text-sm font-bold text-ink-primary shadow-sm shadow-slate-200/70 transition hover:border-accent-600 hover:text-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0"
-          >
-            <LogIn className="h-4 w-4" />
-            Login
-          </Link>
         </header>
 
         {renderCompactSearchForm(

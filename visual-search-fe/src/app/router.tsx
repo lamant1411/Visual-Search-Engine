@@ -25,8 +25,6 @@ const router = createBrowserRouter([
           { path: '/register', element: <RegisterPage /> },
         ],
       },
-      { path: '/search', element: <SearchPage /> },
-      { path: '/search/results', element: <SearchResultsPage /> },
     ],
   },
 
@@ -39,6 +37,7 @@ const router = createBrowserRouter([
         children: [
           { index: true, element: <Navigate to="/search" replace /> },
           { path: '/search', element: <SearchPage /> },
+          { path: '/search/results', element: <SearchResultsPage /> },
           { path: '/history', element: <div>History page</div> },
         ],
       },
