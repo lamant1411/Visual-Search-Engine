@@ -51,7 +51,10 @@ const router = createBrowserRouter([
     element: <AppShell />,    // layout có Header
     children: [
       { path: '/history', element: <HistoryPage /> },
-      { path: '/bookmark', element: <BookmarkPage /> },]
+      { path: '/bookmark', element: <BookmarkPage /> },
+      { path: '/admin', element: <AdminOverviewPage /> },
+      { path: '/admin/indexing', element: <AdminIndexingPage /> },
+      { path: '/admin/users', element: <AdminUsersPage /> },]
   },
 
   // ── Admin routes: yêu cầu login + role admin ─────────────────────
@@ -61,9 +64,9 @@ const router = createBrowserRouter([
       {
         element: <AdminShell />,  // layout có Header + Sidebar
         children: [
-          { path: '/admin', element: <AdminOverviewPage /> },
-          { path: '/admin/indexing', element: <AdminIndexingPage /> },
-          { path: '/admin/users', element: <AdminUsersPage /> },
+          // { path: '/admin', element: <AdminOverviewPage /> },
+          // { path: '/admin/indexing', element: <AdminIndexingPage /> },
+          // { path: '/admin/users', element: <AdminUsersPage /> },
         ],
       },
     ],
