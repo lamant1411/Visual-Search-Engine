@@ -11,8 +11,9 @@ import { SearchPage } from '@/features/search/pages/SearchPage';
 import HistoryPage from '@/pages/HistoryPage';
 import BookmarkPage from '@/pages/BookmarkPage';
 import { SearchResultsPage } from '@/features/search/pages/SearchResultsPage';
-// import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
-// import { AdminGuard } from '@/components/layout/AdminGuard';
+import AdminOverviewPage from '@/pages/admin/AdminOverviewPage';
+import AdminIndexingPage from '@/pages/admin/AdminIndexingPage';
+import AdminUsersPage from '@/pages/admin/AdminUsersPage';
 
 const router = createBrowserRouter([
   // ── Auth routes: chỉ dành cho khách chưa login ───────────────────
@@ -60,9 +61,9 @@ const router = createBrowserRouter([
       {
         element: <AdminShell />,  // layout có Header + Sidebar
         children: [
-          { path: '/admin', element: <div>Admin overview</div> },
-          { path: '/admin/indexing', element: <div>Indexing status</div> },
-          { path: '/admin/users', element: <div>User list</div> },
+          { path: '/admin', element: <AdminOverviewPage /> },
+          { path: '/admin/indexing', element: <AdminIndexingPage /> },
+          { path: '/admin/users', element: <AdminUsersPage /> },
         ],
       },
     ],

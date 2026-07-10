@@ -71,7 +71,7 @@ export default function HistoryPage() {
   }
 
   // Điều hướng về trang search kèm query cũ
-  const handleReSearch = (item: HistoryItem) => {
+  const handleReSearch = (_item: HistoryItem) => {
     navigate('/search', {
       state: {
         // queryType: item.query_type,
