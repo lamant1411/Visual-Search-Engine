@@ -65,7 +65,7 @@ const router = createBrowserRouter([
     ],
   },
 
-  { path: '*', element: <div>404 - Không tìm thấy trang</div> },
+  { path: '*', element: <div>404 - Page not found</div> },
 ])
 
 export function AppRouter() {

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Info, Zap } from 'lucide-react'
 
 import type { SearchResult } from '../types'
+import { formatSimilarityScore } from '../utils/formatSimilarityScore'
 
 type ResultCardProps = {
   result: SearchResult
@@ -13,11 +14,12 @@ export function ResultCard({ result, onSelect }: ResultCardProps) {
   const sizeLabel =
     result.metadata.width && result.metadata.height
       ? `${result.metadata.width} x ${result.metadata.height}`
-      : 'Không rõ kích thước'
+      : 'Unknown size'
   const aspectRatio =
     result.metadata.width && result.metadata.height
       ? `${result.metadata.width} / ${result.metadata.height}`
       : '4 / 3'
+  const similarityScore = formatSimilarityScore(result.similarityScore)
 
   return (
     <button
@@ -40,11 +42,11 @@ export function ResultCard({ result, onSelect }: ResultCardProps) {
         />
         <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-xs font-bold text-ink-primary shadow-sm shadow-slate-900/10 backdrop-blur">
           <Zap className="h-3.5 w-3.5 text-accent-600" />
-          {Math.round(result.similarityScore)}%
+          {similarityScore}%
         </span>
 
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent p-4 pt-14 text-white opacity-0 transition duration-200 group-hover:opacity-100 group-focus-visible:opacity-100">
-          <h2 className="text-sm font-semibold">{result.metadata.source ?? 'Kết quả hình ảnh'}</h2>
+          <h2 className="text-sm font-semibold">{result.metadata.source ?? 'Image result'}</h2>
           <p className="mt-1 text-xs text-white/80">
             {sizeLabel}
             {` · #${result.id}`}

@@ -10,12 +10,12 @@ type SearchModeTabsProps = {
 const searchModes = [
   {
     value: 'image',
-    label: 'Hình ảnh',
+    label: 'Image',
     icon: Image,
   },
   {
     value: 'semantic',
-    label: 'Ngữ nghĩa',
+    label: 'Semantic',
     icon: FileText,
   },
   {
