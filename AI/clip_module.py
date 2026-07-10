@@ -1,0 +1,55 @@
+import torch
+from PIL import Image
+from transformers import CLIPProcessor, CLIPModel
+import os
+
+class CLIPEmbedder:
+    def __init__(self, model_id="openai/clip-vit-base-patch32"):
+        print(f"Đang tải mô hình {model_id}...")
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model = CLIPModel.from_pretrained(model_id).to(self.device)
+        self.processor = CLIPProcessor.from_pretrained(model_id, use_fast=True)
+        print(f"Tải mô hình thành công trên {self.device.upper()}!\n")
+
+    def embed_image(self, image_path: str) -> list:
+        """
+        Đọc ảnh từ đường dẫn và chuyển đổi thành vector 512 chiều.
+        """
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(f"Không tìm thấy ảnh tại: {image_path}")
+
+        valid_extensions = ('.jpg', '.jpeg', '.png', '.webp')
+        if not image_path.lower().endswith(valid_extensions):
+            raise ValueError(f"Định dạng không hợp lệ. Vui lòng dùng: {valid_extensions}")
+
+        try:
+            image = Image.open(image_path).convert("RGB")
+            inputs = self.processor(images=image, return_tensors="pt").to(self.device)
+            
+            with torch.no_grad():
+                image_features = self.model.get_image_features(**inputs)
+                
+            return image_features.cpu().numpy().flatten().tolist()
+        
+        except Exception as e:
+            print(f"Lỗi khi xử lý ảnh: {e}")
+            return None
+
+    def embed_text(self, query: str) -> list:
+        """
+        Chuyển đổi văn bản tìm kiếm thành vector 512 chiều.
+        """
+        if not query or not query.strip():
+            raise ValueError("Query tìm kiếm không được để trống.")
+
+        try:
+            inputs = self.processor(text=[query], return_tensors="pt", padding=True).to(self.device)
+            
+            with torch.no_grad():
+                text_features = self.model.get_text_features(**inputs)
+                
+            return text_features.cpu().numpy().flatten().tolist()
+        
+        except Exception as e:
+            print(f"Lỗi khi xử lý text: {e}")
+            return None
