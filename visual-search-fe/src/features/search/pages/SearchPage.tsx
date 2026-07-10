@@ -63,7 +63,7 @@ export function SearchPage() {
   function handleSearch() {
     if (!canSearch) {
       if (mode === 'image') {
-        setUploadError('Vui lòng chọn ảnh trước khi tìm kiếm.')
+        setUploadError('Please select an image before searching.')
       }
       return
     }
@@ -88,16 +88,31 @@ export function SearchPage() {
 
   return (
     <div className="min-h-screen bg-surface-0">
-      <PageContainer size="wide" className="max-w-7xl space-y-10 pb-10 pt-8 sm:pt-12">
-        <section className="mx-auto max-w-5xl text-center">
-          <p className="text-xs font-bold uppercase text-ink-muted">Ngữ nghĩa, OCR, tìm ảnh tương tự</p>
-          <h1 className="font-display mx-auto mt-4 max-w-4xl text-4xl font-bold leading-[1.04] tracking-normal text-ink-primary sm:text-5xl lg:text-[64px]">
-            Tìm đúng hình ảnh bằng ý nghĩa, chữ trong ảnh hoặc ảnh mẫu.
+      <section className="relative isolate flex min-h-[500px] w-full overflow-hidden px-5 pb-24 pt-16 text-center sm:min-h-[540px] sm:px-10 sm:pt-20">
+        <div aria-hidden="true" className="absolute inset-0 grid grid-cols-2 sm:grid-cols-4">
+          {[0, 3, 4, 7].map((resultIndex) => (
+            <img
+              key={mockSearchResults[resultIndex].id}
+              alt=""
+              className="h-full w-full object-cover"
+              src={mockSearchResults[resultIndex].imageUrl}
+            />
+          ))}
+        </div>
+        <div className="absolute inset-0 bg-slate-950/65" />
+
+        <div className="relative z-10 m-auto max-w-5xl text-white">
+          <p className="text-xs font-bold uppercase text-white/70">Semantic, OCR, and image-to-image search</p>
+          <h1 className="font-display mx-auto mt-4 max-w-4xl text-4xl font-bold leading-[1.04] tracking-normal sm:text-5xl lg:text-[64px]">
+            Search images by meaning, text, or visual similarity.
           </h1>
-          <p className="mx-auto mt-5 max-w-2xl text-base font-medium leading-7 text-ink-secondary sm:text-lg">
-            Nhập mô tả tự nhiên, tìm nội dung chữ trong ảnh, hoặc tải ảnh tham chiếu để khám phá các kết quả tương tự.
+          <p className="mx-auto mt-5 max-w-2xl text-base font-medium leading-7 text-white/80 sm:text-lg">
+            Describe an idea, find words inside images, or upload a reference to discover visually related results.
           </p>
-        </section>
+        </div>
+      </section>
+
+      <PageContainer size="wide" className="relative z-20 -mt-14 max-w-7xl pb-10 pt-0">
 
         <section className="mx-auto max-w-3xl space-y-4 text-left" aria-label="Search controls">
           <div className="flex justify-center">
@@ -118,8 +133,8 @@ export function SearchPage() {
           />
         </section>
 
-        <div className="flex flex-wrap justify-center gap-2 text-sm font-medium text-ink-secondary">
-          <span className="px-2 py-2 text-ink-muted">Gợi ý</span>
+        <div className="mt-5 flex flex-wrap justify-center gap-2 text-sm font-medium text-ink-secondary">
+          <span className="px-2 py-2 text-ink-muted">Try</span>
           {['sunset on the beach', 'SALE 50%', 'green forest', 'product label'].map((suggestion) => (
             <button
               key={suggestion}
@@ -135,11 +150,11 @@ export function SearchPage() {
           ))}
         </div>
 
-        <section aria-label="Sample image results" className="space-y-4 pt-2">
+        <section aria-label="Sample image results" className="mt-12 space-y-4 pt-2">
           <div className="flex items-end justify-between gap-4 border-b border-border pb-3">
             <div>
-              <h2 className="font-display text-2xl font-bold text-ink-primary">Khám phá trong thư viện</h2>
-              <p className="mt-1 text-sm font-medium text-ink-secondary">Một vài ảnh mẫu để kiểm tra modal chi tiết.</p>
+              <h2 className="font-display text-2xl font-bold text-ink-primary">Explore the library</h2>
+              <p className="mt-1 text-sm font-medium text-ink-secondary">Open a sample to inspect its image details.</p>
             </div>
           </div>
 
@@ -152,16 +167,16 @@ export function SearchPage() {
                   'group relative mb-4 block w-full cursor-pointer break-inside-avoid overflow-hidden rounded-[18px] bg-surface-1 text-left shadow-sm shadow-slate-200/80 ring-1 ring-white/70 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0',
                   featuredImageHeights[index % featuredImageHeights.length],
                 ].join(' ')}
-                aria-label={`Open detail for sample image ${result.id}`}
+                aria-label={`Open details for sample image ${result.id}`}
                 onClick={() => setSelectedResult(result)}
               >
                 <img
-                  alt={`Featured image ${result.id}`}
+                  alt={`Featured sample ${result.id}`}
                   className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                   src={result.imageUrl}
                 />
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-4 text-white opacity-0 transition duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
-                  <p className="text-xs font-medium opacity-90">Ảnh trong thư viện</p>
+                  <p className="text-xs font-medium opacity-90">Library image</p>
                   <p className="mt-1 text-xl font-bold">{result.metadata.source ?? 'VisualSearch'}</p>
                 </div>
               </button>

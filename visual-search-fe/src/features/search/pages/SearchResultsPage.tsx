@@ -20,9 +20,9 @@ type SearchLocationState = {
 const pageLimit = 20
 
 const modeLabel: Record<SearchMode, string> = {
-  image: 'Tìm bằng ảnh',
-  semantic: 'Tìm theo ngữ nghĩa',
-  ocr: 'Tìm chữ trong ảnh',
+  image: 'IMAGE SEARCH',
+  semantic: 'SEMANTIC SEARCH',
+  ocr: 'OCR SEARCH',
 }
 
 export function SearchResultsPage() {
@@ -63,20 +63,20 @@ export function SearchResultsPage() {
         {queryEnabled ? (
           <div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-bold text-ink-primary">{total} kết quả</p>
+              <p className="text-sm font-bold text-ink-primary">{total} results</p>
               <p className="mt-1 text-sm text-ink-secondary">
-                Trang {page} / {totalPages}. Sắp xếp theo độ tương đồng cao nhất.
+                Page {page} / {totalPages}. Sorted by highest similarity.
               </p>
             </div>
 
             <span className="w-fit rounded-full border border-border bg-white px-3 py-1 text-xs font-bold text-ink-secondary shadow-sm shadow-slate-200/70">
-              20 ảnh mỗi trang
+              20 images per page
             </span>
           </div>
         ) : (
           <section className="rounded-lg border border-border bg-white p-6 text-center shadow-sm shadow-slate-200/70">
-            <p className="font-semibold text-ink-primary">Bắt đầu tìm kiếm để xem kết quả</p>
-            <p className="mt-2 text-sm text-ink-secondary">Nhập mô tả, OCR text hoặc chọn ảnh mẫu ở thanh tìm kiếm phía trên.</p>
+            <p className="font-semibold text-ink-primary">Start a search to view results</p>
+            <p className="mt-2 text-sm text-ink-secondary">Enter a description, OCR text, or choose a reference image above.</p>
           </section>
         )}
 
@@ -84,15 +84,15 @@ export function SearchResultsPage() {
 
         {queryEnabled && searchQuery.isError && (
           <section className="rounded-lg border border-red-200 bg-red-50 p-6">
-            <p className="font-semibold text-red-700">Tìm kiếm thất bại</p>
-            <p className="mt-1 text-sm text-red-600">Hãy thử lại hoặc bắt đầu một lượt tìm kiếm mới.</p>
+            <p className="font-semibold text-red-700">Search failed</p>
+            <p className="mt-1 text-sm text-red-600">Try again or start a new search.</p>
           </section>
         )}
 
         {queryEnabled && searchQuery.isSuccess && response && response.items.length === 0 && (
           <section className="rounded-lg border border-border bg-white p-8 text-center shadow-sm shadow-slate-200/70">
-            <p className="font-semibold text-ink-primary">Không có kết quả phù hợp</p>
-            <p className="mt-2 text-sm text-ink-secondary">Thử mô tả khác hoặc chọn một ảnh tham chiếu khác.</p>
+            <p className="font-semibold text-ink-primary">No matching results</p>
+            <p className="mt-2 text-sm text-ink-secondary">Try another description or choose a different reference image.</p>
           </section>
         )}
 
@@ -109,7 +109,7 @@ export function SearchResultsPage() {
                 leftIcon={<ChevronLeft className="h-4 w-4" />}
                 onClick={() => updateSearchParams(page - 1)}
               >
-                Trước
+                Previous
               </Button>
 
               <span className="text-sm font-semibold text-ink-secondary">
@@ -124,7 +124,7 @@ export function SearchResultsPage() {
                 rightIcon={<ChevronRight className="h-4 w-4" />}
                 onClick={() => updateSearchParams(page + 1)}
               >
-                Sau
+                Next
               </Button>
             </div>
           </>
@@ -179,13 +179,13 @@ function parseSearchMode(value: string | null): SearchMode {
 function getResultTitle(mode: SearchMode, query: string, fileName?: string, imageId?: number) {
   if (mode === 'image') {
     if (imageId) {
-      return `Ảnh tương tự với #${imageId}`
+      return `Images similar to #${imageId}`
     }
 
-    return fileName ? `Kết quả cho ${fileName}` : 'Kết quả tìm bằng ảnh'
+    return fileName ? `Results for ${fileName}` : 'Image search results'
   }
 
-  return query ? `Kết quả cho "${query}"` : 'Kết quả tìm kiếm'
+  return query ? `Results for “${query}”` : 'Search results'
 }
 
 function parsePositiveNumber(value: string | null, fallback: number) {

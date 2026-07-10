@@ -66,7 +66,7 @@ export function ImageUploadZone({
             <div>
               <p className="text-base font-semibold text-ink-primary">{file.name}</p>
               <p className="mt-1 text-sm text-ink-secondary">{formatFileSize(file.size)}</p>
-              <p className="mt-3 text-sm text-accent-600">Bấm hoặc thả ảnh khác để thay thế.</p>
+              <p className="mt-3 text-sm text-accent-600">Click or drop another image to replace it.</p>
             </div>
           </div>
         ) : (
@@ -74,8 +74,8 @@ export function ImageUploadZone({
             <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-white text-accent-600 shadow-sm shadow-slate-200/80">
               <ImagePlus className="h-6 w-6" />
             </span>
-            <p className="mt-3 text-base font-semibold text-ink-primary">Tải ảnh mẫu lên</p>
-            <p className="mt-1 text-sm text-ink-secondary">Thả JPG, PNG, WebP vào đây hoặc bấm để chọn ảnh.</p>
+            <p className="mt-3 text-base font-semibold text-ink-primary">Upload a reference image</p>
+            <p className="mt-1 text-sm text-ink-secondary">Drop a JPG, PNG, or WebP here, or click to browse.</p>
           </div>
         )}
       </label>
@@ -86,7 +86,7 @@ export function ImageUploadZone({
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-white px-4 py-3 shadow-sm shadow-slate-200/70">
           <div className="flex items-center gap-2 text-sm text-ink-secondary">
             <Upload className="h-4 w-4 text-accent-600" />
-            <span>Sẵn sàng tìm ảnh tương tự</span>
+            <span>Ready to find similar images</span>
           </div>
 
           <Button
@@ -96,7 +96,7 @@ export function ImageUploadZone({
             leftIcon={<Trash2 className="h-4 w-4" />}
           onClick={onClear}
         >
-            Xoá ảnh
+            Remove
           </Button>
         </div>
       )}
