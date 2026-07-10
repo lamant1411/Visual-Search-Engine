@@ -13,7 +13,7 @@ export function ResultCard({ result, onSelect }: ResultCardProps) {
   const sizeLabel =
     result.metadata.width && result.metadata.height
       ? `${result.metadata.width} x ${result.metadata.height}`
-      : 'Unknown size'
+      : 'Không rõ kích thước'
   const aspectRatio =
     result.metadata.width && result.metadata.height
       ? `${result.metadata.width} / ${result.metadata.height}`
@@ -44,7 +44,7 @@ export function ResultCard({ result, onSelect }: ResultCardProps) {
         </span>
 
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent p-4 pt-14 text-white opacity-0 transition duration-200 group-hover:opacity-100 group-focus-visible:opacity-100">
-          <h2 className="text-sm font-semibold">{result.metadata.source ?? 'Image result'}</h2>
+          <h2 className="text-sm font-semibold">{result.metadata.source ?? 'Kết quả hình ảnh'}</h2>
           <p className="mt-1 text-xs text-white/80">
             {sizeLabel}
             {` · #${result.id}`}

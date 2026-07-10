@@ -25,7 +25,7 @@ export function SearchResultDetailModal({
   const sizeLabel =
     result.metadata.width && result.metadata.height
       ? `${result.metadata.width} x ${result.metadata.height}`
-      : 'Unknown size'
+      : 'Không rõ kích thước'
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -104,8 +104,8 @@ export function SearchResultDetailModal({
         <aside className="flex max-h-[92vh] flex-col overflow-y-auto bg-white p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase text-accent-600">Image detail</p>
-              <h2 className="font-display mt-1 text-2xl font-bold text-ink-primary">Image #{result.id}</h2>
+              <p className="text-xs font-semibold uppercase text-accent-600">Chi tiết ảnh</p>
+              <h2 className="font-display mt-1 text-2xl font-bold text-ink-primary">Ảnh #{result.id}</h2>
             </div>
 
             <Button
@@ -124,22 +124,22 @@ export function SearchResultDetailModal({
             <div className="mt-5 rounded-lg border border-border bg-surface-0 p-4">
               <div className="flex items-center gap-2 text-sm font-semibold text-accent-600">
                 <Zap className="h-4 w-4" />
-                {Math.round(result.similarityScore)}% similarity
+                Độ tương đồng {Math.round(result.similarityScore)}%
               </div>
             </div>
           )}
 
           <dl className="mt-5 space-y-4 text-sm">
-            <DetailRow label="Size" value={sizeLabel} />
-            <DetailRow label="Source" value={result.metadata.source ?? 'Unknown'} />
-            <DetailRow label="Image ID" value={String(result.id)} />
+            <DetailRow label="Kích thước" value={sizeLabel} />
+            <DetailRow label="Nguồn ảnh" value={result.metadata.source ?? 'Không rõ'} />
+            <DetailRow label="Mã ảnh" value={String(result.id)} />
           </dl>
 
           {result.metadata.ocrText && (
             <div className="mt-5 rounded-lg border border-border bg-white p-4 shadow-sm shadow-slate-200/70">
               <div className="flex items-center gap-2 text-sm font-semibold text-ink-primary">
                 <Info className="h-4 w-4 text-accent-600" />
-                OCR text
+                Nội dung OCR
               </div>
               <p className="mt-2 text-sm text-ink-secondary">{result.metadata.ocrText}</p>
             </div>
@@ -153,7 +153,7 @@ export function SearchResultDetailModal({
               type="button"
               onClick={() => onFindSimilar?.(result)}
             >
-              Find similar images
+              Tìm ảnh tương tự
             </Button>
 
             <Button
@@ -166,11 +166,11 @@ export function SearchResultDetailModal({
               variant="secondary"
               onClick={handleCopyImageUrl}
             >
-              {copyStatus === 'copied' ? 'Copied URL' : 'Copy image URL'}
+              {copyStatus === 'copied' ? 'Đã copy URL' : 'Copy URL ảnh'}
             </Button>
 
             {copyStatus === 'error' && (
-              <p className="text-center text-xs font-medium text-red-600">Could not copy this URL.</p>
+              <p className="text-center text-xs font-medium text-red-600">Không thể copy URL này.</p>
             )}
           </div>
         </aside>
