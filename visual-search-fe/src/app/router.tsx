@@ -19,10 +19,8 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/search" replace /> },
       { path: '/search', element: <SearchPage /> },
-      { path: '/search/results', element: <SearchResultsPage /> },
     ],
   },
-
   // Auth routes: chỉ dành cho khách chưa login
   {
     element: <GuestRoute />,
@@ -44,6 +42,7 @@ const router = createBrowserRouter([
       {
         element: <AppShell />,
         children: [
+          { path: '/search/results', element: <SearchResultsPage /> },
           { path: '/history', element: <div>History page</div> },
         ],
       },

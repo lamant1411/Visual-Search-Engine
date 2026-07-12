@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { ChevronDown, Clock, FileText, ImagePlus, LogOut, ScanText, Search, Shield, X } from 'lucide-react';
 import { Button } from '@/components/base/button';
 import { useAuth } from '@/contexts/AuthContext';
+import { SearchLoginModal } from '@/features/search/components/SearchLoginModal';
 import { validateSearchImageFile } from '@/features/search/utils/imageValidation';
 
 type HeaderSearchMode = 'image' | 'semantic' | 'ocr';
@@ -19,12 +20,13 @@ const searchModeOptions = [
 
 export function Header() {
   const navigate = useNavigate();
-  const { isAuthenticated, logout, user } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading, logout, user } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [searchMode, setSearchMode] = useState<HeaderSearchMode>('semantic');
   const [query, setQuery] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [isSearchLoginOpen, setIsSearchLoginOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const userDisplayName = user?.full_name?.trim() || user?.username || user?.email || 'Account';
   const userInitial = userDisplayName.charAt(0).toUpperCase();
@@ -69,6 +71,18 @@ export function Header() {
 
     if (!canSubmitSearch) return;
 
+    if (isAuthLoading) return;
+
+    if (!isAuthenticated) {
+      setIsSearchLoginOpen(true);
+      return;
+    }
+
+    executeSearch();
+  }
+
+  function executeSearch() {
+
     if (searchMode === 'image') {
       navigate('/search/results?mode=image&page=1&limit=20', {
         state: {
@@ -100,6 +114,7 @@ export function Header() {
   }
 
   return (
+    <>
     <header className="sticky top-0 z-40 border-b border-border bg-white/90 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
         <Link
@@ -266,5 +281,16 @@ export function Header() {
         </nav>
       </div>
     </header>
+
+    {isSearchLoginOpen && (
+      <SearchLoginModal
+        onClose={() => setIsSearchLoginOpen(false)}
+        onSuccess={() => {
+          setIsSearchLoginOpen(false);
+          executeSearch();
+        }}
+      />
+    )}
+    </>
   );
 }

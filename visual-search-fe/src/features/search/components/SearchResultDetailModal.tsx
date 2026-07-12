@@ -1,5 +1,5 @@
 import { type MouseEvent, useEffect, useState } from 'react'
-import { Check, Copy, Info, Minus, Plus, RotateCcw, Search, X, Zap } from 'lucide-react'
+import { Bookmark, Check, Copy, Info, Minus, Plus, RotateCcw, Search, X, Zap } from 'lucide-react'
 
 import { Button } from '@/components/base/button'
 
@@ -8,6 +8,8 @@ import { formatSimilarityScore } from '../utils/formatSimilarityScore'
 
 type SearchResultDetailModalProps = {
   result: SearchResult
+  isBookmarked?: boolean
+  onBookmark?: (result: SearchResult) => void
   onClose: () => void
   onFindSimilar?: (result: SearchResult) => void
   showSimilarity?: boolean
@@ -15,6 +17,8 @@ type SearchResultDetailModalProps = {
 
 export function SearchResultDetailModal({
   result,
+  isBookmarked = false,
+  onBookmark,
   onClose,
   onFindSimilar,
   showSimilarity = true,
@@ -148,6 +152,17 @@ export function SearchResultDetailModal({
           )}
 
           <div className="mt-auto space-y-3 pt-6">
+            <Button
+              fullWidth
+              className="focus-visible:ring-accent-600"
+              leftIcon={<Bookmark className={isBookmarked ? 'h-4 w-4 fill-current' : 'h-4 w-4'} />}
+              type="button"
+              variant="outline"
+              onClick={() => onBookmark?.(result)}
+            >
+              {isBookmarked ? 'Remove bookmark' : 'Save to bookmarks'}
+            </Button>
+
             <Button
               fullWidth
               className="!bg-ink-primary shadow-sm shadow-slate-300/70 hover:!bg-slate-800 active:!bg-slate-900 focus-visible:ring-accent-600"

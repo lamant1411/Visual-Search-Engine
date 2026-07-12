@@ -2,23 +2,34 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 
 import { PageContainer } from '@/components/layout/PageContainer'
+import { useAuth } from '@/contexts/AuthContext'
 import { mockSearchResults } from '@/mocks/searchMockData'
 
 import { SearchModeTabs } from '../components/SearchModeTabs'
+import { SearchLoginModal } from '../components/SearchLoginModal'
 import { SearchPanel } from '../components/SearchPanel'
 import { SearchResultDetailModal } from '../components/SearchResultDetailModal'
+import { useBookmarks } from '../hooks/useBookmarks'
 import type { SearchMode, SearchResult } from '../types'
 import { validateSearchImageFile } from '../utils/imageValidation'
 
 const featuredImageHeights = ['h-72', 'h-96', 'h-80', 'h-64', 'h-[22rem]', 'h-72']
 
+type PendingAction =
+  | { type: 'search' }
+  | { type: 'bookmark'; result: SearchResult }
+  | { type: 'find-similar'; result: SearchResult }
+
 export function SearchPage() {
   const navigate = useNavigate()
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth()
   const [mode, setMode] = useState<SearchMode>('semantic')
   const [query, setQuery] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [uploadError, setUploadError] = useState<string>()
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null)
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
+  const { isBookmarked, toggleBookmark } = useBookmarks()
 
   const previewUrl = useMemo(() => {
     if (!selectedFile) {
@@ -68,6 +79,19 @@ export function SearchPage() {
       return
     }
 
+    if (isAuthLoading) {
+      return
+    }
+
+    if (!isAuthenticated) {
+      setPendingAction({ type: 'search' })
+      return
+    }
+
+    executeSearch()
+  }
+
+  function executeSearch() {
     if (mode === 'image') {
       navigate('/search/results?mode=image&page=1&limit=20', {
         state: {
@@ -82,8 +106,43 @@ export function SearchPage() {
   }
 
   function handleFindSimilarResult(result: SearchResult) {
+    if (!isAuthenticated) {
+      setPendingAction({ type: 'find-similar', result })
+      return
+    }
+
+    executeFindSimilar(result)
+  }
+
+  function executeFindSimilar(result: SearchResult) {
     setSelectedResult(null)
     navigate(`/search/results?mode=image&imageId=${result.id}&page=1&limit=20`)
+  }
+
+  function handleBookmarkResult(result: SearchResult) {
+    if (!isAuthenticated) {
+      setPendingAction({ type: 'bookmark', result })
+      return
+    }
+
+    toggleBookmark(result.id)
+  }
+
+  function handleLoginSuccess() {
+    const action = pendingAction
+    setPendingAction(null)
+
+    if (!action) {
+      return
+    }
+
+    if (action.type === 'search') {
+      executeSearch()
+    } else if (action.type === 'bookmark') {
+      toggleBookmark(action.result.id)
+    } else {
+      executeFindSimilar(action.result)
+    }
   }
 
   return (
@@ -188,10 +247,16 @@ export function SearchPage() {
       {selectedResult && (
         <SearchResultDetailModal
           result={selectedResult}
+          isBookmarked={isBookmarked(selectedResult.id)}
           showSimilarity={false}
           onClose={() => setSelectedResult(null)}
+          onBookmark={handleBookmarkResult}
           onFindSimilar={handleFindSimilarResult}
         />
+      )}
+
+      {pendingAction && !isAuthLoading && (
+        <SearchLoginModal onClose={() => setPendingAction(null)} onSuccess={handleLoginSuccess} />
       )}
     </div>
   )

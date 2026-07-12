@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/base/loader'
 import { ResultGrid } from '../components/ResultGrid'
 import { SearchResultDetailModal } from '../components/SearchResultDetailModal'
 import { searchByImage, searchByText } from '../services/search.api'
+import { useBookmarks } from '../hooks/useBookmarks'
 import type { SearchMode, SearchResponse, SearchResult } from '../types'
 
 type SearchLocationState = {
@@ -35,6 +36,7 @@ export function SearchResultsPage() {
   const imageId = parseOptionalPositiveNumber(searchParams.get('imageId'))
   const page = parsePositiveNumber(searchParams.get('page'), 1)
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null)
+  const { isBookmarked, toggleBookmark } = useBookmarks()
   const resultTitle = getResultTitle(mode, query, state.fileName, imageId)
   const queryEnabled = mode === 'image' ? Boolean(state.file || imageId) : query.trim().length > 0
   const imageSearchKey = state.file
@@ -98,7 +100,12 @@ export function SearchResultsPage() {
 
         {queryEnabled && searchQuery.isSuccess && response && response.items.length > 0 && (
           <>
-            <ResultGrid results={response.items} onSelectResult={setSelectedResult} />
+            <ResultGrid
+              results={response.items}
+              isBookmarked={isBookmarked}
+              onBookmark={(result) => toggleBookmark(result.id)}
+              onSelectResult={setSelectedResult}
+            />
 
             <div className="flex items-center justify-center gap-3 border-t border-border pt-6">
               <Button
@@ -134,7 +141,9 @@ export function SearchResultsPage() {
       {selectedResult && (
         <SearchResultDetailModal
           result={selectedResult}
+          isBookmarked={isBookmarked(selectedResult.id)}
           onClose={() => setSelectedResult(null)}
+          onBookmark={(result) => toggleBookmark(result.id)}
           onFindSimilar={handleFindSimilarResult}
         />
       )}
