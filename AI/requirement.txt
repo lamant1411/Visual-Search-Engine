@@ -24,3 +24,8 @@ numpy<2
 # DATABASE CONNECTOR (Cho script Indexing)
 # ==========================================
 qdrant-client
+
+# ==========================================
+# CLOUD STORAGE (Upload anh len Cloudinary)
+# ==========================================
+cloudinary
