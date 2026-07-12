@@ -28,7 +28,7 @@ class Image(Base):
         nullable=False,
         default=ImageSourceType.dataset,
     )
-    storage_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    storage_path: Mapped[str] = mapped_column(String(2048), nullable=False)
     original_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     mime_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
