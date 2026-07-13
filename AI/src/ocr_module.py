@@ -17,7 +17,6 @@ class OCRExtractor:
         Đầu ra: Danh sách các chuỗi văn bản thuần túy (list[str]).
         """
         try:
-            # Nếu đầu vào là đường dẫn (string), kiểm tra xem file có tồn tại không
             if isinstance(image_input, str):
                 if not os.path.exists(image_input):
                     raise FileNotFoundError("Không tìm thấy ảnh tại đường dẫn đã cung cấp.")
@@ -26,12 +25,9 @@ class OCRExtractor:
                 if not image_input.lower().endswith(valid_extensions):
                     raise ValueError(f"Định dạng không hợp lệ. Vui lòng dùng: {valid_extensions}")
 
-            # EasyOCR cực kỳ thông minh, hàm readtext nhận được cả String lẫn Bytes!
-            # Tham số detail=0 để chỉ lấy văn bản, bỏ qua tọa độ.
             results = self.reader.readtext(image_input, detail=0)
             return results
         
         except Exception as e:
-            # Đã bỏ phần in chi tiết image_input ra terminal để tránh dội bom nhị phân
             print(f"Lỗi khi trích xuất OCR: {e}")
             return []

@@ -8,14 +8,10 @@ import pandas as pd
 from PIL import Image
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
-
-# Import các module AI đã hoàn thiện
 from clip_module import CLIPEmbedder
 from ocr_module import OCRExtractor
 
-# ==========================================
-# CẤU HÌNH KẾT NỐI (Đọc từ Biến môi trường)
-# ==========================================
+
 POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 
@@ -138,16 +134,11 @@ def run_batch_indexing_from_urls(tsv_path: str, max_images: int = 2000):
     pg_conn.close()
 
 
-# ==========================================
-# XỬ LÝ ĐƯỜNG DẪN GIÁN TIẾP VÀ THAM SỐ
-# ==========================================
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Chạy hệ thống Batch Indexing cho AI Service từ URL Cloud")
     
-    # Tự động tính toán đường dẫn tuyệt đối dựa trên vị trí của chính file script này
     current_script_dir = os.path.dirname(os.path.abspath(__file__))
     
-    # Suy đoán đường dẫn mặc định theo cấu trúc thư mục dự án (lui ra 1 cấp rồi vào data)
     default_tsv_path = os.path.abspath(os.path.join(current_script_dir, "..", "data", "unsplash-lite", "photos.tsv000"))
     
     # Định nghĩa cờ cấu hình khi gõ lệnh
