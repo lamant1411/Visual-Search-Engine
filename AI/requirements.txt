@@ -1,3 +1,5 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 # ==========================================
 # CORE AI LIBRARIES (Mô hình và tính toán)
 # ==========================================
@@ -24,3 +26,11 @@ numpy<2
 # DATABASE CONNECTOR (Cho script Indexing)
 # ==========================================
 qdrant-client
+
+psycopg2-binary==2.9.9
+fastapi
+uvicorn
+python-multipart
+
+requests==2.31.0
+pandas==2.2.2
