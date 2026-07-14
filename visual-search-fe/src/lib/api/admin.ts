@@ -42,6 +42,57 @@ export interface TriggerIndexingResponse {
 // Giả lập danh sách các đợt Indexing trong localStorage
 const INDEXING_STATE_KEY = 'mock_indexing_state'
 const INDEXING_BATCHES_KEY = 'mock_indexing_batches'
+const PENDING_IMAGES_KEY = 'mock_pending_images'
+
+export interface PendingImage {
+  id: string
+  url: string
+  filename: string
+  status: 'pending' | 'indexed'
+  created_at: string
+}
+
+const defaultPendingImages: PendingImage[] = [
+  {
+    id: 'p1',
+    url: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5',
+    filename: 'photo-flower-art.jpg',
+    status: 'pending',
+    created_at: new Date(Date.now() - 3600000).toISOString()
+  },
+  {
+    id: 'p2',
+    url: 'https://images.unsplash.com/photo-1579783928591-7240c66364d9',
+    filename: 'photo-abstract-painting.jpg',
+    status: 'pending',
+    created_at: new Date(Date.now() - 7200000).toISOString()
+  },
+  {
+    id: 'p3',
+    url: 'https://images.unsplash.com/photo-1549880181-56a44cf8a4a1',
+    filename: 'photo-mountain-landscape.jpg',
+    status: 'pending',
+    created_at: new Date(Date.now() - 10800000).toISOString()
+  }
+]
+
+function getStoredPendingImages(): PendingImage[] {
+  const stored = localStorage.getItem(PENDING_IMAGES_KEY)
+  if (!stored) {
+    localStorage.setItem(PENDING_IMAGES_KEY, JSON.stringify(defaultPendingImages))
+    return defaultPendingImages
+  }
+  try {
+    return JSON.parse(stored) as PendingImage[]
+  } catch {
+    return defaultPendingImages
+  }
+}
+
+function saveStoredPendingImages(images: PendingImage[]) {
+  localStorage.setItem(PENDING_IMAGES_KEY, JSON.stringify(images))
+}
+
 
 const defaultBatches: IndexingBatch[] = [
   {
@@ -280,30 +331,96 @@ export const adminApi = {
   },
 
   /**
-   * Tải ảnh lên trực tiếp chuẩn bị cho indexing
+   * Lưu danh sách URL ảnh với trạng thái pending
    */
-  async uploadImagesForIndexing(files: File[]): Promise<{ message: string; uploaded_count: number }> {
+  async importImagesPending(urls: string[]): Promise<{ message: string; imported_count: number }> {
     try {
-      const formData = new FormData()
-      files.forEach((file) => {
-        formData.append('files', file)
-      })
-      const response = await apiClient.post<{ message: string; uploaded_count: number }>(
-        '/admin/indexing/upload',
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
+      const response = await apiClient.post<{ message: string; imported_count: number }>(
+        '/admin/images/import',
+        { urls }
+      )
+      return response.data
+    } catch {
+      await delay(500)
+      const currentList = getStoredPendingImages()
+      const newItems: PendingImage[] = urls.map((url, idx) => {
+        const parts = url.split('/')
+        let filename = parts[parts.length - 1] || `image_${Date.now()}_${idx}.jpg`
+        if (filename.includes('?')) {
+          filename = filename.split('?')[0]
         }
+        return {
+          id: `p_${Date.now()}_${idx}`,
+          url,
+          filename,
+          status: 'pending',
+          created_at: new Date().toISOString()
+        }
+      })
+      saveStoredPendingImages([...newItems, ...currentList])
+      return {
+        message: `Đã lưu tạm ${urls.length} ảnh với trạng thái pending thành công.`,
+        imported_count: urls.length
+      }
+    }
+  },
+
+  /**
+   * Lấy danh sách các ảnh chưa được index (pending)
+   */
+  async getPendingImages(): Promise<PendingImage[]> {
+    try {
+      const response = await apiClient.get<PendingImage[]>('/admin/images/pending')
+      return response.data
+    } catch {
+      await delay(300)
+      return getStoredPendingImages().filter((img) => img.status === 'pending')
+    }
+  },
+
+  /**
+   * Kích hoạt indexing cho danh sách URL ảnh cụ thể
+   */
+  async triggerIndexingForUrls(urls: string[]): Promise<TriggerIndexingResponse> {
+    try {
+      const response = await apiClient.post<TriggerIndexingResponse>(
+        '/admin/indexing/trigger',
+        { urls }
       )
       return response.data
     } catch {
       await delay(800)
+      const allPending = getStoredPendingImages()
+      
+      // Đánh dấu các ảnh có url trùng khớp là 'indexed'
+      const updated = allPending.map((img) => {
+        if (urls.includes(img.url)) {
+          return { ...img, status: 'indexed' as const }
+        }
+        return img
+      })
+      saveStoredPendingImages(updated)
+
+      // Tạo một đợt indexing lịch sử mới
+      const batches = getStoredBatches()
+      const newBatch: IndexingBatch = {
+        id: batches.length + 1,
+        batch_id: `batch_${new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14)}`,
+        status: 'completed',
+        total_images: urls.length,
+        processed_images: urls.length,
+        failed_images: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+      batches.unshift(newBatch)
+      saveStoredBatches(batches)
+
       return {
-        message: `Tải lên thành công ${files.length} hình ảnh chuẩn bị indexing.`,
-        uploaded_count: files.length,
+        message: `Đã index thành công ${urls.length} ảnh.`,
+        task_id: newBatch.batch_id
       }
     }
   },
 }
+
