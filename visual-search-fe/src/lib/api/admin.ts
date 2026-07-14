@@ -15,11 +15,23 @@ export interface AdminUser {
 }
 
 export interface IndexingStatus {
-  status: 'idle' | 'running' | 'completed' | 'failed'
+  status: 'idle' | 'queued' | 'running' | 'completed' | 'failed'
   progress: number // 0 to 100
   processed_count: number
   total_count: number
   error_message?: string | null
+}
+
+export interface IndexingBatch {
+  id: number
+  batch_id: string
+  status: 'queued' | 'running' | 'completed' | 'failed'
+  total_images: number
+  processed_images: number
+  failed_images: number
+  error_message?: string | null
+  created_at: string
+  updated_at?: string | null
 }
 
 export interface TriggerIndexingResponse {
@@ -27,8 +39,61 @@ export interface TriggerIndexingResponse {
   task_id: string
 }
 
-// Giả lập trạng thái Indexing trong localStorage để persistence giữa các lần reload/polling
+// Giả lập danh sách các đợt Indexing trong localStorage
 const INDEXING_STATE_KEY = 'mock_indexing_state'
+const INDEXING_BATCHES_KEY = 'mock_indexing_batches'
+
+const defaultBatches: IndexingBatch[] = [
+  {
+    id: 1,
+    batch_id: 'batch_20260713_001',
+    status: 'completed',
+    total_images: 1200,
+    processed_images: 1200,
+    failed_images: 0,
+    created_at: '2026-07-13T10:00:00.000Z',
+    updated_at: '2026-07-13T10:15:30.000Z'
+  },
+  {
+    id: 2,
+    batch_id: 'batch_20260712_003',
+    status: 'completed',
+    total_images: 500,
+    processed_images: 495,
+    failed_images: 5,
+    error_message: '5 ảnh lỗi định dạng không hỗ trợ',
+    created_at: '2026-07-12T14:30:00.000Z',
+    updated_at: '2026-07-12T14:38:12.000Z'
+  },
+  {
+    id: 3,
+    batch_id: 'batch_20260711_012',
+    status: 'failed',
+    total_images: 300,
+    processed_images: 120,
+    failed_images: 180,
+    error_message: 'Mất kết nối với Vector Database',
+    created_at: '2026-07-11T09:15:00.000Z',
+    updated_at: '2026-07-11T09:20:45.000Z'
+  }
+]
+
+function getStoredBatches(): IndexingBatch[] {
+  const stored = localStorage.getItem(INDEXING_BATCHES_KEY)
+  if (!stored) {
+    localStorage.setItem(INDEXING_BATCHES_KEY, JSON.stringify(defaultBatches))
+    return defaultBatches
+  }
+  try {
+    return JSON.parse(stored) as IndexingBatch[]
+  } catch {
+    return defaultBatches
+  }
+}
+
+function saveStoredBatches(batches: IndexingBatch[]) {
+  localStorage.setItem(INDEXING_BATCHES_KEY, JSON.stringify(batches))
+}
 
 function getStoredIndexingState(): IndexingStatus {
   const stored = localStorage.getItem(INDEXING_STATE_KEY)
@@ -36,7 +101,12 @@ function getStoredIndexingState(): IndexingStatus {
     try {
       const parsed = JSON.parse(stored) as IndexingStatus
       // Nếu đang chạy, giả lập tăng tiến trình qua mỗi lần đọc (polling)
-      if (parsed.status === 'running') {
+      if (parsed.status === 'running' || parsed.status === 'queued') {
+        // Chuyển queued sang running nếu cần thiết
+        if (parsed.status === 'queued') {
+          parsed.status = 'running'
+        }
+
         const timeElapsed = Date.now() - (parsed as any).lastUpdated
         // Giả sử hoàn thành 100% trong 25 giây (tương đương 4% mỗi giây)
         const progressIncrement = Math.floor((timeElapsed / 1000) * 4)
@@ -51,6 +121,16 @@ function getStoredIndexingState(): IndexingStatus {
           // Cập nhật lại mốc thời gian
           ;(parsed as any).lastUpdated = Date.now()
           localStorage.setItem(INDEXING_STATE_KEY, JSON.stringify(parsed))
+
+          // Đồng bộ với danh sách đợt indexing lịch sử
+          const batches = getStoredBatches()
+          const activeBatch = batches.find(b => b.status === 'running' || b.status === 'queued')
+          if (activeBatch) {
+            activeBatch.status = parsed.status === 'completed' ? 'completed' : 'running'
+            activeBatch.processed_images = parsed.processed_count
+            activeBatch.updated_at = new Date().toISOString()
+            saveStoredBatches(batches)
+          }
         }
       }
       return parsed
@@ -92,11 +172,9 @@ export const adminApi = {
    */
   async getStats(): Promise<AdminStats> {
     try {
-      // Thử gọi thật từ API nếu đã mở
       const response = await apiClient.get<AdminStats>('/admin/stats')
       return response.data
     } catch {
-      // Fallback giả lập dữ liệu thống kê
       await delay(400)
       return {
         total_images: 12450,
@@ -128,6 +206,21 @@ export const adminApi = {
   },
 
   /**
+   * Lấy danh sách lịch sử các đợt Indexing
+   */
+  async getIndexingBatches(): Promise<IndexingBatch[]> {
+    try {
+      const response = await apiClient.get<IndexingBatch[]>('/admin/indexing/batches')
+      return response.data
+    } catch {
+      await delay(300)
+      // Kích hoạt cập nhật tiến độ (nếu có) trước khi trả về danh sách để hiển thị tiến độ đồng bộ
+      getStoredIndexingState()
+      return getStoredBatches()
+    }
+  },
+
+  /**
    * Lấy trạng thái Indexing (hỗ trợ polling)
    */
   async getIndexingStatus(): Promise<IndexingStatus> {
@@ -135,7 +228,6 @@ export const adminApi = {
       const response = await apiClient.get<IndexingStatus>('/admin/indexing/status')
       return response.data
     } catch {
-      // Giả lập trạng thái từ localStorage
       await delay(200)
       return getStoredIndexingState()
     }
@@ -149,14 +241,14 @@ export const adminApi = {
       const response = await apiClient.post<TriggerIndexingResponse>('/admin/indexing/trigger', { batch_size: batchSize })
       return response.data
     } catch {
-      // Giả lập kích hoạt tiến trình chạy ngầm
       await delay(600)
       
       const currentState = getStoredIndexingState()
-      if (currentState.status === 'running') {
+      if (currentState.status === 'running' || currentState.status === 'queued') {
         throw new Error('Tiến trình indexing hiện tại vẫn đang chạy. Vui lòng chờ.')
       }
 
+      // 1. Tạo state indexing mới để chạy polling
       const newState: IndexingStatus = {
         status: 'running',
         progress: 0,
@@ -165,9 +257,52 @@ export const adminApi = {
       }
       setStoredIndexingState(newState)
 
+      // 2. Thêm một đợt indexing mới vào danh sách lịch sử
+      const batches = getStoredBatches()
+      const newBatch: IndexingBatch = {
+        id: batches.length + 1,
+        batch_id: `batch_${new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14)}`,
+        status: 'running',
+        total_images: batchSize,
+        processed_images: 0,
+        failed_images: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+      batches.unshift(newBatch)
+      saveStoredBatches(batches)
+
       return {
         message: `Đã kích hoạt indexing thành công cho batch gồm ${batchSize} ảnh.`,
-        task_id: `task_${Date.now()}`,
+        task_id: newBatch.batch_id,
+      }
+    }
+  },
+
+  /**
+   * Tải ảnh lên trực tiếp chuẩn bị cho indexing
+   */
+  async uploadImagesForIndexing(files: File[]): Promise<{ message: string; uploaded_count: number }> {
+    try {
+      const formData = new FormData()
+      files.forEach((file) => {
+        formData.append('files', file)
+      })
+      const response = await apiClient.post<{ message: string; uploaded_count: number }>(
+        '/admin/indexing/upload',
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      )
+      return response.data
+    } catch {
+      await delay(800)
+      return {
+        message: `Tải lên thành công ${files.length} hình ảnh chuẩn bị indexing.`,
+        uploaded_count: files.length,
       }
     }
   },
