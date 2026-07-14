@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { ChevronDown, FileText, ImagePlus, ScanText, Search } from 'lucide-react'
 
 import { PageContainer } from '@/components/layout/PageContainer'
 import { mockSearchResults } from '@/mocks/searchMockData'
@@ -64,7 +63,7 @@ export function SearchPage() {
   function handleSearch() {
     if (!canSearch) {
       if (mode === 'image') {
-        setUploadError('Please choose an image before searching.')
+        setUploadError('Please select an image before searching.')
       }
       return
     }
@@ -88,89 +87,34 @@ export function SearchPage() {
   }
 
   return (
-    <main className="min-h-screen bg-surface-0">
-      <PageContainer size="wide" className="max-w-7xl space-y-8 pb-7 pt-3">
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-border bg-surface-0/90 py-4 backdrop-blur">
-          <div className="flex items-center gap-3">
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-white text-ink-primary shadow-sm shadow-slate-200/70">
-              <Search className="h-5 w-5" strokeWidth={2.25} />
-            </span>
-            <div>
-              <p className="font-display text-xl font-bold text-ink-primary">VisualSearch</p>
-              <p className="text-[11px] font-semibold uppercase text-slate-400">Image search engine</p>
-            </div>
-          </div>
+    <div className="min-h-screen bg-surface-0">
+      <section className="relative isolate flex min-h-[500px] w-full overflow-hidden px-5 pb-24 pt-16 text-center sm:min-h-[540px] sm:px-10 sm:pt-20">
+        <div aria-hidden="true" className="absolute inset-0 grid grid-cols-2 sm:grid-cols-4">
+          {[0, 3, 4, 7].map((resultIndex) => (
+            <img
+              key={mockSearchResults[resultIndex].id}
+              alt=""
+              className="h-full w-full object-cover"
+              src={mockSearchResults[resultIndex].imageUrl}
+            />
+          ))}
+        </div>
+        <div className="absolute inset-0 bg-slate-950/65" />
 
-          <form
-            className="hidden h-12 max-w-3xl flex-1 items-center rounded-full bg-white shadow-sm shadow-slate-200/80 ring-1 ring-border transition duration-200 focus-within:ring-4 focus-within:ring-accent-100 lg:flex"
-            onSubmit={(event) => {
-              event.preventDefault()
-              handleSearch()
-            }}
-          >
-            <label className="relative flex h-full shrink-0 cursor-pointer items-center gap-2 rounded-l-full border-r border-border bg-surface-1 px-4 text-sm font-bold text-ink-primary">
-              {mode === 'image' && <ImagePlus className="h-4 w-4 text-accent-600" />}
-              {mode === 'semantic' && <FileText className="h-4 w-4 text-accent-600" />}
-              {mode === 'ocr' && <ScanText className="h-4 w-4 text-accent-600" />}
-              <select
-                className="cursor-pointer appearance-none bg-transparent pr-5 outline-none"
-                value={mode}
-                onChange={(event) => handleModeChange(event.target.value as SearchMode)}
-              >
-                <option value="image">Image</option>
-                <option value="semantic">Semantic</option>
-                <option value="ocr">OCR</option>
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-slate-400" />
-            </label>
-
-            {mode === 'image' ? (
-              <label className="flex h-full min-w-0 flex-1 cursor-pointer items-center px-5 text-sm font-semibold text-slate-500">
-                <input
-                  accept="image/jpeg,image/png,image/webp"
-                  className="sr-only"
-                  type="file"
-                  onChange={(event) => {
-                    const nextFile = event.target.files?.[0]
-                    if (nextFile) {
-                      handleFileSelect(nextFile)
-                    }
-                    event.target.value = ''
-                  }}
-                />
-                <span className="truncate">{selectedFile?.name ?? 'Choose an image to search'}</span>
-              </label>
-            ) : (
-              <input
-                className="h-full min-w-0 flex-1 bg-transparent px-5 text-sm font-bold text-ink-primary outline-none placeholder:font-medium placeholder:text-slate-400"
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={mode === 'semantic' ? 'Search by description' : 'Search text in images'}
-                value={query}
-              />
-            )}
-
-            <button
-              aria-label="Search"
-              className="mr-2 inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-ink-primary transition hover:bg-accent-50 hover:text-accent-700 disabled:cursor-not-allowed disabled:text-slate-300"
-              disabled={!canSearch}
-              type="submit"
-            >
-              <Search className="h-5 w-5" />
-            </button>
-          </form>
-
-        </header>
-
-        <section className="mx-auto max-w-5xl pt-4 text-center sm:pt-8">
-          <h1 className="font-display mx-auto max-w-3xl text-4xl font-bold leading-[1.05] tracking-normal text-ink-primary sm:text-5xl lg:text-[58px]">
-            Tìm kiếm hình ảnh theo ngữ nghĩa, chữ trong ảnh hoặc độ tương đồng hình ảnh.
+        <div className="relative z-10 m-auto max-w-5xl text-white">
+          <p className="text-xs font-bold uppercase text-white/70">Semantic, OCR, and image-to-image search</p>
+          <h1 className="font-display mx-auto mt-4 max-w-4xl text-4xl font-bold leading-[1.04] tracking-normal sm:text-5xl lg:text-[64px]">
+            Search images by meaning, text, or visual similarity.
           </h1>
-          <p className="mx-auto mt-4 max-w-2xl text-base font-medium leading-7 text-ink-secondary sm:text-lg">
-            Nhập mô tả bằng ngôn ngữ tự nhiên, tìm chữ xuất hiện trong ảnh hoặc tải lên ảnh tham chiếu để tìm kết quả tương tự.
+          <p className="mx-auto mt-5 max-w-2xl text-base font-medium leading-7 text-white/80 sm:text-lg">
+            Describe an idea, find words inside images, or upload a reference to discover visually related results.
           </p>
-        </section>
+        </div>
+      </section>
 
-        <div className="mx-auto max-w-2xl space-y-4 text-left">
+      <PageContainer size="wide" className="relative z-20 -mt-14 max-w-7xl pb-10 pt-0">
+
+        <section className="mx-auto max-w-3xl space-y-4 text-left" aria-label="Search controls">
           <div className="flex justify-center">
             <SearchModeTabs value={mode} onChange={handleModeChange} />
           </div>
@@ -187,10 +131,10 @@ export function SearchPage() {
             onQueryChange={setQuery}
             onSubmit={handleSearch}
           />
-        </div>
+        </section>
 
-        <div className="flex flex-wrap justify-center gap-3 text-sm font-medium text-ink-secondary">
-          <span className="px-1 py-2 text-ink-muted">Try</span>
+        <div className="mt-5 flex flex-wrap justify-center gap-2 text-sm font-medium text-ink-secondary">
+          <span className="px-2 py-2 text-ink-muted">Try</span>
           {['sunset on the beach', 'SALE 50%', 'green forest', 'product label'].map((suggestion) => (
             <button
               key={suggestion}
@@ -206,29 +150,38 @@ export function SearchPage() {
           ))}
         </div>
 
-        <section aria-label="Sample image results" className="columns-1 gap-4 pt-2 sm:columns-2 lg:columns-3">
-          {mockSearchResults.slice(0, 9).map((result, index) => (
-            <button
-              key={result.id}
-              type="button"
-              className={[
-                'group relative mb-4 block w-full cursor-pointer break-inside-avoid overflow-hidden rounded-lg bg-surface-1 text-left shadow-sm shadow-slate-200/80 ring-1 ring-white/70 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0',
-                featuredImageHeights[index % featuredImageHeights.length],
-              ].join(' ')}
-              aria-label={`Open detail for sample image ${result.id}`}
-              onClick={() => setSelectedResult(result)}
-            >
-              <img
-                alt={`Featured image ${result.id}`}
-                className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                src={result.imageUrl}
-              />
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-4 text-white opacity-0 transition duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
-                <p className="text-xs font-medium opacity-90">Ảnh trong thư viện</p>
-                <p className="mt-1 text-xl font-bold">{result.metadata.source ?? 'VisualSearch'}</p>
-              </div>
-            </button>
-          ))}
+        <section aria-label="Sample image results" className="mt-12 space-y-4 pt-2">
+          <div className="flex items-end justify-between gap-4 border-b border-border pb-3">
+            <div>
+              <h2 className="font-display text-2xl font-bold text-ink-primary">Explore the library</h2>
+              <p className="mt-1 text-sm font-medium text-ink-secondary">Open a sample to inspect its image details.</p>
+            </div>
+          </div>
+
+          <div className="columns-1 gap-4 sm:columns-2 lg:columns-3">
+            {mockSearchResults.slice(0, 9).map((result, index) => (
+              <button
+                key={result.id}
+                type="button"
+                className={[
+                  'group relative mb-4 block w-full cursor-pointer break-inside-avoid overflow-hidden rounded-[18px] bg-surface-1 text-left shadow-sm shadow-slate-200/80 ring-1 ring-white/70 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0',
+                  featuredImageHeights[index % featuredImageHeights.length],
+                ].join(' ')}
+                aria-label={`Open details for sample image ${result.id}`}
+                onClick={() => setSelectedResult(result)}
+              >
+                <img
+                  alt={`Featured sample ${result.id}`}
+                  className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                  src={result.imageUrl}
+                />
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-4 text-white opacity-0 transition duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
+                  <p className="text-xs font-medium opacity-90">Library image</p>
+                  <p className="mt-1 text-xl font-bold">{result.metadata.source ?? 'VisualSearch'}</p>
+                </div>
+              </button>
+            ))}
+          </div>
         </section>
       </PageContainer>
 
@@ -240,6 +193,6 @@ export function SearchPage() {
           onFindSimilar={handleFindSimilarResult}
         />
       )}
-    </main>
+    </div>
   )
 }

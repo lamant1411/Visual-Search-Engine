@@ -1,0 +1,35 @@
+from fastapi import FastAPI, UploadFile, File, Form
+from pydantic import BaseModel
+import uvicorn
+from clip_module import CLIPEmbedder
+from PIL import Image
+import io
+
+app = FastAPI(title="Visual Search - AI Service")
+
+print("Đang tải mô hình CLIP cho API Service...")
+clip_model = CLIPEmbedder()
+print("Mô hình đã sẵn sàng!")
+
+@app.post("/api/embed/text")
+async def embed_text(text: str = Form(...)):
+    """API biến văn bản tìm kiếm thành Vector"""
+    try:
+        vector = clip_model.embed_text(text)
+        return {"status": "success", "vector": vector}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/embed/image")
+async def embed_image(file: UploadFile = File(...)):
+    """API biến ảnh upload thành Vector"""
+    try:
+        image_data = await file.read()
+        image = Image.open(io.BytesIO(image_data)).convert("RGB")
+        vector = clip_model.embed_image(image)
+        return {"status": "success", "vector": vector}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+if __name__ == "__main__":
+    uvicorn.run("ai_service:app", host="0.0.0.0", port=8001, reload=True)

@@ -16,13 +16,22 @@ import AdminIndexingPage from '@/pages/admin/AdminIndexingPage';
 import AdminUsersPage from '@/pages/admin/AdminUsersPage';
 
 const router = createBrowserRouter([
-  // ── Auth routes: chỉ dành cho khách chưa login ───────────────────
+  // Trang public: ai cũng vào được
   {
-    element: <GuestRoute />,      // redirect về /search nếu đã login
+    element: <AppShell />,
     children: [
-      // "/" chưa có page riêng -> tự chuyển hướng sang /search
+      { index: true, element: <Navigate to="/search" replace /> },
+      { path: '/search', element: <SearchPage /> },
+      { path: '/search/results', element: <SearchResultsPage /> },
+    ],
+  },
+
+  // Auth routes: chỉ dành cho khách chưa login
+  {
+    element: <GuestRoute />,
+    children: [
       {
-        element: <AuthShell />,   // layout nền tím, không Header
+        element: <AuthShell />,
         children: [
           { path: '/login', element: <LoginPage /> },
           { path: '/register', element: <RegisterPage /> },
@@ -31,17 +40,14 @@ const router = createBrowserRouter([
     ],
   },
 
-  // ── App routes: yêu cầu đăng nhập ───────────────────────────────
+  // Routes cần login
   {
-    element: <ProtectedRoute />,  // redirect về /login nếu chưa login
+    element: <ProtectedRoute />,
     children: [
       {
-        element: <AppShell />,    // layout có Header
+        element: <AppShell />,
         children: [
-          { index: true, element: <Navigate to="/search" replace /> },
-          { path: '/search', element: <SearchPage /> },
-          { path: '/search/results', element: <SearchResultsPage /> },
-          // { path: '/bookmark', element: <BookmarkPage /> },
+          { path: '/history', element: <div>History page</div> },
         ],
       },
     ],
@@ -50,7 +56,6 @@ const router = createBrowserRouter([
   {
     element: <AppShell />,    // layout có Header
     children: [
-      { path: '/history', element: <HistoryPage /> },
       { path: '/bookmark', element: <BookmarkPage /> },
       { path: '/admin', element: <AdminOverviewPage /> },
       { path: '/admin/indexing', element: <AdminIndexingPage /> },
@@ -59,10 +64,10 @@ const router = createBrowserRouter([
 
   // ── Admin routes: yêu cầu login + role admin ─────────────────────
   {
-    element: <AdminGuard />,      // redirect /login nếu chưa login, /search nếu không phải admin
+    element: <AdminGuard />,
     children: [
       {
-        element: <AdminShell />,  // layout có Header + Sidebar
+        element: <AdminShell />,
         children: [
           // { path: '/admin', element: <AdminOverviewPage /> },
           // { path: '/admin/indexing', element: <AdminIndexingPage /> },
@@ -72,8 +77,8 @@ const router = createBrowserRouter([
     ],
   },
 
-  { path: '*', element: <div>404 - Không tìm thấy trang</div> },
-]);
+  { path: '*', element: <div>404 - Page not found</div> },
+])
 
 export function AppRouter() {
   return <RouterProvider router={router} />;

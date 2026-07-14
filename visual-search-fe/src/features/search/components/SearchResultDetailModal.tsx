@@ -4,6 +4,7 @@ import { Check, Copy, Info, Minus, Plus, RotateCcw, Search, X, Zap } from 'lucid
 import { Button } from '@/components/base/button'
 
 import type { SearchResult } from '../types'
+import { formatSimilarityScore } from '../utils/formatSimilarityScore'
 
 type SearchResultDetailModalProps = {
   result: SearchResult
@@ -22,6 +23,7 @@ export function SearchResultDetailModal({
   const [zoom, setZoom] = useState(1)
   const [zoomOrigin, setZoomOrigin] = useState('50% 50%')
   const isZoomed = zoom > 1
+  const similarityScore = formatSimilarityScore(result.similarityScore)
   const sizeLabel =
     result.metadata.width && result.metadata.height
       ? `${result.metadata.width} x ${result.metadata.height}`
@@ -104,7 +106,7 @@ export function SearchResultDetailModal({
         <aside className="flex max-h-[92vh] flex-col overflow-y-auto bg-white p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase text-accent-600">Image detail</p>
+              <p className="text-xs font-semibold uppercase text-accent-600">Image details</p>
               <h2 className="font-display mt-1 text-2xl font-bold text-ink-primary">Image #{result.id}</h2>
             </div>
 
@@ -124,13 +126,13 @@ export function SearchResultDetailModal({
             <div className="mt-5 rounded-lg border border-border bg-surface-0 p-4">
               <div className="flex items-center gap-2 text-sm font-semibold text-accent-600">
                 <Zap className="h-4 w-4" />
-                {Math.round(result.similarityScore)}% similarity
+                {similarityScore}% similarity
               </div>
             </div>
           )}
 
           <dl className="mt-5 space-y-4 text-sm">
-            <DetailRow label="Size" value={sizeLabel} />
+            <DetailRow label="Dimensions" value={sizeLabel} />
             <DetailRow label="Source" value={result.metadata.source ?? 'Unknown'} />
             <DetailRow label="Image ID" value={String(result.id)} />
           </dl>
@@ -139,7 +141,7 @@ export function SearchResultDetailModal({
             <div className="mt-5 rounded-lg border border-border bg-white p-4 shadow-sm shadow-slate-200/70">
               <div className="flex items-center gap-2 text-sm font-semibold text-ink-primary">
                 <Info className="h-4 w-4 text-accent-600" />
-                OCR text
+                OCR content
               </div>
               <p className="mt-2 text-sm text-ink-secondary">{result.metadata.ocrText}</p>
             </div>
@@ -166,11 +168,11 @@ export function SearchResultDetailModal({
               variant="secondary"
               onClick={handleCopyImageUrl}
             >
-              {copyStatus === 'copied' ? 'Copied URL' : 'Copy image URL'}
+              {copyStatus === 'copied' ? 'URL copied' : 'Copy image URL'}
             </Button>
 
             {copyStatus === 'error' && (
-              <p className="text-center text-xs font-medium text-red-600">Could not copy this URL.</p>
+              <p className="text-center text-xs font-medium text-red-600">Unable to copy this URL.</p>
             )}
           </div>
         </aside>
