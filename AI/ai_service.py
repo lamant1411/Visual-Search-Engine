@@ -1,13 +1,9 @@
 import io
-import sys
-from pathlib import Path
-
 import uvicorn
 from fastapi import FastAPI, UploadFile, File, Form
 from PIL import Image
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
-from clip_module import CLIPEmbedder
+from src.clip_module import CLIPEmbedder
 
 app = FastAPI(title="Visual Search - AI Service")
 
