@@ -1,7 +1,10 @@
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.router import api_router
 from app.core.config import settings
@@ -18,6 +21,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+backend_root = Path(__file__).resolve().parent.parent
+static_directory = Path(settings.static_files_dir)
+if not static_directory.is_absolute():
+    static_directory = backend_root / static_directory
+static_directory.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=static_directory), name="static")
 
 app.include_router(api_router, prefix="/api/v1")
 

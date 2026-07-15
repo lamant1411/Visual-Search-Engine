@@ -1,5 +1,7 @@
 import os
 import uuid
+from pathlib import Path
+
 import psycopg2
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
@@ -20,6 +22,9 @@ POSTGRES_CONFIG = {
 }
 QDRANT_URL = "http://localhost:6333"
 COLLECTION_NAME = "images_collection"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_IMAGE_FOLDER = PROJECT_ROOT / "backend" / "static" / "images"
+LOCAL_IMAGE_URL_PREFIX = os.getenv("LOCAL_IMAGE_URL_PREFIX", "/static/images").rstrip("/")
 
 def connect_databases():
     """Chỉ kết nối DB. Việc tạo bảng (CREATE TABLE) giờ là nhiệm vụ của Alembic bên BE."""
@@ -53,6 +58,7 @@ def run_batch_indexing(image_folder: str):
 
     for idx, filename in enumerate(image_files, 1):
         file_path = os.path.join(image_folder, filename)
+        storage_path = f"{LOCAL_IMAGE_URL_PREFIX}/{filename}"
         
         # 1. Tạo UUID riêng cho Qdrant (Do BE không dùng UUID làm khóa chính nữa)
         qdrant_point_id = str(uuid.uuid4())
@@ -72,7 +78,7 @@ def run_batch_indexing(image_folder: str):
                 INSERT INTO images (storage_path, original_filename, source_type, status) 
                 VALUES (%s, %s, %s, %s) 
                 RETURNING id;
-            """, (file_path, filename, 'dataset', 'indexed'))
+            """, (storage_path, filename, 'dataset', 'indexed'))
             
             # Lấy ID số nguyên tự động tăng do Postgres cấp
             image_id_int = pg_cursor.fetchone()[0]
@@ -96,7 +102,7 @@ def run_batch_indexing(image_folder: str):
                     models.PointStruct(
                         id=qdrant_point_id, # Dùng UUID để link với bảng image_embeddings
                         vector=vector,
-                        payload={"storage_path": file_path, "image_id_int": image_id_int}
+                        payload={"storage_path": storage_path, "image_id_int": image_id_int}
                     )
                 ]
             )
@@ -121,7 +127,7 @@ def run_batch_indexing(image_folder: str):
     pg_conn.close()
 
 if __name__ == "__main__":
-    DATASET_FOLDER = "./data/dataset_2000_images" 
+    DATASET_FOLDER = os.getenv("IMAGE_FOLDER", str(DEFAULT_IMAGE_FOLDER))
     if os.path.exists(DATASET_FOLDER):
         run_batch_indexing(DATASET_FOLDER)
     else:

@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     image_embedding_dim: int = Field(default=512)
     image_search_max_upload_mb: int = Field(default=10)
     image_search_max_results: int = Field(default=100)
+    image_base_url: str = Field(default="http://localhost:8000")
+    static_files_dir: str = Field(default="static")
     backend_cors_origins: list[str] = Field(
         default=[
             "http://localhost:5173",

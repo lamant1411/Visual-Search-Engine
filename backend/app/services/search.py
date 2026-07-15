@@ -3,6 +3,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models.image import Image
 from app.models.ocr_text import OCRText
 from app.schemas.search import SearchResponse, SearchResultItem, SearchResultMetadata
@@ -61,4 +62,16 @@ async def build_search_response_from_hits(
 def build_image_url(storage_path: str) -> str:
     if storage_path.startswith(("http://", "https://")):
         return storage_path
-    return storage_path
+
+    normalized_path = storage_path.replace("\\", "/").strip()
+    base_url = settings.image_base_url.rstrip("/")
+
+    if normalized_path.startswith("/static/"):
+        return f"{base_url}{normalized_path}"
+    if normalized_path.startswith("static/"):
+        return f"{base_url}/{normalized_path}"
+    if normalized_path.startswith("images/"):
+        return f"{base_url}/static/{normalized_path}"
+
+    filename = normalized_path.rsplit("/", maxsplit=1)[-1]
+    return f"{base_url}/static/images/{filename}"
