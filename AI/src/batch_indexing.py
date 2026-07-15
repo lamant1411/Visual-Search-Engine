@@ -51,6 +51,15 @@ def connect_databases():
     return conn, cursor, qdrant
 
 
+def get_existing_image_id(pg_cursor, storage_path: str) -> Optional[int]:
+    pg_cursor.execute(
+        "SELECT id FROM images WHERE storage_path = %s LIMIT 1;",
+        (storage_path,),
+    )
+    row = pg_cursor.fetchone()
+    return row[0] if row else None
+
+
 def insert_indexed_image(
     pg_cursor,
     qdrant_client: QdrantClient,
@@ -121,10 +130,16 @@ def run_batch_indexing_from_urls(tsv_path: str, max_images: int = 2000):
     print(f"\nTim thay {total_images} URL anh. Bat dau tai va xu ly...\n")
 
     success_count = 0
+    skipped_count = 0
     error_count = 0
 
     for idx, url in enumerate(image_urls, 1):
         try:
+            if get_existing_image_id(pg_cursor, url) is not None:
+                skipped_count += 1
+                if idx % 10 == 0 or idx == total_images:
+                    print(f"[{idx}/{total_images}] Bo qua URL da index: {url}")
+                continue
             optimize_url = f"{url}?w=600" if "?" not in url else url
             response = requests.get(optimize_url, stream=True, timeout=10)
             response.raise_for_status()
@@ -161,6 +176,7 @@ def run_batch_indexing_from_urls(tsv_path: str, max_images: int = 2000):
 
     print("\n--- TONG KET BATCH INDEXING URL ---")
     print(f"Hoan thanh: {success_count}/{total_images} anh.")
+    print(f"Bo qua do da index: {skipped_count} anh.")
     print(f"Loi: {error_count} anh.")
 
     pg_cursor.close()
@@ -202,6 +218,7 @@ def run_batch_indexing_from_local_folder(
     print(f"\nTim thay {total_images} anh local. Bat dau xu ly...\n")
 
     success_count = 0
+    skipped_count = 0
     error_count = 0
 
     for idx, file_path in enumerate(image_files, 1):
@@ -209,6 +226,12 @@ def run_batch_indexing_from_local_folder(
         storage_path = build_local_storage_path(image_folder, file_path, storage_prefix)
 
         try:
+            if get_existing_image_id(pg_cursor, storage_path) is not None:
+                skipped_count += 1
+                if idx % 10 == 0 or idx == total_images:
+                    print(f"[{idx}/{total_images}] Bo qua file da index: {storage_path}")
+                continue
+
             # AI doc file local de embed/OCR, DB luu path ma BE serve duoc cho FE.
             vector = clip.embed_image(file_path)
             ocr_texts_list = ocr.extract_text(file_path)
@@ -238,6 +261,7 @@ def run_batch_indexing_from_local_folder(
 
     print("\n--- TONG KET BATCH INDEXING LOCAL ---")
     print(f"Hoan thanh: {success_count}/{total_images} anh.")
+    print(f"Bo qua do da index: {skipped_count} anh.")
     print(f"Loi: {error_count} anh.")
 
     pg_cursor.close()
