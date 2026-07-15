@@ -55,3 +55,13 @@ Thumbs.db
 # Logs
 *.log
 logs/
+# Local image dataset is mounted by docker-compose volume, not copied into the image
+static/images/
+static/**/*.jpg
+static/**/*.jpeg
+static/**/*.png
+static/**/*.webp
+static/**/*.gif
+static/**/*.bmp
+static/**/*.tif
+static/**/*.tiff
