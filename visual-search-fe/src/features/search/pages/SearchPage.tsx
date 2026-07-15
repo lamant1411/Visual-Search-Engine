@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { mockSearchResults } from '@/mocks/searchMockData'
 
 import { SearchModeTabs } from '../components/SearchModeTabs'
+import { ImageCropModal } from '../components/ImageCropModal'
 import { SearchLoginModal } from '../components/SearchLoginModal'
 import { SearchPanel } from '../components/SearchPanel'
 import { SearchResultDetailModal } from '../components/SearchResultDetailModal'
@@ -26,6 +27,7 @@ export function SearchPage() {
   const [mode, setMode] = useState<SearchMode>('semantic')
   const [query, setQuery] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [cropSourceFile, setCropSourceFile] = useState<File | null>(null)
   const [uploadError, setUploadError] = useState<string>()
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null)
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
@@ -39,6 +41,14 @@ export function SearchPage() {
     return URL.createObjectURL(selectedFile)
   }, [selectedFile])
 
+  const cropSourceUrl = useMemo(() => {
+    if (!cropSourceFile) {
+      return null
+    }
+
+    return URL.createObjectURL(cropSourceFile)
+  }, [cropSourceFile])
+
   useEffect(() => {
     return () => {
       if (previewUrl) {
@@ -46,6 +56,14 @@ export function SearchPage() {
       }
     }
   }, [previewUrl])
+
+  useEffect(() => {
+    return () => {
+      if (cropSourceUrl) {
+        URL.revokeObjectURL(cropSourceUrl)
+      }
+    }
+  }, [cropSourceUrl])
 
   const canSearch = mode === 'image' ? Boolean(selectedFile) : query.trim().length > 0
 
@@ -62,12 +80,19 @@ export function SearchPage() {
       return
     }
 
-    setSelectedFile(file)
+    setCropSourceFile(file)
     setUploadError(undefined)
   }
 
   function handleClearFile() {
     setSelectedFile(null)
+    setCropSourceFile(null)
+    setUploadError(undefined)
+  }
+
+  function handleCropConfirm(file: File) {
+    setSelectedFile(file)
+    setCropSourceFile(null)
     setUploadError(undefined)
   }
 
@@ -186,6 +211,7 @@ export function SearchPage() {
             selectedFile={selectedFile}
             uploadError={uploadError}
             onClearFile={handleClearFile}
+            onEditCrop={() => selectedFile && setCropSourceFile(selectedFile)}
             onFileSelect={handleFileSelect}
             onQueryChange={setQuery}
             onSubmit={handleSearch}
@@ -257,6 +283,16 @@ export function SearchPage() {
 
       {pendingAction && !isAuthLoading && (
         <SearchLoginModal onClose={() => setPendingAction(null)} onSuccess={handleLoginSuccess} />
+      )}
+
+      {cropSourceFile && cropSourceUrl && (
+        <ImageCropModal
+          file={cropSourceFile}
+          imageUrl={cropSourceUrl}
+          onCancel={() => setCropSourceFile(null)}
+          onConfirm={handleCropConfirm}
+          onUseOriginal={() => handleCropConfirm(cropSourceFile)}
+        />
       )}
     </div>
   )
