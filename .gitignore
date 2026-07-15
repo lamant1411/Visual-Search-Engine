@@ -9,3 +9,5 @@ __pycache__/
 .venv
 # Ignore AI Datasets and images
 AI/data/
+**/static/images/
+**/images/

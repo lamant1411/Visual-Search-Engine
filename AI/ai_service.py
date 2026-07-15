@@ -1,7 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from pydantic import BaseModel
 import uvicorn
-from clip_module import CLIPEmbedder
+from src.clip_module import CLIPEmbedder
 from PIL import Image
 import io
 
