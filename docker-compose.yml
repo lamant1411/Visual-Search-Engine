@@ -1,4 +1,4 @@
-services:
+﻿services:
   backend:
     build:
       context: ./backend
@@ -6,12 +6,12 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
-      # BE cần map thư mục ảnh này để đọc và trả về cho Frontend hiển thị
-      - ./AI/data/dataset_2000_images:/app/images 
+      # BE serve anh local qua /static/images de Frontend hien thi duoc.
+      - ./backend/static/images:/app/static/images
     env_file:
       - ./backend/.env
     environment:
-      - AI_SERVICE_URL=http://ai_service:8001 # Báo cho BE biết chỗ gọi AI
+      - AI_SERVICE_URL=http://ai_service:8001 # BÃ¡o cho BE biáº¿t chá»— gá»i AI
     depends_on:
       postgres:
         condition: service_healthy
@@ -28,6 +28,7 @@ services:
       - "8001:8001"
     volumes:
       - ./AI:/app
+      - ./backend/static/images:/app/static/images
     environment:
       - POSTGRES_HOST=postgres
       - QDRANT_URL=http://qdrant:6333
@@ -90,3 +91,5 @@ volumes:
   frontend_node_modules:
   postgres_data:
   qdrant_data:
+
+

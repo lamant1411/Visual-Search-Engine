@@ -15,6 +15,8 @@ class SearchRequest(BaseModel):
 
 
 class SearchResultMetadata(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     width: int | None = None
     height: int | None = None
     source: str | None = None
