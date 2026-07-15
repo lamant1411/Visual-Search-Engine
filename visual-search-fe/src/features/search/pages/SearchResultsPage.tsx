@@ -12,6 +12,7 @@ import { SearchResultDetailModal } from '../components/SearchResultDetailModal'
 import { searchByImage, searchByText } from '../services/search.api'
 import { useBookmarks } from '../hooks/useBookmarks'
 import type { SearchMode, SearchResponse, SearchResult } from '../types'
+import { getSearchErrorMessage } from '../utils/getSearchErrorMessage'
 
 type SearchLocationState = {
   file?: File
@@ -51,6 +52,7 @@ export function SearchResultsPage() {
   })
 
   const response = searchQuery.data
+  const searchError = getSearchErrorMessage(searchQuery.error)
   const total = response?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / pageLimit))
 
@@ -86,8 +88,8 @@ export function SearchResultsPage() {
 
         {queryEnabled && searchQuery.isError && (
           <section className="rounded-lg border border-red-200 bg-red-50 p-6">
-            <p className="font-semibold text-red-700">Search failed</p>
-            <p className="mt-1 text-sm text-red-600">Try again or start a new search.</p>
+            <p className="font-semibold text-red-700">{searchError.title}</p>
+            <p className="mt-1 text-sm text-red-600">{searchError.description}</p>
           </section>
         )}
 
