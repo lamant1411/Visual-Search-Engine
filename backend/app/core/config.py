@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     qdrant_url: str = Field(default="http://qdrant:6333")
     qdrant_images_collection: str = Field(default="images_collection")
     ai_service_url: str = Field(default="http://ai:8001")
-    ai_image_embedding_path: str = Field(default="/embed/image")
+    ai_image_embedding_path: str = Field(default="/api/embed/image")
     ai_service_timeout_seconds: float = Field(default=30.0)
     image_embedding_dim: int = Field(default=512)
     image_search_max_upload_mb: int = Field(default=10)
