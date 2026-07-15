@@ -9,3 +9,4 @@ __pycache__/
 .venv
 # Ignore AI Datasets and images
 AI/data/
+AI/cloudinary_assets/cloudinary_upload_manifest.csv

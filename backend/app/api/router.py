@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.auth import router as auth_router
+from app.api.search import router as search_router
 
 api_router = APIRouter()
 
@@ -10,5 +11,5 @@ api_router = APIRouter()
 # from app.api import auth, images, search, admin
 api_router.include_router(auth_router, prefix="/auth", tags=["Auth"])
 # api_router.include_router(images.router, prefix="/images", tags=["Images"])
-# api_router.include_router(search.router, prefix="/search", tags=["Search"])
+api_router.include_router(search_router, prefix="/search", tags=["Search"])
 # api_router.include_router(admin.router, prefix="/admin", tags=["Admin"])
