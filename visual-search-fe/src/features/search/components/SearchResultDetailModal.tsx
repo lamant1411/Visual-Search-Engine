@@ -1,5 +1,5 @@
 import { type MouseEvent, useEffect, useState } from 'react'
-import { Bookmark, Check, Copy, Info, Minus, Plus, RotateCcw, Search, X, Zap } from 'lucide-react'
+import { Bookmark, Check, Copy, ImageOff, Info, Minus, Plus, RotateCcw, Search, X, Zap } from 'lucide-react'
 
 import { Button } from '@/components/base/button'
 
@@ -26,6 +26,7 @@ export function SearchResultDetailModal({
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle')
   const [zoom, setZoom] = useState(1)
   const [zoomOrigin, setZoomOrigin] = useState('50% 50%')
+  const [imageStatus, setImageStatus] = useState<'loading' | 'loaded' | 'error'>('loading')
   const isZoomed = zoom > 1
   const similarityScore = formatSimilarityScore(result.similarityScore)
   const sizeLabel =
@@ -34,6 +35,9 @@ export function SearchResultDetailModal({
       : 'Unknown size'
 
   useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         onClose()
@@ -41,23 +45,26 @@ export function SearchResultDetailModal({
     }
 
     document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', handleKeyDown)
+    }
   }, [onClose])
 
   return (
     <div
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-0 backdrop-blur-sm sm:p-4"
       role="dialog"
       onClick={onClose}
     >
       <section
-        className="grid h-[92vh] w-[96vw] max-w-[1500px] overflow-hidden rounded-lg bg-white shadow-2xl lg:grid-cols-[minmax(0,1fr)_340px]"
+        className="grid h-[100dvh] w-full max-w-[1500px] grid-rows-[minmax(240px,45dvh)_minmax(0,1fr)] overflow-hidden bg-white shadow-2xl sm:h-[92dvh] sm:w-[96vw] sm:rounded-lg lg:grid-cols-[minmax(0,1fr)_340px] lg:grid-rows-1"
         onClick={(event) => event.stopPropagation()}
       >
         <div
           className={[
-            'relative flex min-h-[420px] items-center justify-center overflow-hidden bg-slate-950 lg:min-h-0',
+            'relative flex min-h-0 items-center justify-center overflow-hidden bg-slate-950',
             isZoomed ? 'cursor-zoom-out' : 'cursor-zoom-in',
           ].join(' ')}
           onClick={handleImageClick}
@@ -98,13 +105,27 @@ export function SearchResultDetailModal({
             </button>
           </div>
 
-          <img
-            alt={`Search result ${result.id}`}
-            className="h-full max-h-[92vh] w-full object-contain transition-transform duration-200"
-            draggable={false}
-            src={result.imageUrl}
-            style={{ transform: `scale(${zoom})`, transformOrigin: zoomOrigin }}
-          />
+          {imageStatus === 'loading' && <div className="absolute inset-0 animate-pulse bg-slate-900" />}
+          {imageStatus === 'error' ? (
+            <div className="flex flex-col items-center gap-3 px-6 text-center text-slate-300" role="status">
+              <ImageOff className="h-8 w-8" />
+              <p className="text-sm font-semibold">This image could not be loaded.</p>
+            </div>
+          ) : (
+            <img
+              alt={`Search result ${result.id}`}
+              className={[
+                'h-full w-full object-contain transition duration-200',
+                imageStatus === 'loaded' ? 'opacity-100' : 'opacity-0',
+              ].join(' ')}
+              decoding="async"
+              draggable={false}
+              src={result.imageUrl}
+              style={{ transform: `scale(${zoom})`, transformOrigin: zoomOrigin }}
+              onError={() => setImageStatus('error')}
+              onLoad={() => setImageStatus('loaded')}
+            />
+          )}
         </div>
 
         <aside className="flex max-h-[92vh] flex-col overflow-y-auto bg-white p-5">
@@ -196,6 +217,10 @@ export function SearchResultDetailModal({
   )
 
   function handleImageClick(event: MouseEvent<HTMLDivElement>) {
+    if (imageStatus !== 'loaded') {
+      return
+    }
+
     updateZoomOrigin(event)
     setZoom((currentZoom) => (currentZoom > 1 ? 1 : 2))
   }

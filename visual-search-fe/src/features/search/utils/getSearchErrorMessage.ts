@@ -5,6 +5,7 @@ import { SearchContractError } from '../services/search.mapper'
 type SearchErrorMessage = {
   title: string
   description: string
+  canRetry: boolean
 }
 
 export function getSearchErrorMessage(error: unknown): SearchErrorMessage {
@@ -12,6 +13,7 @@ export function getSearchErrorMessage(error: unknown): SearchErrorMessage {
     return {
       title: 'Unexpected search data',
       description: 'The server response does not match the agreed Search API contract.',
+      canRetry: false,
     }
   }
 
@@ -22,6 +24,7 @@ export function getSearchErrorMessage(error: unknown): SearchErrorMessage {
       return {
         title: 'Session expired',
         description: 'Sign in again to continue searching.',
+        canRetry: false,
       }
     }
 
@@ -29,6 +32,15 @@ export function getSearchErrorMessage(error: unknown): SearchErrorMessage {
       return {
         title: 'Invalid search request',
         description: 'Check your query or reference image and try again.',
+        canRetry: false,
+      }
+    }
+
+    if (status === 501) {
+      return {
+        title: 'Find similar is not available yet',
+        description: 'The Backend currently supports uploaded image files, but not search by an existing image ID.',
+        canRetry: false,
       }
     }
 
@@ -36,6 +48,7 @@ export function getSearchErrorMessage(error: unknown): SearchErrorMessage {
       return {
         title: 'Too many searches',
         description: 'Wait a moment before trying again.',
+        canRetry: true,
       }
     }
 
@@ -43,6 +56,7 @@ export function getSearchErrorMessage(error: unknown): SearchErrorMessage {
       return {
         title: 'Search service unavailable',
         description: 'The server is temporarily unavailable. Try again shortly.',
+        canRetry: true,
       }
     }
 
@@ -50,6 +64,7 @@ export function getSearchErrorMessage(error: unknown): SearchErrorMessage {
       return {
         title: 'Unable to reach the server',
         description: 'Check your connection or confirm that the Backend is running.',
+        canRetry: true,
       }
     }
   }
@@ -57,5 +72,6 @@ export function getSearchErrorMessage(error: unknown): SearchErrorMessage {
   return {
     title: 'Search failed',
     description: 'Try again or start a new search.',
+    canRetry: true,
   }
 }

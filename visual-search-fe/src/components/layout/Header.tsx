@@ -1,6 +1,6 @@
 import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { ChevronDown, Clock, FileText, ImagePlus, LogOut, ScanText, Search, Shield, X } from 'lucide-react';
+import { Bookmark, ChevronDown, Clock, FileText, ImagePlus, LogOut, ScanText, Search, Shield, X } from 'lucide-react';
 import { Button } from '@/components/base/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { SearchLoginModal } from '@/features/search/components/SearchLoginModal';
@@ -26,8 +26,10 @@ export function Header() {
   const [query, setQuery] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [isSearchLoginOpen, setIsSearchLoginOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
+  const mobileSearchInputRef = useRef<HTMLInputElement>(null);
   const userDisplayName = user?.full_name?.trim() || user?.username || user?.email || 'Account';
   const userInitial = userDisplayName.charAt(0).toUpperCase();
   const selectedMode = searchModeOptions.find((mode) => mode.value === searchMode) ?? searchModeOptions[0];
@@ -58,12 +60,38 @@ export function Header() {
     };
   }, [isAccountMenuOpen]);
 
+  useEffect(() => {
+    if (!isMobileSearchOpen) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsMobileSearchOpen(false);
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown);
+    const focusTimer =
+      searchMode === 'image' ? undefined : window.setTimeout(() => mobileSearchInputRef.current?.focus(), 0);
+
+    return () => {
+      if (focusTimer !== undefined) {
+        window.clearTimeout(focusTimer);
+      }
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isMobileSearchOpen, searchMode]);
+
   async function handleLogout() {
     setIsAccountMenuOpen(false);
     setIsLoggingOut(true);
     await logout();
     setIsLoggingOut(false);
     navigate('/login', { replace: true });
+  }
+
+  function handleAccountNavigation(path: string) {
+    setIsAccountMenuOpen(false);
+    navigate(path);
   }
 
   function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
@@ -82,6 +110,7 @@ export function Header() {
   }
 
   function executeSearch() {
+    setIsMobileSearchOpen(false);
 
     if (searchMode === 'image') {
       navigate('/search/results?mode=image&page=1&limit=20', {
@@ -192,11 +221,16 @@ export function Header() {
         <nav className="flex shrink-0 items-center gap-1.5">
           <button
             type="button"
-            className="hidden h-9 cursor-pointer items-center gap-2 rounded-full px-3 text-sm font-bold text-ink-secondary transition hover:bg-accent-50 hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 sm:inline-flex"
-            onClick={() => navigate('/history')}
+            aria-controls="mobile-header-search"
+            aria-expanded={isMobileSearchOpen}
+            aria-label={isMobileSearchOpen ? 'Close search' : 'Open search'}
+            className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-border bg-white text-ink-primary shadow-sm shadow-slate-200/70 transition hover:border-accent-200 hover:bg-accent-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 md:hidden"
+            onClick={() => {
+              setIsAccountMenuOpen(false);
+              setIsMobileSearchOpen((isOpen) => !isOpen);
+            }}
           >
-            <Clock className="h-4 w-4" />
-            <span className="hidden lg:inline">History</span>
+            {isMobileSearchOpen ? <X className="h-5 w-5" /> : <Search className="h-5 w-5" />}
           </button>
 
           {user?.role === 'admin' && (
@@ -255,10 +289,32 @@ export function Header() {
                     </p>
                   </div>
 
+                  <div className="border-b border-border py-1.5">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg px-3 text-sm font-bold text-ink-secondary transition hover:bg-accent-50 hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600"
+                      onClick={() => handleAccountNavigation('/history')}
+                    >
+                      <Clock className="h-4 w-4" />
+                      History
+                    </button>
+
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg px-3 text-sm font-bold text-ink-secondary transition hover:bg-accent-50 hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600"
+                      onClick={() => handleAccountNavigation('/bookmark')}
+                    >
+                      <Bookmark className="h-4 w-4" />
+                      Bookmarks
+                    </button>
+                  </div>
+
                   <button
                     type="button"
                     role="menuitem"
-                    className="mt-2 flex h-10 w-full cursor-pointer items-center gap-2 rounded-xl px-3 text-sm font-bold text-ink-secondary transition hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                    className="mt-1.5 flex h-10 w-full cursor-pointer items-center gap-3 rounded-lg px-3 text-sm font-bold text-ink-secondary transition hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
                     disabled={isLoggingOut}
                     onClick={handleLogout}
                   >
@@ -279,6 +335,74 @@ export function Header() {
             </Button>
           )}
         </nav>
+      </div>
+
+      <div
+        id="mobile-header-search"
+        className="border-t border-border bg-white md:hidden"
+        hidden={!isMobileSearchOpen}
+      >
+        <form className="mx-auto flex h-[72px] max-w-7xl items-center px-4 sm:px-6" onSubmit={handleSearchSubmit}>
+          <div className="flex h-11 min-w-0 flex-1 items-center rounded-full border border-border bg-surface-1 shadow-sm shadow-slate-200/70 transition focus-within:border-accent-600 focus-within:bg-white focus-within:ring-4 focus-within:ring-accent-100">
+            <label className="relative flex h-full shrink-0 cursor-pointer items-center gap-2 rounded-l-full border-r border-border bg-white pl-3 pr-2 text-sm font-bold text-ink-primary">
+              <SelectedModeIcon className="h-4 w-4 text-accent-600" />
+              <select
+                aria-label="Search mode"
+                className="w-[76px] cursor-pointer appearance-none bg-transparent pr-4 outline-none"
+                value={searchMode}
+                onChange={(event) => handleModeChange(event.target.value as HeaderSearchMode)}
+              >
+                {searchModeOptions.map((mode) => (
+                  <option key={mode.value} value={mode.value}>
+                    {mode.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-1.5 h-3.5 w-3.5 text-slate-400" />
+            </label>
+
+            {searchMode === 'image' ? (
+              <label className="flex h-full min-w-0 flex-1 cursor-pointer items-center px-3 text-sm font-semibold text-ink-secondary">
+                <input
+                  ref={mobileSearchInputRef}
+                  accept="image/jpeg,image/png,image/webp"
+                  className="sr-only"
+                  type="file"
+                  onChange={handleFileChange}
+                />
+                <span className="truncate">{selectedFile?.name ?? 'Choose image'}</span>
+              </label>
+            ) : (
+              <input
+                ref={mobileSearchInputRef}
+                className="h-full min-w-0 flex-1 bg-transparent px-3 text-sm font-semibold text-ink-primary outline-none placeholder:text-slate-400"
+                value={query}
+                placeholder={searchMode === 'semantic' ? 'Describe an image...' : 'Find text in images...'}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            )}
+
+            {searchMode === 'image' && selectedFile && (
+              <button
+                aria-label="Remove selected image"
+                className="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-ink-muted transition hover:bg-accent-50 hover:text-ink-primary"
+                type="button"
+                onClick={() => setSelectedFile(null)}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+
+            <button
+              aria-label="Search"
+              className="mr-1 inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-ink-primary text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+              disabled={!canSubmitSearch}
+              type="submit"
+            >
+              <Search className="h-[18px] w-[18px]" />
+            </button>
+          </div>
+        </form>
       </div>
     </header>
 

@@ -1,18 +1,21 @@
 import { useState } from 'react'
-import { Bookmark, Info, Zap } from 'lucide-react'
+import { Bookmark, ImageOff, Info, Zap } from 'lucide-react'
 
 import type { SearchResult } from '../types'
 import { formatSimilarityScore } from '../utils/formatSimilarityScore'
 
 type ResultCardProps = {
   result: SearchResult
+  priority?: boolean
   isBookmarked?: boolean
   onBookmark?: (result: SearchResult) => void
   onSelect?: (result: SearchResult) => void
 }
 
-export function ResultCard({ result, isBookmarked = false, onBookmark, onSelect }: ResultCardProps) {
-  const [imageLoaded, setImageLoaded] = useState(false)
+export function ResultCard({ result, priority = false, isBookmarked = false, onBookmark, onSelect }: ResultCardProps) {
+  const [imageSource, setImageSource] = useState(result.thumbnailUrl)
+  const [imageStatus, setImageStatus] = useState<'loading' | 'loaded' | 'error'>('loading')
+  const imageLoaded = imageStatus === 'loaded'
   const sizeLabel =
     result.metadata.width && result.metadata.height
       ? `${result.metadata.width} x ${result.metadata.height}`
@@ -32,17 +35,31 @@ export function ResultCard({ result, isBookmarked = false, onBookmark, onSelect 
         onClick={() => onSelect?.(result)}
       >
         <div className="relative overflow-hidden bg-surface-1" style={{ aspectRatio }}>
-        {!imageLoaded && <div className="absolute inset-0 animate-pulse bg-slate-200" />}
-        <img
-          alt={`Search result ${result.id}`}
-          className={[
-            'h-full w-full object-cover transition duration-300 group-hover:scale-105',
-            imageLoaded ? 'opacity-100' : 'opacity-0',
-          ].join(' ')}
-          loading="lazy"
-          src={result.thumbnailUrl}
-          onLoad={() => setImageLoaded(true)}
-        />
+        {imageStatus === 'loading' && <div className="absolute inset-0 animate-pulse bg-slate-200" />}
+        {imageStatus === 'error' ? (
+          <div
+            aria-label={`Image ${result.id} could not be loaded`}
+            className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-100 px-4 text-center text-ink-muted"
+            role="img"
+          >
+            <ImageOff className="h-6 w-6" />
+            <span className="text-xs font-semibold">Image unavailable</span>
+          </div>
+        ) : (
+          <img
+            alt={`Search result ${result.id}`}
+            className={[
+              'h-full w-full object-cover transition duration-300 group-hover:scale-105',
+              imageLoaded ? 'opacity-100' : 'opacity-0',
+            ].join(' ')}
+            decoding="async"
+            fetchPriority={priority ? 'high' : 'auto'}
+            loading={priority ? 'eager' : 'lazy'}
+            src={imageSource}
+            onError={handleImageError}
+            onLoad={() => setImageStatus('loaded')}
+          />
+        )}
         <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-xs font-bold text-ink-primary shadow-sm shadow-slate-900/10 backdrop-blur">
           <Zap className="h-3.5 w-3.5 text-accent-600" />
           {similarityScore}%
@@ -77,4 +94,14 @@ export function ResultCard({ result, isBookmarked = false, onBookmark, onSelect 
       </button>
     </article>
   )
+
+  function handleImageError() {
+    if (imageSource !== result.imageUrl) {
+      setImageSource(result.imageUrl)
+      setImageStatus('loading')
+      return
+    }
+
+    setImageStatus('error')
+  }
 }

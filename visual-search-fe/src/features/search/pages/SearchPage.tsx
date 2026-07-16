@@ -174,11 +174,13 @@ export function SearchPage() {
     <div className="min-h-screen bg-surface-0">
       <section className="relative isolate flex min-h-[500px] w-full overflow-hidden px-5 pb-24 pt-16 text-center sm:min-h-[540px] sm:px-10 sm:pt-20">
         <div aria-hidden="true" className="absolute inset-0 grid grid-cols-2 sm:grid-cols-4">
-          {[0, 3, 4, 7].map((resultIndex) => (
+          {[0, 3, 4, 7].map((resultIndex, index) => (
             <img
               key={mockSearchResults[resultIndex].id}
               alt=""
               className="h-full w-full object-cover"
+              decoding="async"
+              fetchPriority={index === 0 ? 'high' : 'auto'}
               src={mockSearchResults[resultIndex].imageUrl}
             />
           ))}
@@ -258,6 +260,8 @@ export function SearchPage() {
                 <img
                   alt={`Featured sample ${result.id}`}
                   className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                  decoding="async"
+                  loading="lazy"
                   src={result.imageUrl}
                 />
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-4 text-white opacity-0 transition duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
