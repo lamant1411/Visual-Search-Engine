@@ -22,6 +22,15 @@ class Settings(BaseSettings):
         default="postgresql+asyncpg://postgres:postgres@postgres:5432/visual_search"
     )
     qdrant_url: str = Field(default="http://qdrant:6333")
+    qdrant_images_collection: str = Field(default="images_collection")
+    ai_service_url: str = Field(default="http://ai:8001")
+    ai_image_embedding_path: str = Field(default="/api/embed/image")
+    ai_service_timeout_seconds: float = Field(default=30.0)
+    image_embedding_dim: int = Field(default=512)
+    image_search_max_upload_mb: int = Field(default=10)
+    image_search_max_results: int = Field(default=100)
+    image_base_url: str = Field(default="http://localhost:8000")
+    static_files_dir: str = Field(default="static")
     backend_cors_origins: list[str] = Field(
         default=[
             "http://localhost:5173",
