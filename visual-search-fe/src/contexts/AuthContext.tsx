@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { saveTokens, clearTokens, getAccessToken } from '@/lib/auth/tokenStorage'
 import { authApi } from '@/lib/api/auth'
+import { AUTH_UNAUTHORIZED_EVENT } from '@/lib/auth/authEvents'
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -82,6 +83,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => {
         setIsLoading(false)
       })
+  }, [])
+
+  useEffect(() => {
+    function handleUnauthorized() {
+      setAccessToken(null)
+      setUser(null)
+    }
+
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized)
+    return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized)
   }, [])
 
   const login = useCallback((payload: LoginPayload) => {

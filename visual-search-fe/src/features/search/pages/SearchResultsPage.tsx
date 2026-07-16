@@ -10,7 +10,9 @@ import { Skeleton } from '@/components/base/loader'
 import { ResultGrid } from '../components/ResultGrid'
 import { SearchResultDetailModal } from '../components/SearchResultDetailModal'
 import { searchByImage, searchByText } from '../services/search.api'
+import { useBookmarks } from '../hooks/useBookmarks'
 import type { SearchMode, SearchResponse, SearchResult } from '../types'
+import { getSearchErrorMessage } from '../utils/getSearchErrorMessage'
 
 type SearchLocationState = {
   file?: File
@@ -35,6 +37,7 @@ export function SearchResultsPage() {
   const imageId = parseOptionalPositiveNumber(searchParams.get('imageId'))
   const page = parsePositiveNumber(searchParams.get('page'), 1)
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null)
+  const { isBookmarked, toggleBookmark } = useBookmarks()
   const resultTitle = getResultTitle(mode, query, state.fileName, imageId)
   const queryEnabled = mode === 'image' ? Boolean(state.file || imageId) : query.trim().length > 0
   const imageSearchKey = state.file
@@ -49,6 +52,7 @@ export function SearchResultsPage() {
   })
 
   const response = searchQuery.data
+  const searchError = getSearchErrorMessage(searchQuery.error)
   const total = response?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / pageLimit))
 
@@ -84,8 +88,8 @@ export function SearchResultsPage() {
 
         {queryEnabled && searchQuery.isError && (
           <section className="rounded-lg border border-red-200 bg-red-50 p-6">
-            <p className="font-semibold text-red-700">Search failed</p>
-            <p className="mt-1 text-sm text-red-600">Try again or start a new search.</p>
+            <p className="font-semibold text-red-700">{searchError.title}</p>
+            <p className="mt-1 text-sm text-red-600">{searchError.description}</p>
           </section>
         )}
 
@@ -98,7 +102,12 @@ export function SearchResultsPage() {
 
         {queryEnabled && searchQuery.isSuccess && response && response.items.length > 0 && (
           <>
-            <ResultGrid results={response.items} onSelectResult={setSelectedResult} />
+            <ResultGrid
+              results={response.items}
+              isBookmarked={isBookmarked}
+              onBookmark={(result) => toggleBookmark(result.id)}
+              onSelectResult={setSelectedResult}
+            />
 
             <div className="flex items-center justify-center gap-3 border-t border-border pt-6">
               <Button
@@ -134,7 +143,9 @@ export function SearchResultsPage() {
       {selectedResult && (
         <SearchResultDetailModal
           result={selectedResult}
+          isBookmarked={isBookmarked(selectedResult.id)}
           onClose={() => setSelectedResult(null)}
+          onBookmark={(result) => toggleBookmark(result.id)}
           onFindSimilar={handleFindSimilarResult}
         />
       )}

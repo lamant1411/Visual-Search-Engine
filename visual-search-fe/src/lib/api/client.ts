@@ -1,5 +1,6 @@
 import axios from 'axios'
-import { getAccessToken } from '@/lib/auth/tokenStorage'
+import { AUTH_UNAUTHORIZED_EVENT } from '@/lib/auth/authEvents'
+import { clearTokens, getAccessToken } from '@/lib/auth/tokenStorage'
 
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
@@ -15,3 +16,19 @@ apiClient.interceptors.request.use((config) => {
   }
   return config
 })
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (axios.isAxiosError(error) && error.response?.status === 401 && !isLoginRequest(error.config?.url)) {
+      clearTokens()
+      window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT))
+    }
+
+    return Promise.reject(error)
+  },
+)
+
+function isLoginRequest(url?: string) {
+  return Boolean(url?.includes('/auth/login'))
+}

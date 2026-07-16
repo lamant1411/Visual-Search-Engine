@@ -13,6 +13,7 @@ type SearchPanelProps = {
   canSearch: boolean
   onQueryChange: (query: string) => void
   onFileSelect: (file: File) => void
+  onEditCrop?: () => void
   onClearFile: () => void
   onSubmit: () => void
 }
@@ -31,6 +32,7 @@ export function SearchPanel({
   canSearch,
   onQueryChange,
   onFileSelect,
+  onEditCrop,
   onClearFile,
   onSubmit,
 }: SearchPanelProps) {
@@ -57,6 +59,7 @@ export function SearchPanel({
             file={selectedFile}
             previewUrl={previewUrl}
             onClear={onClearFile}
+            onEditCrop={onEditCrop}
             onFileSelect={onFileSelect}
           />
 

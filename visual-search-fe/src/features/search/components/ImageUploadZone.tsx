@@ -1,5 +1,5 @@
 import type { DragEvent, ChangeEvent } from 'react'
-import { ImagePlus, Trash2, Upload } from 'lucide-react'
+import { Crop, ImagePlus, Trash2, Upload } from 'lucide-react'
 
 import { Button } from '@/components/base/button'
 
@@ -8,6 +8,7 @@ type ImageUploadZoneProps = {
   previewUrl: string | null
   errorMessage?: string
   onFileSelect: (file: File) => void
+  onEditCrop?: () => void
   onClear: () => void
 }
 
@@ -16,6 +17,7 @@ export function ImageUploadZone({
   previewUrl,
   errorMessage,
   onFileSelect,
+  onEditCrop,
   onClear,
 }: ImageUploadZoneProps) {
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -89,15 +91,29 @@ export function ImageUploadZone({
             <span>Ready to find similar images</span>
           </div>
 
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            leftIcon={<Trash2 className="h-4 w-4" />}
-          onClick={onClear}
-        >
-            Remove
-          </Button>
+          <div className="flex items-center gap-1">
+            {onEditCrop && (
+              <Button
+                leftIcon={<Crop className="h-4 w-4" />}
+                size="sm"
+                type="button"
+                variant="ghost"
+                onClick={onEditCrop}
+              >
+                Crop
+              </Button>
+            )}
+
+            <Button
+              leftIcon={<Trash2 className="h-4 w-4" />}
+              size="sm"
+              type="button"
+              variant="ghost"
+              onClick={onClear}
+            >
+              Remove
+            </Button>
+          </div>
         </div>
       )}
     </div>
