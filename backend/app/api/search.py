@@ -1,6 +1,6 @@
 """Endpoint tìm kiếm bằng ảnh."""
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -57,6 +57,54 @@ async def search_by_image(
             filename=file.filename or "image",
             content_type=file.content_type or "application/octet-stream",
         )
+        max_results = max(limit, settings.image_search_max_results)
+        all_hits = QdrantSearchService().search(vector, limit=max_results)
+        offset = (page - 1) * limit
+        hits = all_hits[offset : offset + limit]
+    except AIServiceError as exc:
+        raise api_error(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "AI_SERVICE_UNAVAILABLE",
+            str(exc),
+        ) from exc
+    except Exception as exc:
+        raise api_error(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "VECTOR_SEARCH_UNAVAILABLE",
+            "Vector search service is unavailable.",
+        ) from exc
+
+    return await build_search_response_from_hits(
+        db,
+        hits,
+        page=page,
+        limit=limit,
+        total=len(all_hits),
+    )
+
+
+@router.get("/text", response_model=SearchResponse)
+async def search_by_text(
+    q: str = Query(..., min_length=1, max_length=500, description="Text query để tìm kiếm ảnh bằng ngữ nghĩa"),
+    page: int = Query(1, ge=1, description="Trang hiện tại"),
+    limit: int = Query(20, ge=1, le=100, description="Số kết quả mỗi trang"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> SearchResponse:
+    """Đưa văn bản (semantic query) vào CLIP để tìm ảnh có ngữ nghĩa gần nhất trong Qdrant."""
+    del current_user
+
+    query = q.strip()
+    if not query:
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "VALIDATION_ERROR",
+            "Query không được để trống sau khi strip.",
+            {"field": "q"},
+        )
+
+    try:
+        vector = await ai_embedding_client.embed_text(query)
         max_results = max(limit, settings.image_search_max_results)
         all_hits = QdrantSearchService().search(vector, limit=max_results)
         offset = (page - 1) * limit

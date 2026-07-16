@@ -17,23 +17,23 @@ print("Mô hình đã sẵn sàng!")
 
 @app.post("/api/embed/text")
 async def embed_text(text: str = Form(...)):
-    """API biến văn bản tìm kiếm thành Vector"""
-    try:
-        vector = clip_model.embed_text(text)
-        return {"status": "success", "vector": vector}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+    """API biến văn bản tìm kiếm thành Vector 512 chiều (CLIP text encoder)."""
+    vector = clip_model.embed_text(text)
+    if vector is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail="Không thể tạo embedding cho text.")
+    return {"vector": vector}
 
 @app.post("/api/embed/image")
 async def embed_image(file: UploadFile = File(...)):
-    """API biến ảnh upload thành Vector"""
-    try:
-        image_data = await file.read()
-        image = Image.open(io.BytesIO(image_data)).convert("RGB")
-        vector = clip_model.embed_image(image)
-        return {"status": "success", "vector": vector}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+    """API biến ảnh upload thành Vector 512 chiều (CLIP image encoder)."""
+    image_data = await file.read()
+    image = Image.open(io.BytesIO(image_data)).convert("RGB")
+    vector = clip_model.embed_image(image)
+    if vector is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail="Không thể tạo embedding cho ảnh.")
+    return {"vector": vector}
 
 if __name__ == "__main__":
     uvicorn.run("ai_service:app", host="0.0.0.0", port=8001, reload=True)
