@@ -2,6 +2,7 @@ import argparse
 import concurrent.futures
 import hashlib
 import io
+import mimetypes
 import os
 import uuid
 from time import perf_counter
@@ -113,6 +114,21 @@ def get_all_existing_checksums(pg_cursor) -> set[str]:
     return {row[0] for row in pg_cursor.fetchall()}
 
 
+def get_images_missing_metadata(pg_cursor) -> dict[str, int]:
+    """Lay anh da index nhung thieu metadata de bo sung ma khong chay lai AI."""
+    pg_cursor.execute(
+        """
+        SELECT id, storage_path
+        FROM images
+        WHERE mime_type IS NULL
+           OR file_size IS NULL
+           OR width IS NULL
+           OR height IS NULL;
+        """
+    )
+    return {storage_path: image_id for image_id, storage_path in pg_cursor.fetchall()}
+
+
 def flush_batch_to_databases(pg_conn, pg_cursor, qdrant_client, batch_data: list):
     """Đẩy một lô dữ liệu (batch) vào DB và Qdrant cùng một lúc"""
     if not batch_data:
@@ -123,13 +139,27 @@ def flush_batch_to_databases(pg_conn, pg_cursor, qdrant_client, batch_data: list
             d['storage_path'],
             d['original_filename'],
             d['source_type'],
+            d['mime_type'],
+            d['file_size'],
+            d['width'],
+            d['height'],
             d['checksum'],
             'indexed',
         )
         for d in batch_data
     ]
     query_images = """
-        INSERT INTO images (storage_path, original_filename, source_type, checksum, status)
+        INSERT INTO images (
+            storage_path,
+            original_filename,
+            source_type,
+            mime_type,
+            file_size,
+            width,
+            height,
+            checksum,
+            status
+        )
         VALUES %s RETURNING id;
     """
     inserted_ids = psycopg2.extras.execute_values(pg_cursor, query_images, images_tuples, fetch=True)
@@ -183,6 +213,70 @@ def report_progress(progress_callback, processed_images: int, failed_images: int
         print(f"Loi khi cap nhat tien do indexing: {exc}")
 
 
+def backfill_image_metadata(
+    pg_conn,
+    pg_cursor,
+    tasks: list[dict],
+    known_checksums: set[str],
+) -> tuple[int, float, float]:
+    """Doc metadata file da index va update PostgreSQL, khong chay CLIP/OCR."""
+    if not tasks:
+        return 0, 0.0, 0.0
+
+    rows = []
+    download_seconds = 0.0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = [executor.submit(download_worker, task) for task in tasks]
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
+            download_seconds += result.get("download_seconds", 0.0)
+            if result["error"]:
+                print(
+                    "Khong the bo sung metadata cho "
+                    f"{result['storage_path']}: {result['error']}"
+                )
+                continue
+
+            rows.append(
+                (
+                    result["existing_image_id"],
+                    result["mime_type"],
+                    result["file_size"],
+                    result["width"],
+                    result["height"],
+                    result["checksum"],
+                )
+            )
+            known_checksums.add(result["checksum"])
+
+    if not rows:
+        return 0, download_seconds, 0.0
+
+    query = """
+        UPDATE images AS image
+        SET mime_type = data.mime_type,
+            file_size = data.file_size,
+            width = data.width,
+            height = data.height,
+            checksum = COALESCE(image.checksum, data.checksum),
+            updated_at = NOW()
+        FROM (VALUES %s) AS data(
+            id,
+            mime_type,
+            file_size,
+            width,
+            height,
+            checksum
+        )
+        WHERE image.id = data.id;
+    """
+    database_write_started_at = perf_counter()
+    psycopg2.extras.execute_values(pg_cursor, query, rows)
+    pg_conn.commit()
+    database_write_seconds = perf_counter() - database_write_started_at
+    return len(rows), download_seconds, database_write_seconds
+
+
 
 # LUỒNG 1: PRODUCER 
 def download_worker(task: dict):
@@ -207,9 +301,22 @@ def download_worker(task: dict):
             res.raise_for_status()
             image_bytes = res.content
 
-        pil_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        with Image.open(io.BytesIO(image_bytes)) as source_image:
+            image_format = (source_image.format or "").upper()
+            width, height = source_image.size
+            pil_image = source_image.convert("RGB")
+
+        mime_type = (
+            Image.MIME.get(image_format)
+            or mimetypes.guess_type(task["filename"])[0]
+            or "application/octet-stream"
+        )
         checksum = hashlib.sha256(image_bytes).hexdigest()
         task["pil_image"] = pil_image
+        task["mime_type"] = mime_type
+        task["file_size"] = len(image_bytes)
+        task["width"] = width
+        task["height"] = height
         task["checksum"] = checksum
         task["error"] = None
     except Exception as e:
@@ -248,9 +355,11 @@ def run_indexing_pipeline(
     pg_conn, pg_cursor, qdrant_client = connect_databases()
     existing_paths = get_all_existing_paths(pg_cursor)
     known_checksums = get_all_existing_checksums(pg_cursor)
+    images_missing_metadata = get_images_missing_metadata(pg_cursor)
     metrics["database_setup_seconds"] = perf_counter() - stage_started_at
 
     tasks = []
+    metadata_backfill_tasks = []
     skipped_count = 0
 
     # BƯỚC 1: Lên danh sách nhiệm vụ (Task generation)
@@ -267,6 +376,16 @@ def run_indexing_pipeline(
             for idx, url in enumerate(urls.tolist(), 1):
                 if url in existing_paths:
                     skipped_count += 1
+                    existing_image_id = images_missing_metadata.get(url)
+                    if existing_image_id is not None:
+                        filename = f"unsplash_{url.split('/')[-1].split('?')[0]}"
+                        metadata_backfill_tasks.append({
+                            "url": url,
+                            "storage_path": url,
+                            "filename": filename,
+                            "existing_image_id": existing_image_id,
+                            "is_local": False,
+                        })
                     continue
                 filename = f"unsplash_{url.split('/')[-1].split('?')[0]}"
                 tasks.append({"idx": idx, "url": url, "storage_path": url, "filename": filename, "source_type": "dataset", "is_local": False})
@@ -288,11 +407,36 @@ def run_indexing_pipeline(
             storage_path = build_local_storage_path(target_path, file_path, storage_prefix)
             if storage_path in existing_paths:
                 skipped_count += 1
+                existing_image_id = images_missing_metadata.get(storage_path)
+                if existing_image_id is not None:
+                    metadata_backfill_tasks.append({
+                        "local_file_path": file_path,
+                        "storage_path": storage_path,
+                        "filename": os.path.basename(file_path),
+                        "existing_image_id": existing_image_id,
+                        "is_local": True,
+                    })
                 continue
             filename = os.path.basename(file_path)
             tasks.append({"idx": idx, "local_file_path": file_path, "storage_path": storage_path, "filename": filename, "source_type": source_type, "is_local": True})
 
     metrics["task_discovery_seconds"] = perf_counter() - stage_started_at
+
+    metadata_backfilled_count = 0
+    if metadata_backfill_tasks:
+        (
+            metadata_backfilled_count,
+            backfill_download_seconds,
+            backfill_database_write_seconds,
+        ) = backfill_image_metadata(
+            pg_conn,
+            pg_cursor,
+            metadata_backfill_tasks,
+            known_checksums,
+        )
+        metrics["database_write_seconds"] += backfill_database_write_seconds
+        metrics["download_seconds"] += backfill_download_seconds
+        print(f"Da bo sung metadata cho {metadata_backfilled_count} anh da index.")
 
     total_tasks = len(tasks)
     total_expected = total_tasks + skipped_count
@@ -300,6 +444,7 @@ def run_indexing_pipeline(
     if total_tasks == 0:
         report_progress(progress_callback, total_expected, 0)
         print(f"Tat ca {total_expected} anh da duoc index hoac khong tim thay anh moi.")
+        print(f"Da bo sung metadata: {metadata_backfilled_count} anh.")
         print_timing_summary(metrics, 0)
         pg_cursor.close()
         pg_conn.close()
@@ -377,6 +522,10 @@ def run_indexing_pipeline(
                         'storage_path': result["storage_path"],
                         'original_filename': result["filename"],
                         'source_type': result["source_type"],
+                        'mime_type': result["mime_type"],
+                        'file_size': result["file_size"],
+                        'width': result["width"],
+                        'height': result["height"],
                         'checksum': checksum,
                         'vector': vector,
                         'ocr_text': ocr_text_combined,
@@ -424,6 +573,7 @@ def run_indexing_pipeline(
     print(f"Hoan thanh xu ly moi: {success_count} anh.")
     print(f"Bo qua (da ton tai): {skipped_count} anh.")
     print(f"Trong do trung checksum: {checksum_skipped_count} anh.")
+    print(f"Da bo sung metadata: {metadata_backfilled_count} anh.")
     print(f"Loi: {error_count} anh.")
     print_timing_summary(metrics, success_count)
 
