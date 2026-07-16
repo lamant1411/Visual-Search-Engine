@@ -48,7 +48,7 @@ export interface PendingImage {
   id: string
   url: string
   filename: string
-  status: 'pending' | 'indexed'
+  status: 'pending' | 'indexed' | 'failed' | 'saved_failed'
   created_at: string
 }
 
@@ -331,42 +331,38 @@ export const adminApi = {
   },
 
   /**
-   * Lưu danh sách URL ảnh với trạng thái pending
+   * Tải ảnh trực tiếp lên server
    */
-  async importImagesPending(urls: string[]): Promise<{ message: string; imported_count: number }> {
+  async uploadImageToServer(file: File): Promise<{ url: string; filename: string }> {
     try {
-      const response = await apiClient.post<{ message: string; imported_count: number }>(
-        '/admin/images/import',
-        { urls }
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await apiClient.post<{ url: string; filename: string }>(
+        '/admin/images/upload',
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
       )
       return response.data
     } catch {
-      await delay(500)
+      await delay(400)
+      const mockUrl = URL.createObjectURL(file)
+      
       const currentList = getStoredPendingImages()
-      const newItems: PendingImage[] = urls.map((url, idx) => {
-        const parts = url.split('/')
-        let filename = parts[parts.length - 1] || `image_${Date.now()}_${idx}.jpg`
-        if (filename.includes('?')) {
-          filename = filename.split('?')[0]
-        }
-        return {
-          id: `p_${Date.now()}_${idx}`,
-          url,
-          filename,
-          status: 'pending',
-          created_at: new Date().toISOString()
-        }
-      })
-      saveStoredPendingImages([...newItems, ...currentList])
-      return {
-        message: `Đã lưu tạm ${urls.length} ảnh với trạng thái pending thành công.`,
-        imported_count: urls.length
+      const newImg: PendingImage = {
+        id: `p_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        url: mockUrl,
+        filename: file.name,
+        status: 'pending',
+        created_at: new Date().toISOString()
       }
+      saveStoredPendingImages([newImg, ...currentList])
+      
+      return { url: mockUrl, filename: file.name }
     }
   },
 
   /**
-   * Lấy danh sách các ảnh chưa được index (pending)
+   * Lấy danh sách các ảnh chưa được index (pending hoặc failed)
    */
   async getPendingImages(): Promise<PendingImage[]> {
     try {
@@ -374,7 +370,79 @@ export const adminApi = {
       return response.data
     } catch {
       await delay(300)
-      return getStoredPendingImages().filter((img) => img.status === 'pending')
+      return getStoredPendingImages().filter((img) => img.status === 'pending' || img.status === 'failed')
+    }
+  },
+
+  /**
+   * Tiến hành index một ảnh đơn lẻ (chạy ngầm song song)
+   */
+  async indexSingleImage(url: string): Promise<{ success: boolean; error_message?: string }> {
+    try {
+      const response = await apiClient.post<{ success: boolean; error_message?: string }>(
+        '/admin/indexing/single',
+        { url }
+      )
+      return response.data
+    } catch {
+      await delay(800)
+      const allPending = getStoredPendingImages()
+      
+      const targetImage = allPending.find(img => img.url === url)
+      const isFailed = Math.random() < 0.15 || (targetImage && (targetImage.filename.toLowerCase().includes('fail') || targetImage.filename.toLowerCase().includes('error')))
+      
+      const updated = allPending.map((img) => {
+        if (img.url === url) {
+          return { ...img, status: (isFailed ? 'failed' : 'indexed') as any }
+        }
+        return img
+      })
+      saveStoredPendingImages(updated)
+
+      if (isFailed) {
+        return {
+          success: false,
+          error_message: 'Lỗi trích xuất vector: Ảnh không hợp lệ hoặc không trích xuất được CLIP embedding.'
+        }
+      }
+      return { success: true }
+    }
+  },
+
+  /**
+   * Xóa ảnh khỏi danh sách pending (sau khi index lỗi hoặc muốn xóa)
+   */
+  async deletePendingImage(url: string): Promise<{ success: boolean }> {
+    try {
+      await apiClient.delete('/admin/images/pending', { data: { url } })
+      return { success: true }
+    } catch {
+      await delay(300)
+      const allPending = getStoredPendingImages()
+      const filtered = allPending.filter(img => img.url !== url)
+      saveStoredPendingImages(filtered)
+      return { success: true }
+    }
+  },
+
+  /**
+   * Lưu ảnh bất chấp lỗi index (bỏ qua thông báo lỗi)
+   */
+  async saveFailedImage(url: string): Promise<{ success: boolean }> {
+    try {
+      await apiClient.post('/admin/images/save-failed', { url })
+      return { success: true }
+    } catch {
+      await delay(200)
+      const allPending = getStoredPendingImages()
+      const updated = allPending.map((img) => {
+        if (img.url === url) {
+          return { ...img, status: 'saved_failed' as const }
+        }
+        return img
+      })
+      saveStoredPendingImages(updated)
+      return { success: true }
     }
   },
 
@@ -392,7 +460,6 @@ export const adminApi = {
       await delay(800)
       const allPending = getStoredPendingImages()
       
-      // Đánh dấu các ảnh có url trùng khớp là 'indexed'
       const updated = allPending.map((img) => {
         if (urls.includes(img.url)) {
           return { ...img, status: 'indexed' as const }
@@ -401,7 +468,6 @@ export const adminApi = {
       })
       saveStoredPendingImages(updated)
 
-      // Tạo một đợt indexing lịch sử mới
       const batches = getStoredBatches()
       const newBatch: IndexingBatch = {
         id: batches.length + 1,

@@ -47,7 +47,8 @@ const router = createBrowserRouter([
       {
         element: <AppShell />,
         children: [
-          { path: '/history', element: <div>History page</div> },
+          { path: '/history', element: <HistoryPage /> },
+          { path: '/bookmark', element: <BookmarkPage /> },
         ],
       },
     ],
@@ -56,7 +57,6 @@ const router = createBrowserRouter([
   {
     element: <AppShell />,    // layout có Header
     children: [
-      { path: '/bookmark', element: <BookmarkPage /> },
       { path: '/admin', element: <AdminOverviewPage /> },
       { path: '/admin/indexing', element: <AdminIndexingPage /> },
       { path: '/admin/users', element: <AdminUsersPage /> },]
