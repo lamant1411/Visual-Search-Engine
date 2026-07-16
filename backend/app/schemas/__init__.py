@@ -3,6 +3,7 @@ from app.schemas.admin import (
     AdminIndexBatchListResponse,
     AdminIndexStartResponse,
     AdminIndexStatusResponse,
+    AdminIndexUploadResponse,
     IndexingBatchOut,
 )
 from app.schemas.auth import TokenSchema

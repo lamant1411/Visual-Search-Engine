@@ -31,11 +31,17 @@ class AdminDashboardResponse(BaseModel):
     latest_batches: list[IndexingBatchOut]
 
 
-class AdminIndexStartResponse(BaseModel):
+class AdminIndexUploadResponse(BaseModel):
     batch_id: str
     status: BatchStatus
     total_images: int
     uploaded_files: int
+
+
+class AdminIndexStartResponse(BaseModel):
+    batch_id: str
+    status: BatchStatus
+    total_images: int
 
 
 class AdminIndexStatusResponse(BaseModel):

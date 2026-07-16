@@ -19,6 +19,7 @@ from app.schemas.admin import (
     AdminIndexBatchListResponse,
     AdminIndexStartResponse,
     AdminIndexStatusResponse,
+    AdminIndexUploadResponse,
 )
 from app.schemas.common import BatchStatus, ImageStatus
 from app.services.admin_indexing import AIIndexingServiceError, ai_indexing_client
@@ -62,13 +63,13 @@ async def get_dashboard(
     )
 
 
-@router.post("/index", response_model=AdminIndexStartResponse, status_code=status.HTTP_202_ACCEPTED)
-async def start_batch_indexing(
+@router.post("/index/upload", response_model=AdminIndexUploadResponse, status_code=status.HTTP_201_CREATED)
+async def upload_indexing_batch(
     files: list[UploadFile] = File(...),
     _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
-) -> AdminIndexStartResponse:
-    """Nhận nhiều ảnh từ FE, lưu theo batch rồi yêu cầu AI indexing batch đó."""
+) -> AdminIndexUploadResponse:
+    """Nh?n nhi?u ?nh t? FE v? t?o batch queued, ch?a g?i AI indexing."""
     if not files:
         raise api_error(
             status.HTTP_400_BAD_REQUEST,
@@ -76,6 +77,7 @@ async def start_batch_indexing(
             "At least one image file is required.",
             {"field": "files"},
         )
+
     batch_id = f"idx_{uuid.uuid4().hex[:12]}"
     upload_dir = Path(settings.admin_index_upload_dir) / batch_id
     upload_dir.mkdir(parents=True, exist_ok=True)
@@ -120,18 +122,63 @@ async def start_batch_indexing(
     await db.commit()
     await db.refresh(batch)
 
+    return AdminIndexUploadResponse(
+        batch_id=batch.batch_id,
+        status=batch.status,
+        total_images=batch.total_images,
+        uploaded_files=saved_count,
+    )
+
+
+@router.post("/index/{batch_id}/start", response_model=AdminIndexStartResponse, status_code=status.HTTP_202_ACCEPTED)
+async def start_batch_indexing(
+    batch_id: str,
+    _: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> AdminIndexStartResponse:
+    """K?ch ho?t AI indexing cho batch ?? upload."""
+    batch = await db.scalar(select(IndexingBatch).where(IndexingBatch.batch_id == batch_id))
+    if batch is None:
+        raise api_error(
+            status.HTTP_404_NOT_FOUND,
+            "NOT_FOUND",
+            "Indexing batch not found.",
+            {"batch_id": batch_id},
+        )
+    if batch.status == BatchStatus.running:
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            "INDEXING_ALREADY_RUNNING",
+            "Indexing batch is already running.",
+            {"batch_id": batch_id},
+        )
+    if batch.status == BatchStatus.completed:
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            "INDEXING_ALREADY_COMPLETED",
+            "Indexing batch is already completed.",
+            {"batch_id": batch_id},
+        )
+    if batch.total_images <= 0:
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "VALIDATION_ERROR",
+            "Indexing batch has no uploaded images.",
+            {"batch_id": batch_id},
+        )
+
     try:
         ai_payload = await ai_indexing_client.start_local_indexing(
-            batch_id=batch_id,
-            image_folder=f"/app/{settings.admin_index_upload_dir}/{batch_id}",
-            storage_prefix=f"/static/images/admin_uploads/{batch_id}",
-            max_images=saved_count,
+            batch_id=batch.batch_id,
+            image_folder=f"/app/{settings.admin_index_upload_dir}/{batch.batch_id}",
+            storage_prefix=f"/static/images/admin_uploads/{batch.batch_id}",
+            max_images=batch.total_images,
             run_all=True,
         )
     except AIIndexingServiceError as exc:
         batch.status = BatchStatus.failed
         batch.error_message = str(exc)
-        batch.failed_images = saved_count
+        batch.failed_images = batch.total_images
         await db.commit()
         raise api_error(
             status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -141,13 +188,15 @@ async def start_batch_indexing(
 
     batch.status = ai_payload.status
     batch.total_images = ai_payload.total_images
+    batch.processed_images = 0
+    batch.failed_images = 0
+    batch.error_message = None
     await db.commit()
 
     return AdminIndexStartResponse(
         batch_id=batch.batch_id,
         status=batch.status,
         total_images=batch.total_images,
-        uploaded_files=saved_count,
     )
 
 
