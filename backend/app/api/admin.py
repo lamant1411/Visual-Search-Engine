@@ -69,7 +69,7 @@ async def upload_indexing_batch(
     _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> AdminIndexUploadResponse:
-    """Nh?n nhi?u ?nh t? FE v? t?o batch queued, ch?a g?i AI indexing."""
+    """Nhan nhieu anh tu FE va tao batch queued, chua gui AI indexing."""
     if not files:
         raise api_error(
             status.HTTP_400_BAD_REQUEST,
@@ -136,7 +136,7 @@ async def start_batch_indexing(
     _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> AdminIndexStartResponse:
-    """K?ch ho?t AI indexing cho batch ?? upload."""
+    """Kich hoat AI indexing cho batch da upload."""
     batch = await db.scalar(select(IndexingBatch).where(IndexingBatch.batch_id == batch_id))
     if batch is None:
         raise api_error(
