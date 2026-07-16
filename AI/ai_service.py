@@ -27,6 +27,7 @@ async def embed_text(text: str = Form(...)):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+
 @app.post("/api/embed/image")
 async def embed_image(file: UploadFile = File(...)):
     """API biến ảnh upload thành Vector"""
