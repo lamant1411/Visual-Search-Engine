@@ -1,11 +1,25 @@
 import easyocr
 import os
 
+import numpy as np
+from PIL import Image
+
+
 class OCRExtractor:
-    def __init__(self, langs=['en', 'vi'], use_gpu=True):
+    def __init__(self, langs=None, use_gpu=None):
         """
         Khởi tạo mô hình EasyOCR.
         """
+        langs = langs or ['en', 'vi']
+        if use_gpu is None:
+            use_gpu = os.getenv("OCR_USE_GPU", "false").lower() == "true"
+
+        self.recognition_batch_size = int(os.getenv("OCR_RECOGNITION_BATCH_SIZE", "1"))
+        self.canvas_size = int(os.getenv("OCR_CANVAS_SIZE", "896"))
+        self.min_size = int(os.getenv("OCR_MIN_SIZE", "25"))
+        self.text_threshold = float(os.getenv("OCR_TEXT_THRESHOLD", "0.75"))
+        self.low_text = float(os.getenv("OCR_LOW_TEXT", "0.45"))
+        self.confidence_threshold = float(os.getenv("OCR_CONFIDENCE_THRESHOLD", "0.3"))
         print(f"Đang tải mô hình EasyOCR cho các ngôn ngữ: {langs}...")
         self.reader = easyocr.Reader(langs, gpu=use_gpu)
         print("Tải mô hình OCR thành công!\n")
@@ -25,8 +39,24 @@ class OCRExtractor:
                 if not image_input.lower().endswith(valid_extensions):
                     raise ValueError(f"Định dạng không hợp lệ. Vui lòng dùng: {valid_extensions}")
 
-            results = self.reader.readtext(image_input, detail=0)
-            return results
+            if isinstance(image_input, Image.Image):
+                rgb_image = np.asarray(image_input.convert("RGB"))
+                image_input = np.ascontiguousarray(rgb_image[:, :, ::-1])
+
+            results = self.reader.readtext(
+                image_input,
+                detail=1,
+                batch_size=self.recognition_batch_size,
+                canvas_size=self.canvas_size,
+                min_size=self.min_size,
+                text_threshold=self.text_threshold,
+                low_text=self.low_text,
+            )
+            return [
+                text.strip()
+                for _, text, confidence in results
+                if confidence >= self.confidence_threshold and text.strip()
+            ]
         
         except Exception as e:
             print(f"Lỗi khi trích xuất OCR: {e}")

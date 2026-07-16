@@ -2,6 +2,7 @@ import io
 import sys
 import uuid
 from pathlib import Path
+from threading import Lock
 from typing import Optional
 
 import uvicorn
@@ -13,20 +14,24 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from src.clip_module import CLIPEmbedder
 from src.batch_indexing import LOCAL_STORAGE_PREFIX, VALID_IMAGE_EXTENSIONS, run_indexing_pipeline
+from src.ocr_module import OCRExtractor
 
 app = FastAPI(title="Visual Search - AI Service")
 
-print("Dang tai mo hinh CLIP cho API Service...")
+print("Dang tai cac mo hinh AI cho API Service...")
 clip_model = CLIPEmbedder()
-print("Mo hinh da san sang!")
+ocr_model = OCRExtractor()
+print("Cac mo hinh da san sang!")
 
 INDEXING_JOBS: dict[str, dict] = {}
+INDEXING_LOCK = Lock()
 
 
 class LocalIndexRequest(BaseModel):
     batch_id: Optional[str] = None
     image_folder: str = "/app/static/images"
     storage_prefix: str = LOCAL_STORAGE_PREFIX
+    source_type: str = Field(default="upload", pattern="^(dataset|upload)$")
     max_images: int = Field(default=2000, ge=1)
     run_all: bool = False
 
@@ -104,20 +109,25 @@ async def get_index_status(batch_id: str):
 
 def _run_local_indexing_job(batch_id: str, request: LocalIndexRequest) -> None:
     job = INDEXING_JOBS[batch_id]
-    job["status"] = "running"
     try:
-        def update_progress(processed_images: int, failed_images: int) -> None:
-            job["processed_images"] = min(processed_images, job["total_images"])
-            job["failed_images"] = failed_images
+        with INDEXING_LOCK:
+            job["status"] = "running"
 
-        run_indexing_pipeline(
-            mode="local",
-            target_path=request.image_folder,
-            max_images=request.max_images,
-            run_all=request.run_all,
-            storage_prefix=request.storage_prefix,
-            progress_callback=update_progress,
-        )
+            def update_progress(processed_images: int, failed_images: int) -> None:
+                job["processed_images"] = min(processed_images, job["total_images"])
+                job["failed_images"] = failed_images
+
+            run_indexing_pipeline(
+                mode="local",
+                target_path=request.image_folder,
+                max_images=request.max_images,
+                run_all=request.run_all,
+                storage_prefix=request.storage_prefix,
+                source_type=request.source_type,
+                clip_model=clip_model,
+                ocr_model=ocr_model,
+                progress_callback=update_progress,
+            )
         job["status"] = "completed"
         job["processed_images"] = job["total_images"]
     except Exception as exc:

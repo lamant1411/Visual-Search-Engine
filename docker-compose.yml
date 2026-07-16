@@ -32,6 +32,18 @@
     environment:
       - POSTGRES_HOST=postgres
       - QDRANT_URL=http://qdrant:6333
+      - OCR_USE_GPU=false
+      - OCR_RECOGNITION_BATCH_SIZE=1
+      - OCR_CANVAS_SIZE=896
+      - OCR_MIN_SIZE=25
+      - OCR_TEXT_THRESHOLD=0.75
+      - OCR_LOW_TEXT=0.45
+      - OCR_CONFIDENCE_THRESHOLD=0.3
+      - OMP_NUM_THREADS=4
+      - MKL_NUM_THREADS=4
+      - INDEXING_DOWNLOAD_WORKERS=4
+      - INDEXING_CHUNK_SIZE=32
+      - INDEXING_DATABASE_BATCH_SIZE=64
     command: uvicorn ai_service:app --host 0.0.0.0 --port 8001
     restart: unless-stopped
 
