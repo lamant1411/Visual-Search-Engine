@@ -20,3 +20,32 @@ class IndexingBatchOut(BaseModel):
     error_message: str | None = None
     created_at: datetime
     updated_at: datetime | None = None
+
+
+class AdminDashboardResponse(BaseModel):
+    total_images: int
+    indexed_images: int
+    pending_images: int
+    failed_images: int
+    total_users: int
+    latest_batches: list[IndexingBatchOut]
+
+
+class AdminIndexStartResponse(BaseModel):
+    batch_id: str
+    status: BatchStatus
+    total_images: int
+    uploaded_files: int
+
+
+class AdminIndexStatusResponse(BaseModel):
+    batch_id: str
+    status: BatchStatus
+    total_images: int = 0
+    processed_images: int = 0
+    failed_images: int = 0
+    error_message: str | None = None
+
+
+class AdminIndexBatchListResponse(BaseModel):
+    items: list[IndexingBatchOut]
