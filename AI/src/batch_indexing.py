@@ -3,7 +3,7 @@ import concurrent.futures
 import io
 import os
 import uuid
-from typing import Optional
+from typing import Callable, Optional
 
 import pandas as pd
 import psycopg2
@@ -117,6 +117,16 @@ def build_local_storage_path(image_folder: str, image_path: str, storage_prefix:
     return f"{storage_prefix.rstrip('/')}/{relative_path}"
 
 
+def report_progress(progress_callback, processed_images: int, failed_images: int) -> None:
+    """Bao tien do indexing cho AI service, khong lam dung pipeline neu callback loi."""
+    if progress_callback is None:
+        return
+    try:
+        progress_callback(processed_images=processed_images, failed_images=failed_images)
+    except Exception as exc:
+        print(f"Loi khi cap nhat tien do indexing: {exc}")
+
+
 
 # LUỒNG 1: PRODUCER 
 def download_worker(task: dict):
@@ -151,7 +161,14 @@ def download_worker(task: dict):
 
 
 # LUỒNG 2: CONSUMER
-def run_indexing_pipeline(mode: str, target_path: str, max_images: int = 2000, run_all: bool = False, storage_prefix: str = LOCAL_STORAGE_PREFIX):
+def run_indexing_pipeline(
+    mode: str,
+    target_path: str,
+    max_images: int = 2000,
+    run_all: bool = False,
+    storage_prefix: str = LOCAL_STORAGE_PREFIX,
+    progress_callback: Optional[Callable[..., None]] = None,
+):
     print("Dang khoi tao cac mo hinh AI (CLIP & EasyOCR)...")
     clip = CLIPEmbedder()
     ocr = OCRExtractor()
@@ -204,8 +221,11 @@ def run_indexing_pipeline(mode: str, target_path: str, max_images: int = 2000, r
     total_expected = total_tasks + skipped_count
     
     if total_tasks == 0:
+        report_progress(progress_callback, total_expected, 0)
         print(f"Tat ca {total_expected} anh da duoc index hoac khong tim thay anh moi.")
         return
+
+    report_progress(progress_callback, skipped_count, 0)
 
     print(f"\nTim thay {total_tasks} anh moi. Khoi dong da luong ({MAX_WORKERS} workers) kem gom lo ({BATCH_SIZE} items/batch)...\n")
 
@@ -232,6 +252,7 @@ def run_indexing_pipeline(mode: str, target_path: str, max_images: int = 2000, r
                 if result["error"]:
                     print(f"[{idx}/{total_expected}] LOI TAI {result['storage_path']}: {result['error']}")
                     error_count += 1
+                    report_progress(progress_callback, skipped_count + success_count + error_count, error_count)
                     continue
                     
                 try:
@@ -259,21 +280,25 @@ def run_indexing_pipeline(mode: str, target_path: str, max_images: int = 2000, r
                     # Gom đủ lô thì xả kho xuống Database
                     if len(batch_data) >= BATCH_SIZE:
                         success_count += flush_batch_to_databases(pg_conn, pg_cursor, qdrant_client, batch_data)
+                        report_progress(progress_callback, skipped_count + success_count + error_count, error_count)
                         print(f"[Tiến trình] Da index thanh cong {success_count}/{total_tasks} anh moi...")
                         batch_data.clear()
                         
                 except Exception as e:
                     print(f"[{idx}/{total_expected}] LOI AI TAI {result['storage_path']}: {e}")
                     error_count += 1
+                    report_progress(progress_callback, skipped_count + success_count + error_count, error_count)
 
     # BƯỚC 3: Quét sạch lô hàng còn sót lại (Lẻ ảnh cuối cùng)
     if batch_data:
         try:
             success_count += flush_batch_to_databases(pg_conn, pg_cursor, qdrant_client, batch_data)
+            report_progress(progress_callback, skipped_count + success_count + error_count, error_count)
             print(f"[Tiến trình] Da index thanh cong {success_count}/{total_tasks} anh moi...")
         except Exception as e:
             pg_conn.rollback()
             error_count += len(batch_data)
+            report_progress(progress_callback, skipped_count + success_count + error_count, error_count)
             print(f"Loi khi luu lo cuoi cung vao Database: {e}")
 
     print("\n--- TONG KET BATCH INDEXING PIPELINE ---")
