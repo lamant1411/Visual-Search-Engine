@@ -7,7 +7,7 @@ export interface AdminStats {
 }
 
 export interface AdminUser {
-  id: string
+  id: number
   email: string
   role: 'admin' | 'user'
   is_active: boolean
@@ -71,12 +71,12 @@ export interface PendingImage {
 
 // Danh sách người dùng giả lập
 let mockUsers: AdminUser[] = [
-  { id: '1', email: 'admin@example.com', role: 'admin', is_active: true, created_at: '2026-07-01T10:00:00Z' },
-  { id: '2', email: 'user@example.com', role: 'user', is_active: true, created_at: '2026-07-02T14:30:00Z' },
-  { id: '3', email: 'nguyenvana@gmail.com', role: 'user', is_active: true, created_at: '2026-07-05T08:20:00Z' },
-  { id: '4', email: 'tranvib@yahoo.com', role: 'user', is_active: false, created_at: '2026-07-06T11:15:00Z' },
-  { id: '5', email: 'lethic@outlook.com', role: 'user', is_active: true, created_at: '2026-07-08T09:40:00Z' },
-  { id: '6', email: 'phamd@company.vn', role: 'user', is_active: true, created_at: '2026-07-09T16:00:00Z' },
+  { id: 1, email: 'admin@example.com', role: 'admin', is_active: true, created_at: '2026-07-01T10:00:00Z' },
+  { id: 2, email: 'user@example.com', role: 'user', is_active: true, created_at: '2026-07-02T14:30:00Z' },
+  { id: 3, email: 'nguyenvana@gmail.com', role: 'user', is_active: true, created_at: '2026-07-05T08:20:00Z' },
+  { id: 4, email: 'tranvib@yahoo.com', role: 'user', is_active: false, created_at: '2026-07-06T11:15:00Z' },
+  { id: 5, email: 'lethic@outlook.com', role: 'user', is_active: true, created_at: '2026-07-08T09:40:00Z' },
+  { id: 6, email: 'phamd@company.vn', role: 'user', is_active: true, created_at: '2026-07-09T16:00:00Z' },
 ]
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))

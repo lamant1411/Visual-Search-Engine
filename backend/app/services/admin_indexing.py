@@ -28,6 +28,19 @@ class AIIndexStatusPayload(BaseModel):
     error_message: str | None = None
 
 
+class AIIndexItemPayload(BaseModel):
+    item_id: int
+    image_id: int
+    image_path: str
+    storage_path: str
+    original_filename: str | None = None
+
+
+class AIIndexItemsResponse(BaseModel):
+    batch_id: str
+    queued_items: int
+
+
 class AIIndexingClient:
     """Che giấu contract AI indexing để API Admin chỉ phụ thuộc vào service này."""
 
@@ -51,6 +64,25 @@ class AIIndexingClient:
             },
         )
         return self._validate_start_payload(data)
+
+
+    async def enqueue_indexing_items(
+        self,
+        *,
+        batch_id: str,
+        items: list[AIIndexItemPayload],
+    ) -> AIIndexItemsResponse:
+        data = await self._post_json(
+            settings.ai_index_items_path,
+            {
+                "batch_id": batch_id,
+                "items": [item.model_dump() for item in items],
+            },
+        )
+        try:
+            return AIIndexItemsResponse.model_validate(data)
+        except ValidationError as exc:
+            raise AIIndexingServiceError("AI indexing service returned invalid item enqueue payload.") from exc
 
     async def get_indexing_status(self, batch_id: str) -> AIIndexStatusPayload:
         path = settings.ai_index_status_path.format(batch_id=batch_id)

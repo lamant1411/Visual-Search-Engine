@@ -38,3 +38,19 @@ class SearchResponse(BaseModel):
     page: int
     limit: int
     total: int
+
+
+class SearchHistoryItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: int
+    query_type: SearchQueryType = Field(alias="queryType")
+    query_value: str = Field(alias="queryValue")
+    created_at: datetime = Field(alias="createdAt")
+
+
+class SearchHistoryResponse(BaseModel):
+    items: list[SearchHistoryItem]
+    page: int
+    limit: int
+    total: int
