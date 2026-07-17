@@ -1,5 +1,10 @@
 from app.schemas.admin import (
     AdminDashboardResponse,
+    AdminIndexingItemOut,
+    AdminIndexingItemListResponse,
+    AdminBatchImageUploadResponse,
+    AdminBatchCreateResponse,
+    AdminBatchCompleteUploadResponse,
     AdminIndexBatchListResponse,
     AdminIndexStartResponse,
     AdminIndexStatusResponse,
