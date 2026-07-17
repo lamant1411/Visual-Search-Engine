@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bookmark, Info, Zap } from "lucide-react";
+import { Bookmark, ImageOff, Info, Zap } from "lucide-react";
 
 import type { SearchResult } from "../types";
 import { formatSimilarityScore } from "../utils/formatSimilarityScore";
@@ -18,6 +18,7 @@ export function ResultCard({
   onSelect,
 }: ResultCardProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
   const sizeLabel =
     result.metadata.width && result.metadata.height
       ? `${result.metadata.width} x ${result.metadata.height}`
@@ -40,20 +41,31 @@ export function ResultCard({
           className="relative overflow-hidden bg-surface-1"
           style={{ aspectRatio }}
         >
-          {!imageLoaded && (
+          {!imageLoaded && !imageFailed && (
             <div className="absolute inset-0 animate-pulse bg-slate-200" />
           )}
-          <img
-            alt={`Search result ${result.id}`}
-            className={[
-              "h-full w-full object-cover transition duration-300 group-hover:scale-105",
-              imageLoaded ? "opacity-100" : "opacity-0",
-            ].join(" ")}
-            decoding="async"
-            loading="lazy"
-            src={result.thumbnailUrl}
-            onLoad={() => setImageLoaded(true)}
-          />
+          {imageFailed ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-100 px-4 text-center text-slate-500">
+              <ImageOff className="h-7 w-7" aria-hidden="true" />
+              <span className="text-xs font-semibold">Image unavailable</span>
+            </div>
+          ) : (
+            <img
+              alt={`Search result ${result.id}`}
+              className={[
+                "h-full w-full object-cover transition duration-300 group-hover:scale-105",
+                imageLoaded ? "opacity-100" : "opacity-0",
+              ].join(" ")}
+              decoding="async"
+              loading="lazy"
+              src={result.thumbnailUrl}
+              onLoad={() => setImageLoaded(true)}
+              onError={() => {
+                setImageLoaded(false);
+                setImageFailed(true);
+              }}
+            />
+          )}
           <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-xs font-bold text-ink-primary shadow-sm shadow-slate-900/10 backdrop-blur">
             <Zap className="h-3.5 w-3.5 text-accent-600" />
             {similarityScore}%
