@@ -3,7 +3,7 @@
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +20,7 @@ from app.schemas.admin import (
     AdminIndexStartResponse,
     AdminIndexStatusResponse,
     AdminIndexUploadResponse,
+    AdminUserListResponse,
 )
 from app.schemas.common import BatchStatus, ImageStatus
 from app.services.admin_indexing import AIIndexingServiceError, ai_indexing_client
@@ -60,6 +61,29 @@ async def get_dashboard(
         failed_images=failed_images,
         total_users=total_users,
         latest_batches=list(latest_batches),
+    )
+
+
+@router.get("/users", response_model=AdminUserListResponse)
+async def list_users(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    _: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> AdminUserListResponse:
+    """Tra danh sach user cho admin xem, chi ho tro doc."""
+    total = await _count_rows(db, select(func.count()).select_from(User))
+    offset = (page - 1) * limit
+    users = (
+        await db.scalars(
+            select(User).order_by(User.created_at.desc(), User.id.desc()).offset(offset).limit(limit)
+        )
+    ).all()
+    return AdminUserListResponse(
+        items=list(users),
+        page=page,
+        limit=limit,
+        total=total,
     )
 
 

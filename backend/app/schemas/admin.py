@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from app.schemas.common import BatchStatus
+from app.schemas.common import BatchStatus, UserRole
 
 
 class IndexingBatchOut(BaseModel):
@@ -29,6 +29,27 @@ class AdminDashboardResponse(BaseModel):
     failed_images: int
     total_users: int
     latest_batches: list[IndexingBatchOut]
+
+
+class AdminUserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: str
+    username: str
+    full_name: str
+    role: UserRole
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime | None = None
+    last_login_at: datetime | None = None
+
+
+class AdminUserListResponse(BaseModel):
+    items: list[AdminUserOut]
+    page: int
+    limit: int
+    total: int
 
 
 class AdminIndexUploadResponse(BaseModel):
