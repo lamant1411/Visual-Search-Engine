@@ -345,10 +345,10 @@ export default function AdminIndexingPage() {
       {/* Thông báo kết quả */}
       {message && (
         <div className={`flex items-start gap-2.5 p-4 rounded-xl border text-sm ${message.type === 'success'
-            ? 'border-emerald-100 bg-emerald-50/50 text-emerald-800'
-            : message.type === 'info'
-              ? 'border-blue-100 bg-blue-50/50 text-blue-800'
-              : 'border-red-100 bg-red-50/50 text-red-800'
+          ? 'border-emerald-100 bg-emerald-50/50 text-emerald-800'
+          : message.type === 'info'
+            ? 'border-blue-100 bg-blue-50/50 text-blue-800'
+            : 'border-red-100 bg-red-50/50 text-red-800'
           }`}>
           {message.type === 'success' ? (
             <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-emerald-600" />
@@ -402,8 +402,8 @@ export default function AdminIndexingPage() {
               }
             }}
             className={`flex flex-col items-center justify-center border border-dashed rounded-lg p-8 text-center cursor-pointer transition-all duration-200 ${isDragging
-                ? 'border-accent-600 bg-surface-1/60'
-                : 'border-border hover:border-accent-600 hover:bg-surface-1/40'
+              ? 'border-accent-600 bg-surface-1/60'
+              : 'border-border hover:border-accent-600 hover:bg-surface-1/40'
               } ${(isUploading || isBackgroundIndexing) ? 'opacity-50 pointer-events-none' : ''}`}
           >
             <input
@@ -620,9 +620,9 @@ export default function AdminIndexingPage() {
                     <td className="px-6 py-4 font-mono font-medium text-ink-primary">{b.batch_id}</td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-3xs font-semibold ${b.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                          b.status === 'running' ? 'bg-amber-50 text-amber-700 border border-amber-200 animate-pulse' :
-                            b.status === 'queued' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
-                              'bg-red-50 text-red-700 border border-red-200'
+                        b.status === 'running' ? 'bg-amber-50 text-amber-700 border border-amber-200 animate-pulse' :
+                          b.status === 'queued' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                            'bg-red-50 text-red-700 border border-red-200'
                         }`}>
                         {b.status === 'queued' ? 'ĐANG CHỜ' :
                           b.status === 'running' ? 'ĐANG CHẠY' :
