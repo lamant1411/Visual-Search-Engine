@@ -95,6 +95,71 @@ Query params:
 
 Response is the same shape as image search.
 
+## Bookmarks
+
+All bookmark endpoints require a bearer access token. Bookmark mutations use the
+image ID so the Search UI can save or remove a result without first loading a
+bookmark resource ID.
+
+### GET /bookmarks
+
+Query params:
+
+- `page`: optional, default `1`
+- `limit`: optional, default `20`, maximum `100`
+
+Response:
+
+```json
+{
+  "items": [
+    {
+      "id": 7,
+      "imageId": 42,
+      "thumbnailUrl": "http://localhost:8000/static/images/42.jpg",
+      "imageUrl": "http://localhost:8000/static/images/42.jpg",
+      "savedAt": "2026-07-19T08:30:00Z",
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "source": "open-images",
+        "ocrText": "SUMMER SALE"
+      }
+    }
+  ],
+  "page": 1,
+  "limit": 20,
+  "total": 1
+}
+```
+
+### GET /bookmarks/image-ids
+
+Returns the current user's saved image IDs so search result cards can display
+their saved state.
+
+```json
+{
+  "imageIds": [12, 42, 81]
+}
+```
+
+### PUT /bookmarks/{imageId}
+
+Saves an image. The operation is idempotent: saving an existing bookmark returns
+the existing resource instead of creating a duplicate. Response is one bookmark
+item from the list response above.
+
+### GET /bookmarks/{imageId}
+
+Returns one saved image with metadata. Returns `BOOKMARK_NOT_FOUND` when the
+current user has not saved that image.
+
+### DELETE /bookmarks/{imageId}
+
+Removes the current user's bookmark and returns `204 No Content`. The operation
+is idempotent, so deleting an already-removed bookmark also returns `204`.
+
 ## Admin
 
 ### GET /admin/stats

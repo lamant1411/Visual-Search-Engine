@@ -203,15 +203,17 @@ export function SearchResultDetailModal({
               {isBookmarked ? "Remove bookmark" : "Save to bookmarks"}
             </Button>
 
-            <Button
-              fullWidth
-              className="!bg-ink-primary shadow-sm shadow-slate-300/70 hover:!bg-slate-800 active:!bg-slate-900 focus-visible:ring-accent-600"
-              leftIcon={<Search className="h-4 w-4" />}
-              type="button"
-              onClick={() => onFindSimilar?.(result)}
-            >
-              Find similar images
-            </Button>
+            {onFindSimilar && (
+              <Button
+                fullWidth
+                className="!bg-ink-primary shadow-sm shadow-slate-300/70 hover:!bg-slate-800 active:!bg-slate-900 focus-visible:ring-accent-600"
+                leftIcon={<Search className="h-4 w-4" />}
+                type="button"
+                onClick={() => onFindSimilar(result)}
+              >
+                Find similar images
+              </Button>
+            )}
 
             <Button
               fullWidth
