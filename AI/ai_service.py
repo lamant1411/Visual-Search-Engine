@@ -1,8 +1,11 @@
+from contextlib import asynccontextmanager
 import io
+import os
+import queue
 import sys
 import uuid
 from pathlib import Path
-from threading import Lock
+from threading import Event, Lock, Thread, Timer
 from typing import Optional
 
 import uvicorn
@@ -14,17 +17,49 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from src.clip_module import CLIPEmbedder
 from src.batch_indexing import LOCAL_STORAGE_PREFIX, VALID_IMAGE_EXTENSIONS, run_indexing_pipeline
+from src.item_indexing import (
+    IndexQueueItem,
+    claim_indexing_item,
+    handle_index_failure,
+    index_single_image_item,
+    prepare_items_for_queue,
+    recover_pending_items,
+    recover_running_item,
+)
 from src.ocr_module import OCRExtractor
-
-app = FastAPI(title="Visual Search - AI Service")
 
 print("Dang tai cac mo hinh AI cho API Service...")
 clip_model = CLIPEmbedder()
 ocr_model = OCRExtractor()
 print("Cac mo hinh da san sang!")
 
+MAX_INDEX_WORKERS = max(1, int(os.getenv("MAX_INDEX_WORKERS", "5")))
+INDEX_ITEM_QUEUE: queue.Queue[Optional[IndexQueueItem]] = queue.Queue()
+INDEX_WORKER_STOP = Event()
+INDEX_WORKER_THREADS: list[Thread] = []
+
 INDEXING_JOBS: dict[str, dict] = {}
 INDEXING_LOCK = Lock()
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    _start_index_workers()
+    try:
+        recovered_items = recover_pending_items()
+        for item in recovered_items:
+            INDEX_ITEM_QUEUE.put(item)
+        if recovered_items:
+            print(f"Da phuc hoi {len(recovered_items)} indexing items tu PostgreSQL.")
+    except Exception as exc:
+        print(f"Khong the phuc hoi indexing_items khi startup: {exc}")
+    try:
+        yield
+    finally:
+        _stop_index_workers()
+
+
+app = FastAPI(title="Visual Search - AI Service", lifespan=lifespan)
 
 
 class LocalIndexRequest(BaseModel):
@@ -51,6 +86,24 @@ class IndexStatusResponse(BaseModel):
     error_message: Optional[str] = None
 
 
+class IndexItemRequest(BaseModel):
+    item_id: int = Field(ge=1)
+    image_id: int = Field(ge=1)
+    image_path: str = Field(min_length=1, max_length=2048)
+    storage_path: str = Field(min_length=1, max_length=2048)
+    original_filename: Optional[str] = None
+
+
+class IndexItemsRequest(BaseModel):
+    batch_id: str = Field(min_length=1, max_length=100)
+    items: list[IndexItemRequest] = Field(min_length=1, max_length=1000)
+
+
+class IndexItemsResponse(BaseModel):
+    batch_id: str
+    queued_items: int
+
+
 @app.post("/api/embed/text")
 async def embed_text(text: str = Form(...)):
     """Bien text tim kiem thanh vector CLIP."""
@@ -71,6 +124,120 @@ async def embed_image(file: UploadFile = File(...)):
         return {"status": "success", "vector": vector}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/api/index/items", response_model=IndexItemsResponse, status_code=202)
+def enqueue_index_items(request: IndexItemsRequest):
+    """Nhan danh sach anh BE vua upload va dua vao item-level queue."""
+    try:
+        queued_items = prepare_items_for_queue(
+            request.batch_id,
+            [item.model_dump() for item in request.items],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not enqueue indexing items: {exc}") from exc
+
+    for item in queued_items:
+        INDEX_ITEM_QUEUE.put(item)
+    return IndexItemsResponse(batch_id=request.batch_id, queued_items=len(queued_items))
+
+
+def _start_index_workers() -> None:
+    if INDEX_WORKER_THREADS:
+        return
+    INDEX_WORKER_STOP.clear()
+    for worker_number in range(1, MAX_INDEX_WORKERS + 1):
+        worker = Thread(
+            target=_index_worker_loop,
+            args=(worker_number,),
+            name=f"index-item-worker-{worker_number}",
+            daemon=True,
+        )
+        worker.start()
+        INDEX_WORKER_THREADS.append(worker)
+    print(f"Da khoi dong {MAX_INDEX_WORKERS} item indexing workers.")
+
+
+def _stop_index_workers() -> None:
+    INDEX_WORKER_STOP.set()
+    for _ in INDEX_WORKER_THREADS:
+        INDEX_ITEM_QUEUE.put(None)
+    for worker in INDEX_WORKER_THREADS:
+        worker.join(timeout=5)
+    INDEX_WORKER_THREADS.clear()
+
+
+def _index_worker_loop(worker_number: int) -> None:
+    while not INDEX_WORKER_STOP.is_set():
+        try:
+            queue_item = INDEX_ITEM_QUEUE.get(timeout=1)
+        except queue.Empty:
+            continue
+
+        try:
+            if queue_item is None:
+                return
+            try:
+                item = claim_indexing_item(queue_item)
+            except Exception as exc:
+                print(f"[Item worker {worker_number}] Khong the claim item_id={queue_item.item_id}: {exc}")
+                _schedule_retry(queue_item, 1)
+                continue
+            if item is None:
+                continue
+
+            try:
+                index_single_image_item(item, clip_model, ocr_model)
+                print(
+                    f"[Item worker {worker_number}] Indexed image_id={item['image_id']} "
+                    f"(item_id={item['item_id']})."
+                )
+            except Exception as exc:
+                print(f"[Item worker {worker_number}] Loi item_id={queue_item.item_id}: {exc}")
+                try:
+                    retry_count = handle_index_failure(queue_item.item_id, exc)
+                    if retry_count is not None:
+                        _schedule_retry(queue_item, retry_count)
+                except Exception as status_exc:
+                    print(
+                        f"[Item worker {worker_number}] Khong the ghi failure "
+                        f"item_id={queue_item.item_id}: {status_exc}"
+                    )
+                    _schedule_running_recovery(queue_item, str(exc))
+        finally:
+            INDEX_ITEM_QUEUE.task_done()
+
+
+def _schedule_retry(item: IndexQueueItem, retry_count: int) -> None:
+    delay_seconds = min(2 ** max(retry_count - 1, 0), 30)
+
+    def requeue() -> None:
+        if not INDEX_WORKER_STOP.is_set():
+            INDEX_ITEM_QUEUE.put(item)
+
+    timer = Timer(delay_seconds, requeue)
+    timer.daemon = True
+    timer.start()
+
+
+def _schedule_running_recovery(item: IndexQueueItem, error_message: str) -> None:
+    def recover() -> None:
+        if INDEX_WORKER_STOP.is_set():
+            return
+        try:
+            should_requeue = recover_running_item(item.item_id, error_message)
+        except Exception as exc:
+            print(f"Khong the recovery running item_id={item.item_id}: {exc}")
+            _schedule_running_recovery(item, error_message)
+            return
+        if should_requeue and not INDEX_WORKER_STOP.is_set():
+            INDEX_ITEM_QUEUE.put(item)
+
+    timer = Timer(5, recover)
+    timer.daemon = True
+    timer.start()
 
 
 @app.post("/api/index/local", response_model=IndexStartResponse)
