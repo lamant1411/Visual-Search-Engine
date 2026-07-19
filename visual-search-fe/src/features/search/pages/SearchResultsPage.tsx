@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { useLocation, useSearchParams } from "react-router";
+import { useLocation, useNavigate, useSearchParams } from "react-router";
+import { ImageUp, RotateCcw } from "lucide-react";
 
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/base/button";
@@ -29,6 +30,7 @@ const modeLabel: Record<SearchMode, string> = {
 export function SearchResultsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const state = (location.state ?? {}) as SearchLocationState;
 
   const mode = parseSearchMode(searchParams.get("mode"));
@@ -40,6 +42,7 @@ export function SearchResultsPage() {
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const { isBookmarked, toggleBookmark } = useBookmarks();
   const resultTitle = getResultTitle(mode, query, state.fileName, imageId);
+  const isMissingImageReference = mode === "image" && !state.file && !imageId;
   const queryEnabled =
     mode === "image" ? Boolean(state.file || imageId) : query.trim().length > 0;
   const imageSearchKey = state.file
@@ -67,6 +70,8 @@ export function SearchResultsPage() {
       }),
     enabled: queryEnabled,
     initialPageParam: 1,
+    retry: (failureCount, error) =>
+      failureCount < 2 && getSearchErrorMessage(error).canRetry,
     getNextPageParam: (lastPage, pages) => {
       const loadedCount = pages.reduce(
         (count, currentPage) => count + currentPage.items.length,
@@ -146,6 +151,24 @@ export function SearchResultsPage() {
               20 images per batch
             </span>
           </div>
+        ) : isMissingImageReference ? (
+          <section className="rounded-lg border border-border bg-white p-8 text-center shadow-sm shadow-slate-200/70">
+            <ImageUp className="mx-auto h-7 w-7 text-ink-muted" />
+            <p className="mt-3 font-semibold text-ink-primary">
+              Choose a reference image again
+            </p>
+            <p className="mx-auto mt-2 max-w-md text-sm text-ink-secondary">
+              Uploaded files are kept only for the current browser navigation
+              and are cleared after a page refresh.
+            </p>
+            <Button
+              className="mt-5"
+              type="button"
+              onClick={() => navigate("/search")}
+            >
+              Back to image search
+            </Button>
+          </section>
         ) : (
           <section className="rounded-lg border border-border bg-white p-6 text-center shadow-sm shadow-slate-200/70">
             <p className="font-semibold text-ink-primary">
@@ -167,6 +190,25 @@ export function SearchResultsPage() {
             <p className="mt-1 text-sm text-red-600">
               {searchError.description}
             </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              {searchError.canRetry && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  leftIcon={<RotateCcw className="h-4 w-4" />}
+                  onClick={() => void searchQuery.refetch()}
+                >
+                  Try again
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => navigate("/search")}
+              >
+                Start a new search
+              </Button>
+            </div>
           </section>
         )}
 

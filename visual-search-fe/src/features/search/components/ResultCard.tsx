@@ -6,6 +6,7 @@ import { formatSimilarityScore } from "../utils/formatSimilarityScore";
 
 type ResultCardProps = {
   result: SearchResult;
+  priority?: boolean;
   isBookmarked?: boolean;
   onBookmark?: (result: SearchResult) => void;
   onSelect?: (result: SearchResult) => void;
@@ -13,6 +14,7 @@ type ResultCardProps = {
 
 export function ResultCard({
   result,
+  priority = false,
   isBookmarked = false,
   onBookmark,
   onSelect,
@@ -57,7 +59,8 @@ export function ResultCard({
                 imageLoaded ? "opacity-100" : "opacity-0",
               ].join(" ")}
               decoding="async"
-              loading="lazy"
+              fetchPriority={priority ? "high" : "auto"}
+              loading={priority ? "eager" : "lazy"}
               src={result.thumbnailUrl}
               onLoad={() => setImageLoaded(true)}
               onError={() => {
