@@ -39,10 +39,27 @@ export interface TriggerIndexingResponse {
   task_id: string
 }
 
-// Giả lập danh sách các đợt Indexing trong localStorage
-const INDEXING_STATE_KEY = 'mock_indexing_state'
-const INDEXING_BATCHES_KEY = 'mock_indexing_batches'
-const PENDING_IMAGES_KEY = 'mock_pending_images'
+export interface AdminIndexUploadResponse {
+  batch_id: string
+  status: 'queued' | 'running' | 'completed' | 'failed'
+  total_images: number
+  uploaded_files: number
+}
+
+export interface AdminIndexStartResponse {
+  batch_id: string
+  status: 'queued' | 'running' | 'completed' | 'failed'
+  total_images: number
+}
+
+export interface AdminIndexStatusResponse {
+  batch_id: string
+  status: 'queued' | 'running' | 'completed' | 'failed'
+  total_images: number
+  processed_images: number
+  failed_images: number
+  error_message?: string | null
+}
 
 export interface PendingImage {
   id: string
@@ -50,159 +67,6 @@ export interface PendingImage {
   filename: string
   status: 'pending' | 'indexed' | 'failed' | 'saved_failed'
   created_at: string
-}
-
-const defaultPendingImages: PendingImage[] = [
-  {
-    id: 'p1',
-    url: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5',
-    filename: 'photo-flower-art.jpg',
-    status: 'pending',
-    created_at: new Date(Date.now() - 3600000).toISOString()
-  },
-  {
-    id: 'p2',
-    url: 'https://images.unsplash.com/photo-1579783928591-7240c66364d9',
-    filename: 'photo-abstract-painting.jpg',
-    status: 'pending',
-    created_at: new Date(Date.now() - 7200000).toISOString()
-  },
-  {
-    id: 'p3',
-    url: 'https://images.unsplash.com/photo-1549880181-56a44cf8a4a1',
-    filename: 'photo-mountain-landscape.jpg',
-    status: 'pending',
-    created_at: new Date(Date.now() - 10800000).toISOString()
-  }
-]
-
-function getStoredPendingImages(): PendingImage[] {
-  const stored = localStorage.getItem(PENDING_IMAGES_KEY)
-  if (!stored) {
-    localStorage.setItem(PENDING_IMAGES_KEY, JSON.stringify(defaultPendingImages))
-    return defaultPendingImages
-  }
-  try {
-    return JSON.parse(stored) as PendingImage[]
-  } catch {
-    return defaultPendingImages
-  }
-}
-
-function saveStoredPendingImages(images: PendingImage[]) {
-  localStorage.setItem(PENDING_IMAGES_KEY, JSON.stringify(images))
-}
-
-
-const defaultBatches: IndexingBatch[] = [
-  {
-    id: 1,
-    batch_id: 'batch_20260713_001',
-    status: 'completed',
-    total_images: 1200,
-    processed_images: 1200,
-    failed_images: 0,
-    created_at: '2026-07-13T10:00:00.000Z',
-    updated_at: '2026-07-13T10:15:30.000Z'
-  },
-  {
-    id: 2,
-    batch_id: 'batch_20260712_003',
-    status: 'completed',
-    total_images: 500,
-    processed_images: 495,
-    failed_images: 5,
-    error_message: '5 ảnh lỗi định dạng không hỗ trợ',
-    created_at: '2026-07-12T14:30:00.000Z',
-    updated_at: '2026-07-12T14:38:12.000Z'
-  },
-  {
-    id: 3,
-    batch_id: 'batch_20260711_012',
-    status: 'failed',
-    total_images: 300,
-    processed_images: 120,
-    failed_images: 180,
-    error_message: 'Mất kết nối với Vector Database',
-    created_at: '2026-07-11T09:15:00.000Z',
-    updated_at: '2026-07-11T09:20:45.000Z'
-  }
-]
-
-function getStoredBatches(): IndexingBatch[] {
-  const stored = localStorage.getItem(INDEXING_BATCHES_KEY)
-  if (!stored) {
-    localStorage.setItem(INDEXING_BATCHES_KEY, JSON.stringify(defaultBatches))
-    return defaultBatches
-  }
-  try {
-    return JSON.parse(stored) as IndexingBatch[]
-  } catch {
-    return defaultBatches
-  }
-}
-
-function saveStoredBatches(batches: IndexingBatch[]) {
-  localStorage.setItem(INDEXING_BATCHES_KEY, JSON.stringify(batches))
-}
-
-function getStoredIndexingState(): IndexingStatus {
-  const stored = localStorage.getItem(INDEXING_STATE_KEY)
-  if (stored) {
-    try {
-      const parsed = JSON.parse(stored) as IndexingStatus
-      // Nếu đang chạy, giả lập tăng tiến trình qua mỗi lần đọc (polling)
-      if (parsed.status === 'running' || parsed.status === 'queued') {
-        // Chuyển queued sang running nếu cần thiết
-        if (parsed.status === 'queued') {
-          parsed.status = 'running'
-        }
-
-        const timeElapsed = Date.now() - (parsed as any).lastUpdated
-        // Giả sử hoàn thành 100% trong 25 giây (tương đương 4% mỗi giây)
-        const progressIncrement = Math.floor((timeElapsed / 1000) * 4)
-        if (progressIncrement > 0) {
-          parsed.progress = Math.min(100, parsed.progress + progressIncrement)
-          parsed.processed_count = Math.floor((parsed.total_count * parsed.progress) / 100)
-          
-          if (parsed.progress >= 100) {
-            parsed.status = 'completed'
-          }
-          
-          // Cập nhật lại mốc thời gian
-          ;(parsed as any).lastUpdated = Date.now()
-          localStorage.setItem(INDEXING_STATE_KEY, JSON.stringify(parsed))
-
-          // Đồng bộ với danh sách đợt indexing lịch sử
-          const batches = getStoredBatches()
-          const activeBatch = batches.find(b => b.status === 'running' || b.status === 'queued')
-          if (activeBatch) {
-            activeBatch.status = parsed.status === 'completed' ? 'completed' : 'running'
-            activeBatch.processed_images = parsed.processed_count
-            activeBatch.updated_at = new Date().toISOString()
-            saveStoredBatches(batches)
-          }
-        }
-      }
-      return parsed
-    } catch {
-      // ignore parsing error
-    }
-  }
-  return {
-    status: 'idle',
-    progress: 0,
-    processed_count: 0,
-    total_count: 0,
-  }
-}
-
-function setStoredIndexingState(state: IndexingStatus) {
-  const stateWithTime = {
-    ...state,
-    lastUpdated: Date.now(),
-  }
-  localStorage.setItem(INDEXING_STATE_KEY, JSON.stringify(stateWithTime))
 }
 
 // Danh sách người dùng giả lập
@@ -222,27 +86,19 @@ export const adminApi = {
    * Lấy số liệu thống kê Dashboard
    */
   async getStats(): Promise<AdminStats> {
-    try {
-      const response = await apiClient.get<AdminStats>('/admin/stats')
-      return response.data
-    } catch {
-      await delay(400)
-      return {
-        total_images: 12450,
-        total_users: mockUsers.length,
-      }
-    }
+    const response = await apiClient.get<AdminStats>('/admin/dashboard')
+    return response.data
   },
 
   /**
-   * Lấy danh sách Users (Chỉ xem)
+   * Lấy danh sách Users (Mock fallback vì backend chưa có endpoint riêng này)
    */
   async listUsers(params?: { page?: number; limit?: number }): Promise<PaginatedResponse<AdminUser>> {
     try {
       const response = await apiClient.get<PaginatedResponse<AdminUser>>('/admin/users', { params })
       return response.data
     } catch {
-      await delay(500)
+      await delay(300)
       const page = params?.page ?? 1
       const limit = params?.limit ?? 10
       const start = (page - 1) * limit
@@ -260,233 +116,130 @@ export const adminApi = {
    * Lấy danh sách lịch sử các đợt Indexing
    */
   async getIndexingBatches(): Promise<IndexingBatch[]> {
-    try {
-      const response = await apiClient.get<IndexingBatch[]>('/admin/indexing/batches')
-      return response.data
-    } catch {
-      await delay(300)
-      // Kích hoạt cập nhật tiến độ (nếu có) trước khi trả về danh sách để hiển thị tiến độ đồng bộ
-      getStoredIndexingState()
-      return getStoredBatches()
-    }
+    const response = await apiClient.get<{ items: IndexingBatch[] }>('/admin/index/batches')
+    return response.data.items
   },
 
   /**
-   * Lấy trạng thái Indexing (hỗ trợ polling)
+   * Lấy trạng thái Indexing tổng quát (hỗ trợ polling)
    */
   async getIndexingStatus(): Promise<IndexingStatus> {
-    try {
-      const response = await apiClient.get<IndexingStatus>('/admin/indexing/status')
-      return response.data
-    } catch {
-      await delay(200)
-      return getStoredIndexingState()
+    const response = await apiClient.get<{ items: IndexingBatch[] }>('/admin/index/batches')
+    const latest = response.data.items[0]
+    if (!latest) {
+      return { status: 'idle', progress: 0, processed_count: 0, total_count: 0 }
+    }
+    return {
+      status: latest.status as any,
+      progress: latest.total_images > 0 ? Math.round((latest.processed_images / latest.total_images) * 100) : 0,
+      processed_count: latest.processed_images,
+      total_count: latest.total_images,
+      error_message: latest.error_message
     }
   },
 
   /**
-   * Kích hoạt tiến trình Indexing cho một batch ảnh mới
+   * Tải ảnh hàng loạt lên server (Tạo Batch ở trạng thái queued)
+   * Giới hạn: File <= 2MB, Batch <= 100MB
    */
-  async triggerIndexing(batchSize: number = 500): Promise<TriggerIndexingResponse> {
-    try {
-      const response = await apiClient.post<TriggerIndexingResponse>('/admin/indexing/trigger', { batch_size: batchSize })
-      return response.data
-    } catch {
-      await delay(600)
-      
-      const currentState = getStoredIndexingState()
-      if (currentState.status === 'running' || currentState.status === 'queued') {
-        throw new Error('Tiến trình indexing hiện tại vẫn đang chạy. Vui lòng chờ.')
-      }
+  async uploadBatchImages(
+    files: File[],
+    onProgress?: (percent: number) => void
+  ): Promise<AdminIndexUploadResponse> {
+    const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
+    const MAX_BATCH_SIZE = 100 * 1024 * 1024 // 100MB
 
-      // 1. Tạo state indexing mới để chạy polling
-      const newState: IndexingStatus = {
-        status: 'running',
-        progress: 0,
-        processed_count: 0,
-        total_count: batchSize,
+    let totalBatchSize = 0
+    for (const file of files) {
+      if (file.size > MAX_FILE_SIZE) {
+        throw new Error(`Ảnh "${file.name}" vượt quá kích thước tối đa cho phép là 2MB.`)
       }
-      setStoredIndexingState(newState)
+      totalBatchSize += file.size
+    }
 
-      // 2. Thêm một đợt indexing mới vào danh sách lịch sử
-      const batches = getStoredBatches()
-      const newBatch: IndexingBatch = {
-        id: batches.length + 1,
-        batch_id: `batch_${new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14)}`,
-        status: 'running',
-        total_images: batchSize,
-        processed_images: 0,
-        failed_images: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+    if (totalBatchSize > MAX_BATCH_SIZE) {
+      throw new Error(
+        `Tổng dung lượng các ảnh (${(totalBatchSize / (1024 * 1024)).toFixed(2)}MB) vượt quá giới hạn mỗi lượt là 100MB.`
+      )
+    }
+
+    const formData = new FormData()
+    files.forEach((file) => {
+      formData.append('files', file)
+    })
+
+    const response = await apiClient.post<AdminIndexUploadResponse>(
+      '/admin/index/upload',
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total && onProgress) {
+            const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+            onProgress(percent)
+          }
+        }
       }
-      batches.unshift(newBatch)
-      saveStoredBatches(batches)
+    )
+    return response.data
+  },
 
+  /**
+   * Kích hoạt tiến trình Indexing cho một batch đã upload trên Server
+   */
+  async startBatchIndexing(batchId: string): Promise<AdminIndexStartResponse> {
+    const response = await apiClient.post<AdminIndexStartResponse>(`/admin/index/${batchId}/start`)
+    return response.data
+  },
+
+  /**
+   * Lấy trạng thái chi tiết của một batch
+   */
+  async getBatchStatus(batchId: string): Promise<AdminIndexStatusResponse> {
+    const response = await apiClient.get<AdminIndexStatusResponse>(`/admin/index/status/${batchId}`)
+    return response.data
+  },
+
+  /**
+   * Tác vụ với ảnh đơn trong modal lỗi (Xử lý cục bộ trên giao diện)
+   */
+  async indexSingleImage(_url: string): Promise<{ success: boolean; error_message?: string }> {
+    await delay(600)
+    const isFailed = Math.random() < 0.15
+    if (isFailed) {
       return {
-        message: `Đã kích hoạt indexing thành công cho batch gồm ${batchSize} ảnh.`,
-        task_id: newBatch.batch_id,
+        success: false,
+        error_message: 'Thử lại thất bại: Lỗi trích xuất vector hoặc ảnh lỗi.'
       }
     }
+    return { success: true }
   },
 
-  /**
-   * Tải ảnh trực tiếp lên server
-   */
+  async deletePendingImage(_url: string): Promise<{ success: boolean }> {
+    await delay(100)
+    return { success: true }
+  },
+
+  async saveFailedImage(_url: string): Promise<{ success: boolean }> {
+    await delay(100)
+    return { success: true }
+  },
+
+  // --- Stubs cho các phương thức legacy không sử dụng ---
+  async triggerIndexing(_batchSize: number = 500): Promise<TriggerIndexingResponse> {
+    return { message: 'Legacy trigger stub called', task_id: 'legacy' }
+  },
+
   async uploadImageToServer(file: File): Promise<{ url: string; filename: string }> {
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-      const response = await apiClient.post<{ url: string; filename: string }>(
-        '/admin/images/upload',
-        formData,
-        { headers: { 'Content-Type': 'multipart/form-data' } }
-      )
-      return response.data
-    } catch {
-      await delay(400)
-      const mockUrl = URL.createObjectURL(file)
-      
-      const currentList = getStoredPendingImages()
-      const newImg: PendingImage = {
-        id: `p_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-        url: mockUrl,
-        filename: file.name,
-        status: 'pending',
-        created_at: new Date().toISOString()
-      }
-      saveStoredPendingImages([newImg, ...currentList])
-      
-      return { url: mockUrl, filename: file.name }
-    }
+    return { url: '', filename: file.name }
   },
 
-  /**
-   * Lấy danh sách các ảnh chưa được index (pending hoặc failed)
-   */
   async getPendingImages(): Promise<PendingImage[]> {
-    try {
-      const response = await apiClient.get<PendingImage[]>('/admin/images/pending')
-      return response.data
-    } catch {
-      await delay(300)
-      return getStoredPendingImages().filter((img) => img.status === 'pending' || img.status === 'failed')
-    }
+    return []
   },
 
-  /**
-   * Tiến hành index một ảnh đơn lẻ (chạy ngầm song song)
-   */
-  async indexSingleImage(url: string): Promise<{ success: boolean; error_message?: string }> {
-    try {
-      const response = await apiClient.post<{ success: boolean; error_message?: string }>(
-        '/admin/indexing/single',
-        { url }
-      )
-      return response.data
-    } catch {
-      await delay(800)
-      const allPending = getStoredPendingImages()
-      
-      const targetImage = allPending.find(img => img.url === url)
-      const isFailed = Math.random() < 0.15 || (targetImage && (targetImage.filename.toLowerCase().includes('fail') || targetImage.filename.toLowerCase().includes('error')))
-      
-      const updated = allPending.map((img) => {
-        if (img.url === url) {
-          return { ...img, status: (isFailed ? 'failed' : 'indexed') as any }
-        }
-        return img
-      })
-      saveStoredPendingImages(updated)
-
-      if (isFailed) {
-        return {
-          success: false,
-          error_message: 'Lỗi trích xuất vector: Ảnh không hợp lệ hoặc không trích xuất được CLIP embedding.'
-        }
-      }
-      return { success: true }
-    }
-  },
-
-  /**
-   * Xóa ảnh khỏi danh sách pending (sau khi index lỗi hoặc muốn xóa)
-   */
-  async deletePendingImage(url: string): Promise<{ success: boolean }> {
-    try {
-      await apiClient.delete('/admin/images/pending', { data: { url } })
-      return { success: true }
-    } catch {
-      await delay(300)
-      const allPending = getStoredPendingImages()
-      const filtered = allPending.filter(img => img.url !== url)
-      saveStoredPendingImages(filtered)
-      return { success: true }
-    }
-  },
-
-  /**
-   * Lưu ảnh bất chấp lỗi index (bỏ qua thông báo lỗi)
-   */
-  async saveFailedImage(url: string): Promise<{ success: boolean }> {
-    try {
-      await apiClient.post('/admin/images/save-failed', { url })
-      return { success: true }
-    } catch {
-      await delay(200)
-      const allPending = getStoredPendingImages()
-      const updated = allPending.map((img) => {
-        if (img.url === url) {
-          return { ...img, status: 'saved_failed' as const }
-        }
-        return img
-      })
-      saveStoredPendingImages(updated)
-      return { success: true }
-    }
-  },
-
-  /**
-   * Kích hoạt indexing cho danh sách URL ảnh cụ thể
-   */
-  async triggerIndexingForUrls(urls: string[]): Promise<TriggerIndexingResponse> {
-    try {
-      const response = await apiClient.post<TriggerIndexingResponse>(
-        '/admin/indexing/trigger',
-        { urls }
-      )
-      return response.data
-    } catch {
-      await delay(800)
-      const allPending = getStoredPendingImages()
-      
-      const updated = allPending.map((img) => {
-        if (urls.includes(img.url)) {
-          return { ...img, status: 'indexed' as const }
-        }
-        return img
-      })
-      saveStoredPendingImages(updated)
-
-      const batches = getStoredBatches()
-      const newBatch: IndexingBatch = {
-        id: batches.length + 1,
-        batch_id: `batch_${new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14)}`,
-        status: 'completed',
-        total_images: urls.length,
-        processed_images: urls.length,
-        failed_images: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }
-      batches.unshift(newBatch)
-      saveStoredBatches(batches)
-
-      return {
-        message: `Đã index thành công ${urls.length} ảnh.`,
-        task_id: newBatch.batch_id
-      }
-    }
+  async triggerIndexingForUrls(_urls: string[]): Promise<TriggerIndexingResponse> {
+    return { message: `Legacy stub index ${_urls.length} urls`, task_id: 'legacy' }
   },
 }
 

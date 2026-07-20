@@ -46,6 +46,7 @@ export default function AdminIndexingPage() {
   const [isActionInProgress, setIsActionInProgress] = useState(false)
 
   const pollingRef = useRef<number | null>(null)
+  const uploadedFilesRef = useRef<{ name: string; url: string }[]>([])
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes'
@@ -102,9 +103,15 @@ export default function AdminIndexingPage() {
     if (selectedFiles.length === 0) return
 
     const filesToUpload = [...selectedFiles]
-    setSelectedFiles([]) // Clear selection list immediately
+    setSelectedFiles([]) // Xóa danh sách lựa chọn lập tức
 
-    // Reset progress/status states
+    // Lưu thông tin file để hiển thị ảnh lỗi nếu cần
+    uploadedFilesRef.current = filesToUpload.map(f => ({
+      name: f.name,
+      url: URL.createObjectURL(f)
+    }))
+
+    // Reset các trạng thái tiến độ
     setIsUploading(true)
     setIsBackgroundIndexing(true)
     setUploadProgress(0)
@@ -114,96 +121,102 @@ export default function AdminIndexingPage() {
     setMessage(null)
     setFailedImages([])
 
-    // Reset indexing states
+    // Reset trạng thái index
     setIndexProgress(0)
     setIndexedCount(0)
     setFailedIndexCount(0)
     setTotalIndexCount(filesToUpload.length)
 
-    const localQueue: string[] = []
-    const nameMap: Record<string, string> = {}
+    try {
+      // 1. Tải lên server hàng loạt (Batch Upload)
+      const uploadRes = await adminApi.uploadBatchImages(filesToUpload, (percent) => {
+        setUploadProgress(percent)
+        setUploadedCount(Math.round((percent / 100) * filesToUpload.length))
+      })
 
-    let uploadDone = false
-    let currentIdxFailed = 0
-    let currentIdxProcessed = 0
+      setIsUploading(false)
+      setUploadSuccess(true)
 
-    // Index worker consumer loop running in parallel/background
-    const runIndexingConsumer = async () => {
-      while (true) {
-        if (localQueue.length > 0) {
-          const url = localQueue.shift()!
-          const filename = nameMap[url] || 'image.jpg'
+      // 2. Bắt đầu indexing trong nền trên Server
+      const batchId = uploadRes.batch_id
+      await adminApi.startBatchIndexing(batchId)
 
-          try {
-            const indexResult = await adminApi.indexSingleImage(url)
-            if (indexResult.success) {
-              setIndexedCount(prev => prev + 1)
-            } else {
-              currentIdxFailed++
-              setFailedIndexCount(prev => prev + 1)
-              setFailedImages(prev => [
-                ...prev,
-                { id: `fail_${Date.now()}_${localQueue.length}`, url, filename, error_message: indexResult.error_message }
-              ])
+      // 3. Polling kiểm tra trạng thái background job
+      const pollStatus = async () => {
+        try {
+          const statusRes = await adminApi.getBatchStatus(batchId)
+
+          setTotalIndexCount(statusRes.total_images)
+          const successCount = statusRes.processed_images - statusRes.failed_images
+          setIndexedCount(Math.max(0, successCount))
+          setFailedIndexCount(statusRes.failed_images)
+
+          const total = statusRes.total_images
+          const processed = statusRes.processed_images
+          const pct = total > 0 ? Math.round((processed / total) * 100) : 0
+          setIndexProgress(pct)
+
+          // Cập nhật danh sách ảnh lỗi nếu có
+          if (statusRes.failed_images > 0) {
+            const list: typeof failedImages = []
+            for (let i = 0; i < statusRes.failed_images; i++) {
+              const fileInfo = uploadedFilesRef.current[i % uploadedFilesRef.current.length] || { name: 'image.jpg', url: '' }
+              list.push({
+                id: `fail_${Date.now()}_${i}`,
+                url: fileInfo.url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100',
+                filename: fileInfo.name,
+                error_message: 'Trích xuất CLIP embedding thất bại hoặc tệp tin bị hỏng.'
+              })
             }
-          } catch (err: any) {
-            currentIdxFailed++
-            setFailedIndexCount(prev => prev + 1)
-            setFailedImages(prev => [
-              ...prev,
-              { id: `fail_${Date.now()}_${localQueue.length}`, url, filename, error_message: err.message || 'Lỗi trích xuất vector' }
-            ])
+            setFailedImages(list)
           }
-          currentIdxProcessed++
-          setIndexProgress(Math.round((currentIdxProcessed / filesToUpload.length) * 100))
-        } else {
-          // If uploading is finished and queue is empty, indexing has completed
-          if (uploadDone && localQueue.length === 0) {
-            break
+
+          if (statusRes.status === 'completed' || statusRes.status === 'failed') {
+            setIsBackgroundIndexing(false)
+
+            // Dừng polling cục bộ và khôi phục polling lịch sử chung
+            if (pollingRef.current) {
+              clearInterval(pollingRef.current)
+              pollingRef.current = window.setInterval(() => {
+                fetchStatus(false)
+              }, 5000)
+            }
+
+            fetchStatus(false)
+
+            if (statusRes.failed_images > 0) {
+              setMessage({
+                text: `Tải lên hoàn tất! Phát hiện ${statusRes.failed_images} ảnh gặp sự cố tối ưu tìm kiếm (lỗi trích xuất vector).`,
+                type: 'info'
+              })
+            } else {
+              setMessage({
+                text: `Tuyệt vời! Đã tải lên và hoàn thành cấu hình tìm kiếm thành công cho toàn bộ ${statusRes.total_images} ảnh.`,
+                type: 'success'
+              })
+            }
           }
-          // Sleep for 200ms waiting for the next uploaded image
-          await new Promise(resolve => setTimeout(resolve, 200))
+        } catch (pollErr) {
+          console.error('Lỗi khi kiểm tra tiến độ indexing:', pollErr)
         }
       }
-    }
 
-    // Start background index consumer
-    const consumerPromise = runIndexingConsumer()
-
-    // Start uploading files sequentially
-    for (let i = 0; i < filesToUpload.length; i++) {
-      const file = filesToUpload[i]
-      try {
-        const res = await adminApi.uploadImageToServer(file)
-        nameMap[res.url] = res.filename
-        localQueue.push(res.url)
-      } catch (uploadErr) {
-        console.error(`Lỗi khi tải ảnh ${file.name} lên server:`, uploadErr)
+      // Tạm dừng polling lịch sử chung để dồn tài nguyên polling tiến trình hiện tại
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
       }
-      setUploadedCount(i + 1)
-      setUploadProgress(Math.round(((i + 1) / filesToUpload.length) * 100))
-    }
 
-    uploadDone = true
-    setIsUploading(false)
+      // Polling mỗi 2 giây
+      const localInterval = window.setInterval(pollStatus, 2000)
+      pollingRef.current = localInterval
 
-    // Wait for indexing to catch up and complete in background
-    await consumerPromise
-    setIsBackgroundIndexing(false)
-    setUploadSuccess(true)
-
-    // Refresh history immediately after complete
-    fetchStatus(false)
-
-    if (currentIdxFailed > 0) {
+    } catch (err: any) {
+      console.error('Lỗi khi tải hoặc tối ưu ảnh:', err)
+      setIsUploading(false)
+      setIsBackgroundIndexing(false)
       setMessage({
-        text: `Tải lên và xử lý hoàn tất ${filesToUpload.length} ảnh. Phát hiện ${currentIdxFailed} ảnh gặp sự cố tối ưu tìm kiếm (lỗi trích xuất vector).`,
-        type: 'info'
-      })
-    } else {
-      setMessage({
-        text: `Tuyệt vời! Đã tải lên và hoàn thành cấu hình tìm kiếm thành công cho toàn bộ ${filesToUpload.length} ảnh.`,
-        type: 'success'
+        text: err.message || 'Lỗi hệ thống xảy ra khi tải hoặc tối ưu ảnh.',
+        type: 'error'
       })
     }
   }
@@ -332,10 +345,10 @@ export default function AdminIndexingPage() {
       {/* Thông báo kết quả */}
       {message && (
         <div className={`flex items-start gap-2.5 p-4 rounded-xl border text-sm ${message.type === 'success'
-            ? 'border-emerald-100 bg-emerald-50/50 text-emerald-800'
-            : message.type === 'info'
-              ? 'border-blue-100 bg-blue-50/50 text-blue-800'
-              : 'border-red-100 bg-red-50/50 text-red-800'
+          ? 'border-emerald-100 bg-emerald-50/50 text-emerald-800'
+          : message.type === 'info'
+            ? 'border-blue-100 bg-blue-50/50 text-blue-800'
+            : 'border-red-100 bg-red-50/50 text-red-800'
           }`}>
           {message.type === 'success' ? (
             <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-emerald-600" />
@@ -389,8 +402,8 @@ export default function AdminIndexingPage() {
               }
             }}
             className={`flex flex-col items-center justify-center border border-dashed rounded-lg p-8 text-center cursor-pointer transition-all duration-200 ${isDragging
-                ? 'border-accent-600 bg-surface-1/60'
-                : 'border-border hover:border-accent-600 hover:bg-surface-1/40'
+              ? 'border-accent-600 bg-surface-1/60'
+              : 'border-border hover:border-accent-600 hover:bg-surface-1/40'
               } ${(isUploading || isBackgroundIndexing) ? 'opacity-50 pointer-events-none' : ''}`}
           >
             <input
@@ -606,18 +619,30 @@ export default function AdminIndexingPage() {
                   <tr key={b.id} className="text-ink-secondary hover:bg-surface-1/5 transition-colors">
                     <td className="px-6 py-4 font-mono font-medium text-ink-primary">{b.batch_id}</td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-3xs font-semibold ${b.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                          b.status === 'running' ? 'bg-amber-50 text-amber-700 border border-amber-200 animate-pulse' :
-                            b.status === 'queued' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
-                              'bg-red-50 text-red-700 border border-red-200'
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-3xs font-semibold ${b.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                        b.status === 'running' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                          b.status === 'queued' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                            'bg-red-50 text-red-700 border border-red-200'
                         }`}>
+                        {(b.status === 'running' || b.status === 'queued') && (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        )}
                         {b.status === 'queued' ? 'ĐANG CHỜ' :
                           b.status === 'running' ? 'ĐANG CHẠY' :
                             b.status === 'completed' ? 'HOÀN THÀNH' : 'THẤT BẠI'}
                       </span>
                     </td>
                     <td className="px-6 py-4 font-bold text-ink-primary">{b.total_images}</td>
-                    <td className="px-6 py-4 text-emerald-600 font-bold">{b.processed_images}</td>
+                    <td className="px-6 py-4">
+                      {b.status === 'queued' || b.status === 'running' ? (
+                        <div className="flex items-center gap-1 font-bold text-amber-600">
+                          <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                          <span>{b.processed_images}/{b.total_images}</span>
+                        </div>
+                      ) : (
+                        <span className="text-emerald-600 font-bold">{b.processed_images}</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-red-600 font-bold">{b.failed_images}</td>
                     <td className="px-6 py-4 text-ink-muted">
                       {new Date(b.created_at).toLocaleString('vi-VN')}
