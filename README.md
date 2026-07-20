@@ -14,9 +14,10 @@ budget is controlled with these environment variables:
 - `OCR_MAX_INPUT_DIMENSION`: maximum image dimension passed to EasyOCR. Lower
   values use less CPU at the cost of small-text accuracy.
 
-The development Docker configuration is tuned for a 6-core/12-thread CPU: ten
-inference threads shared by two item workers, leaving two logical CPUs for the
-API, database, and Docker. For a smaller machine, use the latency-friendly
-profile `AI_CPU_THREADS=4` and `MAX_INDEX_WORKERS=1`. For fastest batch
-throughput, start with `AI_CPU_THREADS=<logical CPUs minus 2>` and
-`MAX_INDEX_WORKERS=2`, then compare a 100-image benchmark before increasing it.
+The development Docker configuration is tuned for maximum batch throughput on
+a 6-core/12-thread CPU: twelve inference threads shared by two item workers,
+with EasyOCR recognizing up to four detected text regions per inference batch.
+For a smaller machine, use the latency-friendly profile `AI_CPU_THREADS=4`,
+`MAX_INDEX_WORKERS=1`, and `OCR_RECOGNITION_BATCH_SIZE=1`. If the API must stay
+responsive during indexing, reserve two logical CPUs with
+`AI_CPU_THREADS=<logical CPUs minus 2>` and keep `MAX_INDEX_WORKERS=2`.

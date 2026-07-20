@@ -36,11 +36,13 @@ services:
     environment:
       - POSTGRES_HOST=postgres
       - QDRANT_URL=http://qdrant:6333
-      # Throughput profile for a 6-core/12-thread development CPU: two workers
-      # share ten inference threads, leaving two threads for API/DB/Docker work.
-      - AI_CPU_THREADS=10
+      # Maximum-throughput profile for this 6-core/12-thread CPU. Two workers
+      # share all logical CPUs; EasyOCR recognition batches text regions to
+      # reduce per-region framework overhead without resizing source images.
+      - AI_CPU_THREADS=12
       - MAX_INDEX_WORKERS=2
       - TORCH_NUM_INTEROP_THREADS=1
+      - OCR_RECOGNITION_BATCH_SIZE=4
       - OCR_MAX_INPUT_DIMENSION=1600
     command: uvicorn ai_service:app --host 0.0.0.0 --port 8001
     healthcheck:
