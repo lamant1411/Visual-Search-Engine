@@ -38,6 +38,19 @@ class CpuRuntimeSettingsTests(unittest.TestCase):
         self.assertEqual(settings.item_workers, 2)
         self.assertEqual(settings.torch_threads, 1)
 
+    def test_inference_threads_can_be_decoupled_from_queue_workers(self):
+        settings = cpu_runtime.load_cpu_runtime_settings(
+            {
+                "AI_CPU_THREADS": "12",
+                "MAX_INDEX_WORKERS": "4",
+                "AI_INFERENCE_THREADS": "6",
+            },
+            available_cpus=12,
+        )
+
+        self.assertEqual(settings.item_workers, 4)
+        self.assertEqual(settings.torch_threads, 6)
+
     def test_native_thread_defaults_preserve_explicit_environment(self):
         settings = cpu_runtime.load_cpu_runtime_settings(
             {"AI_CPU_THREADS": "2"},
@@ -71,6 +84,12 @@ class CpuRuntimeSettingsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "AI_CPU_THREADS"):
             cpu_runtime.load_cpu_runtime_settings(
                 {"AI_CPU_THREADS": "0"},
+                available_cpus=8,
+            )
+
+        with self.assertRaisesRegex(ValueError, "AI_INFERENCE_THREADS"):
+            cpu_runtime.load_cpu_runtime_settings(
+                {"AI_INFERENCE_THREADS": "invalid"},
                 available_cpus=8,
             )
 

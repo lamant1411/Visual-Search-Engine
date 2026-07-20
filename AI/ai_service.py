@@ -174,7 +174,7 @@ def _start_index_workers() -> None:
         "CPU indexing runtime: "
         f"available={CPU_SETTINGS.available_cpus}, budget={CPU_SETTINGS.cpu_budget}, "
         f"workers={MAX_INDEX_WORKERS}{worker_note}, "
-        f"torch_threads_per_worker={CPU_SETTINGS.torch_threads}, "
+        f"torch_threads_per_inference={CPU_SETTINGS.torch_threads}, "
         f"torch_interop_threads={CPU_SETTINGS.torch_interop_threads}."
     )
     print(f"Da khoi dong {MAX_INDEX_WORKERS} item indexing workers.")

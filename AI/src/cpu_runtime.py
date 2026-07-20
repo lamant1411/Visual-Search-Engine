@@ -62,7 +62,11 @@ def load_cpu_runtime_settings(
     )
     requested_workers = _positive_int(values, "MAX_INDEX_WORKERS", 1)
     item_workers = min(requested_workers, cpu_budget)
-    torch_threads = max(1, cpu_budget // item_workers)
+    default_inference_threads = max(1, cpu_budget // item_workers)
+    torch_threads = min(
+        cpu_budget,
+        _positive_int(values, "AI_INFERENCE_THREADS", default_inference_threads),
+    )
     torch_interop_threads = _positive_int(values, "TORCH_NUM_INTEROP_THREADS", 1)
 
     return CpuRuntimeSettings(

@@ -36,13 +36,16 @@ services:
     environment:
       - POSTGRES_HOST=postgres
       - QDRANT_URL=http://qdrant:6333
-      # Maximum-throughput profile for this 6-core/12-thread CPU. Two workers
-      # share all logical CPUs; EasyOCR recognition batches text regions to
-      # reduce per-region framework overhead without resizing source images.
+      # Four queue workers keep the stages fed. CLIP uses one four-thread slot
+      # while EasyOCR can use two four-thread slots, filling 12 logical CPUs.
       - AI_CPU_THREADS=12
-      - MAX_INDEX_WORKERS=2
+      - AI_INFERENCE_THREADS=4
+      - MAX_INDEX_WORKERS=4
       - TORCH_NUM_INTEROP_THREADS=1
+      - CLIP_IMAGE_BATCH_SIZE=2
+      - CLIP_IMAGE_BATCH_WAIT_MS=8
       - OCR_RECOGNITION_BATCH_SIZE=4
+      - OCR_MAX_CONCURRENT_INFERENCE=2
       - OCR_MAX_INPUT_DIMENSION=1600
     command: uvicorn ai_service:app --host 0.0.0.0 --port 8001
     healthcheck:
