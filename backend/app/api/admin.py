@@ -135,11 +135,11 @@ async def upload_images_to_batch(
             "Indexing batch not found.",
             {"batch_id": batch_id},
         )
-    if batch.status in {BatchStatus.completed, BatchStatus.failed}:
+    if batch.status in {BatchStatus.completed, BatchStatus.failed, BatchStatus.cancelled}:
         raise api_error(
             status.HTTP_409_CONFLICT,
             "INDEXING_BATCH_CLOSED",
-            "Cannot upload images to a completed or failed batch.",
+            "Cannot upload images to a closed batch.",
             {"batch_id": batch_id, "status": batch.status},
         )
     if not files:
@@ -271,6 +271,55 @@ async def complete_batch_upload(
         status=batch.status,
         total_images=batch.total_images,
         is_uploading=batch.is_uploading,
+    )
+
+
+@router.post("/index/batches/{batch_id}/cancel", response_model=AdminIndexStatusResponse)
+async def cancel_indexing_batch(
+    batch_id: str,
+    _: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> AdminIndexStatusResponse:
+    """Cancel queued/running items without stopping other indexing batches."""
+    batch = await db.scalar(select(IndexingBatch).where(IndexingBatch.batch_id == batch_id))
+    if batch is None:
+        raise api_error(
+            status.HTTP_404_NOT_FOUND,
+            "NOT_FOUND",
+            "Indexing batch not found.",
+            {"batch_id": batch_id},
+        )
+
+    if batch.status not in {BatchStatus.completed, BatchStatus.failed, BatchStatus.cancelled}:
+        active_items = (
+            await db.scalars(
+                select(IndexingItem).where(
+                    IndexingItem.batch_id == batch_id,
+                    IndexingItem.status.in_(
+                        [IndexingItemStatus.queued, IndexingItemStatus.running]
+                    ),
+                )
+            )
+        ).all()
+        for item in active_items:
+            item.status = IndexingItemStatus.cancelled
+            item.error_message = "Cancelled by admin."
+
+        batch.status = BatchStatus.cancelled
+        batch.is_uploading = False
+        batch.error_message = "Cancelled by admin."
+        await db.commit()
+
+    return AdminIndexStatusResponse(
+        batch_id=batch.batch_id,
+        status=batch.status,
+        total_images=batch.total_images,
+        processed_images=batch.processed_images,
+        failed_images=batch.failed_images,
+        queued_images=0,
+        running_images=0,
+        is_uploading=batch.is_uploading,
+        error_message=batch.error_message,
     )
 
 
@@ -595,6 +644,7 @@ async def _sync_batch_counts_for_batches(
                 func.sum(case((IndexingItem.status == IndexingItemStatus.failed, 1), else_=0)).label("failed"),
                 func.sum(case((IndexingItem.status == IndexingItemStatus.queued, 1), else_=0)).label("queued"),
                 func.sum(case((IndexingItem.status == IndexingItemStatus.running, 1), else_=0)).label("running"),
+                func.sum(case((IndexingItem.status == IndexingItemStatus.cancelled, 1), else_=0)).label("cancelled"),
             )
             .where(IndexingItem.batch_id.in_(batch_ids))
             .group_by(IndexingItem.batch_id)
@@ -615,11 +665,15 @@ async def _sync_batch_counts_for_batches(
         failed = int(counts.failed or 0)
         queued = int(counts.queued or 0)
         running = int(counts.running or 0)
+        cancelled = int(counts.cancelled or 0)
 
         batch.total_images = total
         batch.processed_images = indexed
         batch.failed_images = failed
-        if total == 0:
+        if batch.status == BatchStatus.cancelled or cancelled > 0:
+            batch.status = BatchStatus.cancelled
+            batch.is_uploading = False
+        elif total == 0:
             batch.status = BatchStatus.running if batch.is_uploading else BatchStatus.queued
         elif batch.is_uploading or queued > 0 or running > 0:
             batch.status = BatchStatus.running

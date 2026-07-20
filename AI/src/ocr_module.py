@@ -1,5 +1,6 @@
 import easyocr
 import os
+from threading import Lock
 
 import numpy as np
 from PIL import Image
@@ -20,6 +21,8 @@ class OCRExtractor:
         self.text_threshold = float(os.getenv("OCR_TEXT_THRESHOLD", "0.75"))
         self.low_text = float(os.getenv("OCR_LOW_TEXT", "0.45"))
         self.confidence_threshold = float(os.getenv("OCR_CONFIDENCE_THRESHOLD", "0.3"))
+        self.max_input_dimension = int(os.getenv("OCR_MAX_INPUT_DIMENSION", "1600"))
+        self._inference_lock = Lock()
         print(f"Đang tải mô hình EasyOCR cho các ngôn ngữ: {langs}...")
         self.reader = easyocr.Reader(langs, gpu=use_gpu)
         print("Tải mô hình OCR thành công!\n")
@@ -40,18 +43,28 @@ class OCRExtractor:
                     raise ValueError(f"Định dạng không hợp lệ. Vui lòng dùng: {valid_extensions}")
 
             if isinstance(image_input, Image.Image):
-                rgb_image = np.asarray(image_input.convert("RGB"))
+                prepared_image = image_input.convert("RGB")
+                if max(prepared_image.size) > self.max_input_dimension:
+                    prepared_image.thumbnail(
+                        (self.max_input_dimension, self.max_input_dimension),
+                        Image.Resampling.LANCZOS,
+                    )
+                rgb_image = np.asarray(prepared_image)
                 image_input = np.ascontiguousarray(rgb_image[:, :, ::-1])
 
-            results = self.reader.readtext(
-                image_input,
-                detail=1,
-                batch_size=self.recognition_batch_size,
-                canvas_size=self.canvas_size,
-                min_size=self.min_size,
-                text_threshold=self.text_threshold,
-                low_text=self.low_text,
-            )
+            # EasyOCR/PyTorch share mutable model state. Serializing inference
+            # avoids CPU contention and occasional stalls when item workers overlap.
+            with self._inference_lock:
+                results = self.reader.readtext(
+                    image_input,
+                    detail=1,
+                    batch_size=self.recognition_batch_size,
+                    canvas_size=self.canvas_size,
+                    min_size=self.min_size,
+                    text_threshold=self.text_threshold,
+                    low_text=self.low_text,
+                    workers=0,
+                )
             return [
                 text.strip()
                 for _, text, confidence in results

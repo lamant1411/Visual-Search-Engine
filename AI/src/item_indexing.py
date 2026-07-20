@@ -4,6 +4,7 @@ import io
 import mimetypes
 from pathlib import Path
 from threading import Lock
+from time import perf_counter
 from typing import Any, Optional
 import uuid
 
@@ -69,7 +70,7 @@ def prepare_items_for_queue(batch_id: str, items: list[dict[str, Any]]) -> list[
                     raise ValueError(f"Indexing item does not match batch/image: {item_id}")
                 if payload["storage_path"] != db_storage_path:
                     raise ValueError(f"storage_path does not match image record: {item_id}")
-                if status in {"running", "indexed"}:
+                if status in {"running", "indexed", "cancelled"}:
                     continue
 
                 cursor.execute(
@@ -191,6 +192,9 @@ def claim_indexing_item(queue_item: IndexQueueItem) -> Optional[dict[str, Any]]:
 
 def index_single_image_item(item: dict[str, Any], clip_model, ocr_model) -> None:
     """Read metadata, run CLIP/OCR, then persist exactly one uploaded image."""
+    item_label = f"item_id={item['item_id']} image_id={item['image_id']}"
+    total_started_at = perf_counter()
+    print(f"[Item pipeline] {item_label} stage=read started", flush=True)
     image_path = Path(item["image_path"])
     if not image_path.is_file():
         raise FileNotFoundError(f"Image file not found: {image_path}")
@@ -209,6 +213,8 @@ def index_single_image_item(item: dict[str, Any], clip_model, ocr_model) -> None
         or mimetypes.guess_type(image_path.name)[0]
         or "application/octet-stream"
     )
+    clip_started_at = perf_counter()
+    print(f"[Item pipeline] {item_label} stage=clip started", flush=True)
     vector = clip_model.embed_image(pil_image)
     if vector is None or len(vector) != EMBEDDING_DIM:
         actual_dim = 0 if vector is None else len(vector)
@@ -216,14 +222,26 @@ def index_single_image_item(item: dict[str, Any], clip_model, ocr_model) -> None
             f"Invalid CLIP embedding dimension: expected {EMBEDDING_DIM}, got {actual_dim}."
         )
 
+    clip_elapsed = perf_counter() - clip_started_at
+    ocr_started_at = perf_counter()
+    print(
+        f"[Item pipeline] {item_label} stage=ocr started clip={clip_elapsed:.2f}s",
+        flush=True,
+    )
     ocr_lines = ocr_model.extract_text(pil_image)
     ocr_text = " ".join(ocr_lines) if ocr_lines else ""
+    ocr_elapsed = perf_counter() - ocr_started_at
     point_id = str(
         uuid.uuid5(uuid.NAMESPACE_URL, f"{COLLECTION_NAME}:image:{item['image_id']}")
     )
     qdrant = _get_qdrant_client()
 
     try:
+        persist_started_at = perf_counter()
+        print(
+            f"[Item pipeline] {item_label} stage=persist started ocr={ocr_elapsed:.2f}s",
+            flush=True,
+        )
         qdrant.upsert(
             collection_name=COLLECTION_NAME,
             points=[
@@ -248,6 +266,13 @@ def index_single_image_item(item: dict[str, Any], clip_model, ocr_model) -> None
             height=height,
             checksum=checksum,
             ocr_text=ocr_text,
+        )
+        persist_elapsed = perf_counter() - persist_started_at
+        total_elapsed = perf_counter() - total_started_at
+        print(
+            f"[Item pipeline] {item_label} stage=completed total={total_elapsed:.2f}s "
+            f"clip={clip_elapsed:.2f}s ocr={ocr_elapsed:.2f}s persist={persist_elapsed:.2f}s",
+            flush=True,
         )
     except Exception:
         # Deterministic ID allows safe cleanup even when Qdrant response is ambiguous.
@@ -438,6 +463,7 @@ def _update_batch_progress(
         SET processed_images = LEAST(total_images, processed_images + %s),
             failed_images = LEAST(total_images, failed_images + %s),
             status = CASE
+                WHEN status = 'cancelled' THEN 'cancelled'
                 WHEN NOT is_uploading
                      AND processed_images + %s + failed_images + %s >= total_images
                 THEN 'completed'
