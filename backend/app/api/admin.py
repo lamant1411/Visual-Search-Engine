@@ -59,6 +59,9 @@ async def get_dashboard(
         )
     ).all()
 
+    for batch in latest_batches:
+        await _sync_batch_if_active(db, batch)
+
     return AdminDashboardResponse(
         total_images=total_images,
         indexed_images=indexed_images,
@@ -486,6 +489,27 @@ async def get_batch_status(
     )
 
 
+async def _sync_batch_if_active(db: AsyncSession, batch: IndexingBatch) -> None:
+    if batch.status in {BatchStatus.queued, BatchStatus.running}:
+        item_count = await _count_rows(
+            db,
+            select(func.count()).select_from(IndexingItem).where(IndexingItem.batch_id == batch.batch_id),
+        )
+        if item_count > 0:
+            await _sync_batch_counts(db, batch)
+        else:
+            try:
+                ai_status = await ai_indexing_client.get_indexing_status(batch.batch_id)
+                batch.status = ai_status.status
+                batch.total_images = ai_status.total_images
+                batch.processed_images = ai_status.processed_images
+                batch.failed_images = ai_status.failed_images
+                batch.error_message = ai_status.error_message
+                await db.commit()
+            except AIIndexingServiceError:
+                pass
+
+
 @router.get("/index/batches", response_model=AdminIndexBatchListResponse)
 async def list_batches(
     _: User = Depends(require_admin),
@@ -497,6 +521,10 @@ async def list_batches(
             select(IndexingBatch).order_by(IndexingBatch.created_at.desc()).limit(20)
         )
     ).all()
+    
+    for batch in items:
+        await _sync_batch_if_active(db, batch)
+
     return AdminIndexBatchListResponse(items=list(items))
 
 
