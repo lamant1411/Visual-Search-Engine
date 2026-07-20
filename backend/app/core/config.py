@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     ai_image_embedding_path: str = Field(default="/api/embed/image")
     ai_index_local_path: str = Field(default="/api/index/local")
     ai_index_status_path: str = Field(default="/api/index/status/{batch_id}")
+    ai_index_items_path: str = Field(default="/api/index/items")
     ai_service_timeout_seconds: float = Field(default=30.0)
     image_embedding_dim: int = Field(default=512)
     image_search_max_upload_mb: int = Field(default=10)

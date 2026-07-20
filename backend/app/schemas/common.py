@@ -21,6 +21,13 @@ class BatchStatus(str, Enum):
     failed = "failed"
 
 
+class IndexingItemStatus(str, Enum):
+    queued = "queued"
+    running = "running"
+    indexed = "indexed"
+    failed = "failed"
+
+
 class SearchQueryType(str, Enum):
     image = "image"
     semantic = "semantic"
