@@ -97,7 +97,9 @@ class AIIndexingClient:
                 f"AI indexing service returned status {exc.response.status_code}."
             ) from exc
         except httpx.RequestError as exc:
-            raise AIIndexingServiceError("AI indexing service is unavailable.") from exc
+            raise AIIndexingServiceError(
+                "Dịch vụ AI đang khởi động hoặc tải model. Vui lòng đợi AI service sẵn sàng rồi thử lại."
+            ) from exc
 
         try:
             return AIIndexStatusPayload.model_validate(response.json())
@@ -116,7 +118,9 @@ class AIIndexingClient:
                 f"AI indexing service returned status {exc.response.status_code}."
             ) from exc
         except httpx.RequestError as exc:
-            raise AIIndexingServiceError("AI indexing service is unavailable.") from exc
+            raise AIIndexingServiceError(
+                "Dịch vụ AI đang khởi động hoặc tải model. Vui lòng đợi AI service sẵn sàng rồi thử lại."
+            ) from exc
 
         try:
             return response.json()

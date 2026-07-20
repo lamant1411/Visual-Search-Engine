@@ -18,7 +18,7 @@ services:
       qdrant:
         condition: service_started
       ai_service:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
 
   ai_service:
@@ -29,14 +29,26 @@ services:
     volumes:
       - ./AI:/app
       - ./backend/static/images:/app/static/images
+      # Persist downloaded models so recreating the container does not warm up
+      # from an empty cache every time.
+      - ai_huggingface_cache:/root/.cache/huggingface
+      - ai_easyocr_cache:/root/.EasyOCR
     environment:
       - POSTGRES_HOST=postgres
       - QDRANT_URL=http://qdrant:6333
-      # EasyOCR/PyTorch already use CPU threads internally; too many item
-      # workers cause heavy contention on developer laptops.
-      - MAX_INDEX_WORKERS=1
+      # Throughput profile for a 6-core/12-thread development CPU: two workers
+      # share ten inference threads, leaving two threads for API/DB/Docker work.
+      - AI_CPU_THREADS=10
+      - MAX_INDEX_WORKERS=2
+      - TORCH_NUM_INTEROP_THREADS=1
       - OCR_MAX_INPUT_DIMENSION=1600
     command: uvicorn ai_service:app --host 0.0.0.0 --port 8001
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
     restart: unless-stopped
 
   frontend:
@@ -92,6 +104,8 @@ services:
     restart: unless-stopped
 
 volumes:
+  ai_huggingface_cache:
+  ai_easyocr_cache:
   frontend_node_modules:
   postgres_data:
   qdrant_data:

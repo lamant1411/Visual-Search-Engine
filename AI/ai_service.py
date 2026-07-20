@@ -1,6 +1,5 @@
 from contextlib import asynccontextmanager
 import io
-import os
 import queue
 import sys
 import uuid
@@ -15,6 +14,7 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
+from cpu_runtime import CPU_SETTINGS
 from src.clip_module import CLIPEmbedder
 from src.batch_indexing import LOCAL_STORAGE_PREFIX, VALID_IMAGE_EXTENSIONS, run_indexing_pipeline
 from src.item_indexing import (
@@ -33,7 +33,7 @@ clip_model = CLIPEmbedder()
 ocr_model = OCRExtractor()
 print("Cac mo hinh da san sang!")
 
-MAX_INDEX_WORKERS = max(1, int(os.getenv("MAX_INDEX_WORKERS", "5")))
+MAX_INDEX_WORKERS = CPU_SETTINGS.item_workers
 INDEX_ITEM_QUEUE: queue.Queue[Optional[IndexQueueItem]] = queue.Queue()
 INDEX_WORKER_STOP = Event()
 INDEX_WORKER_THREADS: list[Thread] = []
@@ -60,6 +60,12 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Visual Search - AI Service", lifespan=lifespan)
+
+
+@app.get("/health")
+def healthcheck() -> dict[str, str]:
+    """Readiness probe; this route exists only after both AI models are loaded."""
+    return {"status": "ready"}
 
 
 class LocalIndexRequest(BaseModel):
@@ -161,6 +167,16 @@ def _start_index_workers() -> None:
         )
         worker.start()
         INDEX_WORKER_THREADS.append(worker)
+    worker_note = ""
+    if CPU_SETTINGS.requested_item_workers != MAX_INDEX_WORKERS:
+        worker_note = f" (requested={CPU_SETTINGS.requested_item_workers}, capped by CPU budget)"
+    print(
+        "CPU indexing runtime: "
+        f"available={CPU_SETTINGS.available_cpus}, budget={CPU_SETTINGS.cpu_budget}, "
+        f"workers={MAX_INDEX_WORKERS}{worker_note}, "
+        f"torch_threads_per_worker={CPU_SETTINGS.torch_threads}, "
+        f"torch_interop_threads={CPU_SETTINGS.torch_interop_threads}."
+    )
     print(f"Da khoi dong {MAX_INDEX_WORKERS} item indexing workers.")
 
 

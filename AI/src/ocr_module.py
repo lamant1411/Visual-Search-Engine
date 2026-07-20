@@ -1,7 +1,11 @@
-import easyocr
 import os
 from threading import Lock
 
+import cpu_runtime
+
+cpu_runtime.apply_thread_environment(cpu_runtime.CPU_SETTINGS)
+
+import easyocr
 import numpy as np
 from PIL import Image
 

@@ -1,15 +1,22 @@
-import torch
-from PIL import Image
-from transformers import CLIPProcessor, CLIPModel
 import os
 import io
+
+from cpu_runtime import configure_torch_runtime
+
+import torch
 from deep_translator import GoogleTranslator
+from PIL import Image
+from transformers import CLIPProcessor, CLIPModel
+
+
+configure_torch_runtime(torch)
 
 class CLIPEmbedder:
     def __init__(self, model_id="openai/clip-vit-base-patch32"):
         print(f"Đang tải mô hình {model_id}...")
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = CLIPModel.from_pretrained(model_id).to(self.device)
+        self.model.eval()
         self.processor = CLIPProcessor.from_pretrained(model_id, use_fast=True)
         
         # Khởi tạo bộ dịch
@@ -46,7 +53,7 @@ class CLIPEmbedder:
             # Đưa ảnh vào mô hình để trích xuất đặc trưng
             inputs = self.processor(images=image, return_tensors="pt").to(self.device)
             
-            with torch.no_grad():
+            with torch.inference_mode():
                 image_features = self.model.get_image_features(**inputs)
                 
             return image_features.cpu().numpy().flatten().tolist()
@@ -70,7 +77,7 @@ class CLIPEmbedder:
             # 2. Đưa câu tiếng Anh vào mô hình CLIP gốc
             inputs = self.processor(text=[translated_query], return_tensors="pt", padding=True).to(self.device)
             
-            with torch.no_grad():
+            with torch.inference_mode():
                 text_features = self.model.get_text_features(**inputs)
                 
             return text_features.cpu().numpy().flatten().tolist()

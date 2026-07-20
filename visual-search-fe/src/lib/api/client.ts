@@ -25,6 +25,13 @@ apiClient.interceptors.response.use(
       window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT))
     }
 
+    if (axios.isAxiosError(error)) {
+      const apiMessage = error.response?.data?.detail?.message
+      if (typeof apiMessage === 'string' && apiMessage.trim()) {
+        error.message = apiMessage
+      }
+    }
+
     return Promise.reject(error)
   },
 )
