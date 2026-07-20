@@ -17,6 +17,8 @@ import {
 import { PageContainer } from '@/components/layout/PageContainer'
 import { adminApi, type IndexingBatch } from '@/lib/api/admin'
 
+const INDEXING_POLL_INTERVAL_MS = 2_000
+
 export default function AdminIndexingPage() {
   const [batches, setBatches] = useState<IndexingBatch[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -312,7 +314,7 @@ export default function AdminIndexingPage() {
 
     const intervalId = window.setInterval(() => {
       fetchStatus(false)
-    }, 5000)
+    }, INDEXING_POLL_INTERVAL_MS)
 
     pollingRef.current = intervalId
 

@@ -242,4 +242,3 @@ export const adminApi = {
     return { message: `Legacy stub index ${_urls.length} urls`, task_id: 'legacy' }
   },
 }
-

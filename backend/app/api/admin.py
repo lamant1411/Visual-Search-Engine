@@ -233,6 +233,7 @@ async def upload_images_to_batch(
         )
     except AIIndexingServiceError as exc:
         await _mark_uploaded_items_failed(db, [item.item_id for item in uploaded_items], str(exc))
+        await _sync_batch_counts(db, batch)
         raise api_error(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "AI_INDEXING_SERVICE_UNAVAILABLE",
@@ -497,6 +498,7 @@ async def list_batches(
             select(IndexingBatch).order_by(IndexingBatch.created_at.desc()).limit(20)
         )
     ).all()
+    await _sync_batch_counts_for_batches(db, list(items))
     return AdminIndexBatchListResponse(items=list(items))
 
 
@@ -573,35 +575,59 @@ async def _get_active_item_counts(db: AsyncSession, batch_id: str) -> tuple[int,
 
 
 async def _sync_batch_counts(db: AsyncSession, batch: IndexingBatch) -> None:
-    counts = (
+    await _sync_batch_counts_for_batches(db, [batch])
+
+
+async def _sync_batch_counts_for_batches(
+    db: AsyncSession,
+    batches: list[IndexingBatch],
+) -> None:
+    if not batches:
+        return
+
+    batch_ids = [batch.batch_id for batch in batches]
+    rows = (
         await db.execute(
             select(
+                IndexingItem.batch_id.label("batch_id"),
                 func.count(IndexingItem.id).label("total"),
                 func.sum(case((IndexingItem.status == IndexingItemStatus.indexed, 1), else_=0)).label("indexed"),
                 func.sum(case((IndexingItem.status == IndexingItemStatus.failed, 1), else_=0)).label("failed"),
                 func.sum(case((IndexingItem.status == IndexingItemStatus.queued, 1), else_=0)).label("queued"),
                 func.sum(case((IndexingItem.status == IndexingItemStatus.running, 1), else_=0)).label("running"),
-            ).where(IndexingItem.batch_id == batch.batch_id)
+            )
+            .where(IndexingItem.batch_id.in_(batch_ids))
+            .group_by(IndexingItem.batch_id)
         )
-    ).one()
+    ).all()
+    counts_by_batch_id = {row.batch_id: row for row in rows}
 
-    total = int(counts.total or 0)
-    indexed = int(counts.indexed or 0)
-    failed = int(counts.failed or 0)
-    queued = int(counts.queued or 0)
-    running = int(counts.running or 0)
+    has_item_batches = False
+    for batch in batches:
+        counts = counts_by_batch_id.get(batch.batch_id)
+        if counts is None:
+            # Legacy folder batches have no indexing_items and are synced from AI status.
+            continue
 
-    batch.total_images = total
-    batch.processed_images = indexed
-    batch.failed_images = failed
-    if total == 0:
-        batch.status = BatchStatus.running if batch.is_uploading else BatchStatus.queued
-    elif batch.is_uploading or queued > 0 or running > 0:
-        batch.status = BatchStatus.running
-    else:
-        batch.status = BatchStatus.completed
+        has_item_batches = True
+        total = int(counts.total or 0)
+        indexed = int(counts.indexed or 0)
+        failed = int(counts.failed or 0)
+        queued = int(counts.queued or 0)
+        running = int(counts.running or 0)
 
-    await db.commit()
+        batch.total_images = total
+        batch.processed_images = indexed
+        batch.failed_images = failed
+        if total == 0:
+            batch.status = BatchStatus.running if batch.is_uploading else BatchStatus.queued
+        elif batch.is_uploading or queued > 0 or running > 0:
+            batch.status = BatchStatus.running
+        else:
+            batch.status = BatchStatus.completed
+
+    if has_item_batches:
+        await db.commit()
 
 
 async def _mark_uploaded_items_failed(db: AsyncSession, item_ids: list[int], error_message: str) -> None:
