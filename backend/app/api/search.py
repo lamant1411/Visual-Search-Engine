@@ -11,7 +11,7 @@ from app.models.user import User
 from app.schemas.search import SearchResponse
 from app.services.ai_service import AIServiceError, ai_embedding_client
 from app.services.qdrant_service import QdrantSearchService
-from app.services.search import build_search_response_from_hits
+from app.services.search import build_search_response_from_hits, search_images_by_ocr_text
 
 router = APIRouter()
 
@@ -57,10 +57,8 @@ async def search_by_image(
             filename=file.filename or "image",
             content_type=file.content_type or "application/octet-stream",
         )
-        max_results = max(limit, settings.image_search_max_results)
+        max_results = max(page * limit, settings.image_search_max_results)
         all_hits = QdrantSearchService().search(vector, limit=max_results)
-        offset = (page - 1) * limit
-        hits = all_hits[offset : offset + limit]
     except AIServiceError as exc:
         raise api_error(
             status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -76,10 +74,9 @@ async def search_by_image(
 
     return await build_search_response_from_hits(
         db,
-        hits,
+        all_hits,
         page=page,
         limit=limit,
-        total=len(all_hits),
     )
 
 
@@ -105,10 +102,8 @@ async def search_by_text(
 
     try:
         vector = await ai_embedding_client.embed_text(query)
-        max_results = max(limit, settings.image_search_max_results)
+        max_results = max(page * limit, settings.image_search_max_results)
         all_hits = QdrantSearchService().search(vector, limit=max_results)
-        offset = (page - 1) * limit
-        hits = all_hits[offset : offset + limit]
     except AIServiceError as exc:
         raise api_error(
             status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -124,11 +119,37 @@ async def search_by_text(
 
     return await build_search_response_from_hits(
         db,
-        hits,
+        all_hits,
         page=page,
         limit=limit,
-        total=len(all_hits),
     )
+
+
+@router.get("/ocr", response_model=SearchResponse)
+async def search_by_ocr(
+    q: str = Query(..., min_length=1, max_length=500, description="Text cần tìm trong nội dung OCR của ảnh"),
+    page: int = Query(1, ge=1, description="Trang hiện tại"),
+    limit: int = Query(20, ge=1, le=100, description="Số kết quả mỗi trang"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> SearchResponse:
+    """Tìm ảnh có chứa text được nhận diện bằng OCR khớp với query.
+
+    Dùng PostgreSQL full-text search (plainto_tsquery) kết hợp ILIKE fallback.
+    Kết quả được sắp xếp theo độ liên quan (ts_rank) giảm dần.
+    """
+    del current_user
+
+    query = q.strip()
+    if not query:
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "VALIDATION_ERROR",
+            "Query không được để trống sau khi strip.",
+            {"field": "q"},
+        )
+
+    return await search_images_by_ocr_text(db, query, page=page, limit=limit)
 
 
 def _validate_pagination(page: int, limit: int) -> None:

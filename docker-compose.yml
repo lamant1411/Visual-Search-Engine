@@ -1,4 +1,4 @@
-﻿services:
+services:
   backend:
     build:
       context: ./backend
@@ -11,7 +11,7 @@
     env_file:
       - ./backend/.env
     environment:
-      - AI_SERVICE_URL=http://ai_service:8001 # BÃ¡o cho BE biáº¿t chá»— gá»i AI
+      - AI_SERVICE_URL=http://ai_service:8001 # Bao cho BE biet cho goi AI
     depends_on:
       postgres:
         condition: service_healthy

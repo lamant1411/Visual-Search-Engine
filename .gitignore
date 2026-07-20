@@ -18,3 +18,4 @@ backend/static/images/*.gif
 backend/static/images/*.bmp
 backend/static/images/*.tif
 backend/static/images/*.tiff
+backend/static/images/compressed_dataset/

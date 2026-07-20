@@ -10,8 +10,11 @@ export async function searchByText(params: TextSearchParams): Promise<SearchResp
     return createMockSearchResponse(params.page, params.limit)
   }
 
-  const response = await apiClient.get<SearchResponse>('/search/text', {
-    params,
+  const endpoint = params.mode === 'ocr' ? '/search/ocr' : '/search/text'
+  const { mode, ...apiParams } = params
+
+  const response = await apiClient.get<SearchResponse>(endpoint, {
+    params: apiParams,
   })
 
   return response.data
