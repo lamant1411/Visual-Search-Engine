@@ -4,7 +4,7 @@ import { clearTokens, getAccessToken } from '@/lib/auth/tokenStorage'
 
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
-  timeout: 10000,
+  timeout: 20000,
 })
 
 // Tự động đính kèm JWT vào mọi request

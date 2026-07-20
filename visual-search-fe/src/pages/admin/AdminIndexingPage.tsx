@@ -40,6 +40,10 @@ export default function AdminIndexingPage() {
   const [failedIndexCount, setFailedIndexCount] = useState(0)
   const [totalIndexCount, setTotalIndexCount] = useState(0)
 
+  // Progress error states
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [indexError, setIndexError] = useState<string | null>(null)
+
   // Hidden background indexing state
   const [failedImages, setFailedImages] = useState<{ id: string; url: string; filename: string; error_message?: string }[]>([])
   const [showFailedModal, setShowFailedModal] = useState(false)
@@ -127,8 +131,10 @@ export default function AdminIndexingPage() {
     setFailedIndexCount(0)
     setTotalIndexCount(filesToUpload.length)
 
+    let batchId = ''
+
+    // 1. Tải lên server hàng loạt (Batch Upload)
     try {
-      // 1. Tải lên server hàng loạt (Batch Upload)
       const uploadRes = await adminApi.uploadBatchImages(filesToUpload, (percent) => {
         setUploadProgress(percent)
         setUploadedCount(Math.round((percent / 100) * filesToUpload.length))
@@ -136,12 +142,33 @@ export default function AdminIndexingPage() {
 
       setIsUploading(false)
       setUploadSuccess(true)
+      batchId = uploadRes.batch_id
+    } catch (err: any) {
+      console.error('Lỗi khi tải ảnh lên server:', err)
+      setIsUploading(false)
+      
+      const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout')
+      const errorMsg = isTimeout
+        ? 'Tải ảnh lên quá thời gian (Timeout). Tuy nhiên, máy chủ có thể vẫn đang tiếp tục lưu và xử lý dữ liệu trong nền. Vui lòng kiểm tra lịch sử đợt tải ảnh bên dưới.'
+        : (err.message || 'Lỗi hệ thống xảy ra khi tải ảnh lên server.')
+      
+      setUploadError(errorMsg)
+      setIndexError('Chưa thể bắt đầu do tải ảnh lên server thất bại.')
+      setIsBackgroundIndexing(false)
+      setMessage({
+        text: errorMsg,
+        type: 'error'
+      })
+      fetchStatus(false)
+      return
+    }
 
-      // 2. Bắt đầu indexing trong nền trên Server
-      const batchId = uploadRes.batch_id
+    // 2. Kích hoạt và polling tiến trình index
+    try {
+      // Bắt đầu indexing trong nền trên Server
       await adminApi.startBatchIndexing(batchId)
 
-      // 3. Polling kiểm tra trạng thái background job
+      // Polling kiểm tra trạng thái background job
       const pollStatus = async () => {
         try {
           const statusRes = await adminApi.getBatchStatus(batchId)
@@ -173,6 +200,9 @@ export default function AdminIndexingPage() {
 
           if (statusRes.status === 'completed' || statusRes.status === 'failed') {
             setIsBackgroundIndexing(false)
+            if (statusRes.status === 'failed') {
+              setIndexError(statusRes.error_message || 'Đợt tối ưu hóa tìm kiếm bị thất bại trên server.')
+            }
 
             // Dừng polling cục bộ và khôi phục polling lịch sử chung
             if (pollingRef.current) {
@@ -184,7 +214,12 @@ export default function AdminIndexingPage() {
 
             fetchStatus(false)
 
-            if (statusRes.failed_images > 0) {
+            if (statusRes.status === 'failed') {
+              setMessage({
+                text: statusRes.error_message || 'Đợt tối ưu hóa tìm kiếm bị thất bại trên server.',
+                type: 'error'
+              })
+            } else if (statusRes.failed_images > 0) {
               setMessage({
                 text: `Tải lên hoàn tất! Phát hiện ${statusRes.failed_images} ảnh gặp sự cố tối ưu tìm kiếm (lỗi trích xuất vector).`,
                 type: 'info'
@@ -211,13 +246,14 @@ export default function AdminIndexingPage() {
       pollingRef.current = localInterval
 
     } catch (err: any) {
-      console.error('Lỗi khi tải hoặc tối ưu ảnh:', err)
-      setIsUploading(false)
+      console.error('Lỗi khi kích hoạt tối ưu ảnh:', err)
       setIsBackgroundIndexing(false)
+      setIndexError(err.message || 'Lỗi hệ thống xảy ra khi bắt đầu tối ưu ảnh.')
       setMessage({
-        text: err.message || 'Lỗi hệ thống xảy ra khi tải hoặc tối ưu ảnh.',
+        text: err.message || 'Lỗi hệ thống xảy ra khi bắt đầu tối ưu ảnh.',
         type: 'error'
       })
+      fetchStatus(false)
     }
   }
 
@@ -462,13 +498,18 @@ export default function AdminIndexingPage() {
           )}
 
           {/* DUAL PROGRESS BARS */}
-          {(isUploading || isBackgroundIndexing || uploadSuccess) && (
+          {(isUploading || isBackgroundIndexing || uploadSuccess || uploadError || indexError) && (
             <div className="space-y-4 p-4 border border-border bg-surface-1 rounded-xl">
               {/* 1. UPLOAD PROGRESS */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between text-xs font-semibold">
                   <span className="text-ink-secondary flex items-center gap-1.5">
-                    {isUploading ? (
+                    {uploadError ? (
+                      <>
+                        <XCircle className="h-4 w-4 text-red-500 shrink-0" />
+                        <span className="text-red-700">Tải ảnh thất bại: {uploadError}</span>
+                      </>
+                    ) : isUploading ? (
                       <>
                         <Loader2 className="h-3.5 w-3.5 animate-spin text-accent-600" />
                         Đang tải ảnh lên server: {uploadedCount} / {totalUploadCount} ảnh
@@ -480,11 +521,11 @@ export default function AdminIndexingPage() {
                       </>
                     )}
                   </span>
-                  <span className="text-ink-muted">{uploadProgress}%</span>
+                  <span className={`text-ink-muted ${uploadError ? 'text-red-500' : ''}`}>{uploadProgress}%</span>
                 </div>
                 <div className="w-full bg-surface-0 rounded-full h-2 border border-border overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all duration-300 ease-out ${isUploading ? 'bg-accent-600' : 'bg-emerald-600'}`}
+                    className={`h-full rounded-full transition-all duration-300 ease-out ${uploadError ? 'bg-red-500' : isUploading ? 'bg-accent-600' : 'bg-emerald-600'}`}
                     style={{ width: `${uploadProgress}%` }}
                   />
                 </div>
@@ -494,7 +535,12 @@ export default function AdminIndexingPage() {
               <div className="space-y-1.5 pt-3 border-t border-border/60">
                 <div className="flex items-center justify-between text-xs font-semibold">
                   <span className="text-ink-secondary flex items-center gap-1.5">
-                    {isBackgroundIndexing ? (
+                    {indexError ? (
+                      <>
+                        <XCircle className="h-4 w-4 text-red-500 shrink-0" />
+                        <span className="text-red-700">Tối ưu hóa thất bại: {indexError}</span>
+                      </>
+                    ) : isBackgroundIndexing ? (
                       <>
                         <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600" />
                         Đang tối ưu hóa tìm kiếm: {indexedCount + failedIndexCount} / {totalIndexCount} ảnh
@@ -506,11 +552,11 @@ export default function AdminIndexingPage() {
                       </>
                     )}
                   </span>
-                  <span className="text-ink-muted">{indexProgress}%</span>
+                  <span className={`text-ink-muted ${indexError ? 'text-red-500' : ''}`}>{indexProgress}%</span>
                 </div>
                 <div className="w-full bg-surface-0 rounded-full h-2 border border-border overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all duration-300 ease-out ${isBackgroundIndexing ? 'bg-amber-500 animate-pulse' : 'bg-emerald-600'}`}
+                    className={`h-full rounded-full transition-all duration-300 ease-out ${indexError ? 'bg-red-500' : isBackgroundIndexing ? 'bg-amber-500 animate-pulse' : 'bg-emerald-600'}`}
                     style={{ width: `${indexProgress}%` }}
                   />
                 </div>
