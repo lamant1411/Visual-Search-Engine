@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     # Chỉ dùng cho type hint, không import lúc chạy thật.
     from app.models.bookmark import Bookmark
     from app.models.image_embedding import ImageEmbedding
+    from app.models.indexing_item import IndexingItem
     from app.models.ocr_text import OCRText
     from app.models.user import User
 
@@ -52,3 +53,4 @@ class Image(Base):
     embedding: Mapped["ImageEmbedding | None"] = relationship(back_populates="image", uselist=False)
     ocr_text: Mapped["OCRText | None"] = relationship(back_populates="image", uselist=False)
     bookmarks: Mapped[list["Bookmark"]] = relationship(back_populates="image")
+    indexing_items: Mapped[list["IndexingItem"]] = relationship(back_populates="image")

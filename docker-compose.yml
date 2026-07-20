@@ -11,7 +11,7 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      - AI_SERVICE_URL=http://ai_service:8001 # Bao cho BE biet cho goi AI
+      - AI_SERVICE_URL=http://ai_service:8001 # Báo cho BE biết chỗ gọi AI
     depends_on:
       postgres:
         condition: service_healthy
@@ -32,6 +32,10 @@ services:
     environment:
       - POSTGRES_HOST=postgres
       - QDRANT_URL=http://qdrant:6333
+      # EasyOCR/PyTorch already use CPU threads internally; too many item
+      # workers cause heavy contention on developer laptops.
+      - MAX_INDEX_WORKERS=1
+      - OCR_MAX_INPUT_DIMENSION=1600
     command: uvicorn ai_service:app --host 0.0.0.0 --port 8001
     restart: unless-stopped
 
@@ -91,5 +95,3 @@ volumes:
   frontend_node_modules:
   postgres_data:
   qdrant_data:
-
-

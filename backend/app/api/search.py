@@ -7,7 +7,9 @@ from app.api.deps import get_current_user
 from app.core.config import settings
 from app.core.errors import api_error
 from app.db.session import get_db
+from app.models.search_history import SearchHistory
 from app.models.user import User
+from app.schemas.common import SearchQueryType
 from app.schemas.search import SearchResponse
 from app.services.ai_service import AIServiceError, ai_embedding_client
 from app.services.qdrant_service import QdrantSearchService
@@ -30,7 +32,6 @@ async def search_by_image(
     db: AsyncSession = Depends(get_db),
 ) -> SearchResponse:
     """Nhận ảnh từ frontend và trả kết quả tìm kiếm theo contract đã thống nhất."""
-    del current_user
     _validate_pagination(page, limit)
 
     if file is None and image_id is None and not image_url:
@@ -72,12 +73,21 @@ async def search_by_image(
             "Vector search service is unavailable.",
         ) from exc
 
-    return await build_search_response_from_hits(
+    response = await build_search_response_from_hits(
         db,
         all_hits,
         page=page,
         limit=limit,
     )
+    db.add(
+        SearchHistory(
+            user_id=current_user.id,
+            query_type=SearchQueryType.image,
+            query_value=file.filename or "uploaded_image",
+        )
+    )
+    await db.commit()
+    return response
 
 
 @router.get("/text", response_model=SearchResponse)

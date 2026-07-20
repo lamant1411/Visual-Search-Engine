@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from app.schemas.common import BatchStatus
+from app.schemas.common import BatchStatus, IndexingItemStatus, UserRole
 
 
 class IndexingBatchOut(BaseModel):
@@ -20,3 +20,106 @@ class IndexingBatchOut(BaseModel):
     error_message: str | None = None
     created_at: datetime
     updated_at: datetime | None = None
+
+
+class AdminDashboardResponse(BaseModel):
+    total_images: int
+    indexed_images: int
+    pending_images: int
+    failed_images: int
+    total_users: int
+    latest_batches: list[IndexingBatchOut]
+
+
+class AdminUserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: str
+    username: str
+    full_name: str
+    role: UserRole
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime | None = None
+    last_login_at: datetime | None = None
+
+
+class AdminUserListResponse(BaseModel):
+    items: list[AdminUserOut]
+    page: int
+    limit: int
+    total: int
+
+
+class AdminIndexUploadResponse(BaseModel):
+    batch_id: str
+    status: BatchStatus
+    total_images: int
+    uploaded_files: int
+
+
+class AdminIndexStartResponse(BaseModel):
+    batch_id: str
+    status: BatchStatus
+    total_images: int
+
+
+class AdminIndexStatusResponse(BaseModel):
+    batch_id: str
+    status: BatchStatus
+    total_images: int = 0
+    processed_images: int = 0
+    failed_images: int = 0
+    queued_images: int = 0
+    running_images: int = 0
+    is_uploading: bool = False
+    error_message: str | None = None
+
+
+class AdminBatchCreateResponse(BaseModel):
+    batch_id: str
+    status: BatchStatus
+    total_images: int = 0
+    processed_images: int = 0
+    failed_images: int = 0
+    is_uploading: bool = True
+
+
+class AdminBatchImageUploadResponse(BaseModel):
+    batch_id: str
+    uploaded_files: int
+    total_images: int
+    queued_items: int
+
+
+class AdminBatchCompleteUploadResponse(BaseModel):
+    batch_id: str
+    status: BatchStatus
+    total_images: int
+    is_uploading: bool = False
+
+
+class AdminIndexingItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    batch_id: str
+    image_id: int
+    status: IndexingItemStatus
+    retry_count: int
+    max_retries: int
+    error_message: str | None = None
+    created_at: datetime
+    updated_at: datetime | None = None
+
+
+class AdminIndexingItemListResponse(BaseModel):
+    items: list[AdminIndexingItemOut]
+    page: int
+    limit: int
+    total: int
+
+
+class AdminIndexBatchListResponse(BaseModel):
+    items: list[IndexingBatchOut]

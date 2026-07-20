@@ -1,4 +1,4 @@
-"""Dependencies dÃ¹ng chung cho cÃ¡c API (auth, db...)."""
+"""Dependencies dùng chung cho các API (auth, db...)."""
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -7,9 +7,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.errors import api_error
 from app.db.session import get_db
 from app.models.user import User
+from app.schemas.common import UserRole
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.api_v1_prefix}/auth/login")
 
@@ -17,7 +17,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.api_v1_prefix}/auth/lo
 async def get_current_user(
     token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)
 ) -> User:
-    """XÃ¡c thá»±c token JWT vÃ  tráº£ vá» User tÆ°Æ¡ng á»©ng."""
+    """Xác thực JWT và trả về user hiện tại."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -39,7 +39,16 @@ async def get_current_user(
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="TÃ i khoáº£n Ä‘Ã£ bá»‹ vÃ´ hiá»‡u hÃ³a",
+            detail="Tài khoản đã bị vô hiệu hóa",
         )
     return user
 
+
+async def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Chỉ cho phép tài khoản admin gọi API quản trị."""
+    if current_user.role != UserRole.admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin permission required",
+        )
+    return current_user

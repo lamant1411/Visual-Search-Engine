@@ -3,6 +3,7 @@ from PIL import Image
 from transformers import CLIPProcessor, CLIPModel
 import os
 import io
+from deep_translator import GoogleTranslator
 
 class CLIPEmbedder:
     def __init__(self, model_id="openai/clip-vit-base-patch32"):
@@ -10,6 +11,9 @@ class CLIPEmbedder:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = CLIPModel.from_pretrained(model_id).to(self.device)
         self.processor = CLIPProcessor.from_pretrained(model_id, use_fast=True)
+        
+        # Khởi tạo bộ dịch
+        self.translator = GoogleTranslator(source='auto', target='en')
         print(f"Tải mô hình thành công trên {self.device.upper()}!\n")
 
     def embed_image(self, image_input) -> list:
@@ -17,7 +21,7 @@ class CLIPEmbedder:
         Đọc ảnh từ đường dẫn, mảng bytes, hoặc đối tượng PIL Image và chuyển đổi thành vector 512 chiều.
         """
         try:
-            # 1. Xử lý nếu đầu vào là đường dẫn file (string)
+            # 1. Xử lý nếu đầu vào là đường dẫn file
             if isinstance(image_input, str):
                 if not os.path.exists(image_input):
                     raise FileNotFoundError(f"Không tìm thấy ảnh tại: {image_input}")
@@ -28,11 +32,11 @@ class CLIPEmbedder:
                 
                 image = Image.open(image_input).convert("RGB")
 
-            # 2. Xử lý nếu đầu vào là mảng bytes (tải trực tiếp từ web)
+            # 2. Xử lý nếu đầu vào là mảng bytes 
             elif isinstance(image_input, bytes):
                 image = Image.open(io.BytesIO(image_input)).convert("RGB")
 
-            # 3. Xử lý nếu đầu vào đã là một bức ảnh được mở sẵn (PIL Image)
+            # 3. Xử lý nếu đầu vào đã là một bức ảnh được mở sẵn
             elif isinstance(image_input, Image.Image):
                 image = image_input.convert("RGB")
                 
@@ -53,13 +57,18 @@ class CLIPEmbedder:
 
     def embed_text(self, query: str) -> list:
         """
-        Chuyển đổi văn bản tìm kiếm thành vector 512 chiều.
+        Dịch truy vấn và chuyển thành vector 512 chiều.
         """
         if not query or not query.strip():
             raise ValueError("Query tìm kiếm không được để trống.")
 
         try:
-            inputs = self.processor(text=[query], return_tensors="pt", padding=True).to(self.device)
+            # 1. Tiền xử lý: Dịch truy vấn sang tiếng Anh một cách tự động
+            translated_query = self.translator.translate(query)
+            print(f"[AI Service] Query gốc: '{query}' -> Đã dịch: '{translated_query}'")
+            
+            # 2. Đưa câu tiếng Anh vào mô hình CLIP gốc
+            inputs = self.processor(text=[translated_query], return_tensors="pt", padding=True).to(self.device)
             
             with torch.no_grad():
                 text_features = self.model.get_text_features(**inputs)

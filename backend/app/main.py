@@ -8,6 +8,8 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.router import api_router
 from app.core.config import settings
+from app.db.session import AsyncSessionLocal
+from app.services.seed import ensure_seed_admin
 
 app = FastAPI(
     title="Visual Search Engine API",
@@ -30,6 +32,13 @@ static_directory.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=static_directory), name="static")
 
 app.include_router(api_router, prefix="/api/v1")
+
+
+@app.on_event("startup")
+async def seed_default_admin() -> None:
+    """T?o admin m?c ??nh t? bi?n m?i tr??ng ?? test dashboard qu?n tr?."""
+    async with AsyncSessionLocal() as db:
+        await ensure_seed_admin(db)
 
 
 @app.exception_handler(HTTPException)

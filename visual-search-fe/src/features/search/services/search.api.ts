@@ -2,22 +2,26 @@ import { apiClient } from '@/lib/api/client'
 import { createMockSearchResponse } from '@/mocks/searchMockData'
 
 import type { ImageSearchParams, SearchResponse, TextSearchParams } from '../types'
+import { mapSearchResponse } from './search.mapper'
 
 const shouldUseMock = import.meta.env.VITE_ENABLE_MOCK !== 'false'
 
 export async function searchByText(params: TextSearchParams): Promise<SearchResponse> {
+  const page = params.page ?? 1
+  const limit = params.limit ?? 20
+
   if (shouldUseMock) {
-    return createMockSearchResponse(params.page, params.limit)
+    return createMockSearchResponse(page, limit)
   }
 
   const endpoint = params.mode === 'ocr' ? '/search/ocr' : '/search/text'
   const { mode, ...apiParams } = params
 
-  const response = await apiClient.get<SearchResponse>(endpoint, {
+  const response = await apiClient.get<unknown>(endpoint, {
     params: apiParams,
   })
 
-  return response.data
+  return mapSearchResponse(response.data, { page, limit })
 }
 
 export async function searchByImage({
@@ -51,7 +55,7 @@ export async function searchByImage({
   formData.append('page', String(page))
   formData.append('limit', String(limit))
 
-  const response = await apiClient.post<SearchResponse>('/search/image', formData)
+  const response = await apiClient.post<unknown>('/search/image', formData)
 
-  return response.data
+  return mapSearchResponse(response.data, { page, limit })
 }

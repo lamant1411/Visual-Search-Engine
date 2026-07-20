@@ -10,6 +10,7 @@ __pycache__/
 # Ignore AI Datasets and images
 AI/data/
 # Ignore local static image files
+backend/static/images/indexing/
 backend/static/images/*.jpg
 backend/static/images/*.jpeg
 backend/static/images/*.png
@@ -18,4 +19,4 @@ backend/static/images/*.gif
 backend/static/images/*.bmp
 backend/static/images/*.tif
 backend/static/images/*.tiff
-backend/static/images/compressed_dataset/
+backend/static/images/*

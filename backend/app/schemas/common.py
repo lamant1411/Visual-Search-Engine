@@ -19,6 +19,15 @@ class BatchStatus(str, Enum):
     running = "running"
     completed = "completed"
     failed = "failed"
+    cancelled = "cancelled"
+
+
+class IndexingItemStatus(str, Enum):
+    queued = "queued"
+    running = "running"
+    indexed = "indexed"
+    failed = "failed"
+    cancelled = "cancelled"
 
 
 class SearchQueryType(str, Enum):
