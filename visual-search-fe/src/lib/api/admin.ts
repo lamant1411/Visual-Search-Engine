@@ -260,15 +260,8 @@ export const adminApi = {
    * Lấy danh sách lịch sử các đợt Indexing
    */
   async getIndexingBatches(): Promise<IndexingBatch[]> {
-    try {
-      const response = await apiClient.get<IndexingBatch[]>('/admin/indexing/batches')
-      return response.data
-    } catch {
-      await delay(300)
-      // Kích hoạt cập nhật tiến độ (nếu có) trước khi trả về danh sách để hiển thị tiến độ đồng bộ
-      getStoredIndexingState()
-      return getStoredBatches()
-    }
+    const response = await apiClient.get<{ items: IndexingBatch[] }>('/admin/index/batches')
+    return response.data.items
   },
 
   /**
@@ -489,4 +482,3 @@ export const adminApi = {
     }
   },
 }
-

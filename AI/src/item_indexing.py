@@ -87,6 +87,17 @@ def prepare_items_for_queue(batch_id: str, items: list[dict[str, Any]]) -> list[
                     "UPDATE images SET status = 'pending', updated_at = NOW() WHERE id = %s;",
                     (db_image_id,),
                 )
+                if status == "failed":
+                    cursor.execute(
+                        """
+                        UPDATE indexing_batches
+                        SET failed_images = GREATEST(failed_images - 1, 0),
+                            status = 'running',
+                            updated_at = NOW()
+                        WHERE batch_id = %s;
+                        """,
+                        (batch_id,),
+                    )
                 queued_items.append(_queue_item_from_payload(batch_id, payload))
         conn.commit()
         return queued_items
@@ -252,7 +263,7 @@ def handle_index_failure(item_id: int, error: Exception) -> Optional[int]:
         with conn.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT image_id, retry_count, max_retries
+                SELECT image_id, retry_count, max_retries, batch_id, status
                 FROM indexing_items
                 WHERE id = %s
                 FOR UPDATE;
@@ -264,7 +275,11 @@ def handle_index_failure(item_id: int, error: Exception) -> Optional[int]:
                 conn.rollback()
                 return None
 
-            image_id, retry_count, max_retries = row
+            image_id, retry_count, max_retries, batch_id, item_status = row
+            if item_status != "running":
+                conn.rollback()
+                return None
+
             if retry_count < max_retries:
                 next_retry = retry_count + 1
                 cursor.execute(
@@ -287,14 +302,17 @@ def handle_index_failure(item_id: int, error: Exception) -> Optional[int]:
                 """
                 UPDATE indexing_items
                 SET status = 'failed', error_message = %s, updated_at = NOW()
-                WHERE id = %s;
+                WHERE id = %s AND status = 'running';
                 """,
                 (error_message, item_id),
             )
+            if cursor.rowcount != 1:
+                raise RuntimeError(f"Indexing item is no longer running: {item_id}")
             cursor.execute(
                 "UPDATE images SET status = 'failed', updated_at = NOW() WHERE id = %s;",
                 (image_id,),
             )
+            _update_batch_progress(cursor, batch_id, failed_increment=1)
         conn.commit()
         return None
     except Exception:
@@ -397,12 +415,47 @@ def _persist_index_success(
             )
             if cursor.rowcount != 1:
                 raise RuntimeError(f"Indexing item is no longer running: {item['item_id']}")
+            _update_batch_progress(cursor, item["batch_id"], processed_increment=1)
         conn.commit()
     except Exception:
         conn.rollback()
         raise
     finally:
         conn.close()
+
+
+def _update_batch_progress(
+    cursor,
+    batch_id: str,
+    *,
+    processed_increment: int = 0,
+    failed_increment: int = 0,
+) -> None:
+    """Atomically update durable batch progress after one item reaches a terminal state."""
+    cursor.execute(
+        """
+        UPDATE indexing_batches
+        SET processed_images = LEAST(total_images, processed_images + %s),
+            failed_images = LEAST(total_images, failed_images + %s),
+            status = CASE
+                WHEN NOT is_uploading
+                     AND processed_images + %s + failed_images + %s >= total_images
+                THEN 'completed'
+                ELSE 'running'
+            END,
+            updated_at = NOW()
+        WHERE batch_id = %s;
+        """,
+        (
+            processed_increment,
+            failed_increment,
+            processed_increment,
+            failed_increment,
+            batch_id,
+        ),
+    )
+    if cursor.rowcount != 1:
+        raise RuntimeError(f"Indexing batch not found: {batch_id}")
 
 
 def _queue_item_from_payload(batch_id: str, payload: dict[str, Any]) -> IndexQueueItem:
