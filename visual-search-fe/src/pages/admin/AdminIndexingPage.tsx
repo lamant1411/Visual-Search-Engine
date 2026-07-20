@@ -619,18 +619,30 @@ export default function AdminIndexingPage() {
                   <tr key={b.id} className="text-ink-secondary hover:bg-surface-1/5 transition-colors">
                     <td className="px-6 py-4 font-mono font-medium text-ink-primary">{b.batch_id}</td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-3xs font-semibold ${b.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                        b.status === 'running' ? 'bg-amber-50 text-amber-700 border border-amber-200 animate-pulse' :
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-3xs font-semibold ${b.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                        b.status === 'running' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
                           b.status === 'queued' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
                             'bg-red-50 text-red-700 border border-red-200'
                         }`}>
+                        {(b.status === 'running' || b.status === 'queued') && (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        )}
                         {b.status === 'queued' ? 'ĐANG CHỜ' :
                           b.status === 'running' ? 'ĐANG CHẠY' :
                             b.status === 'completed' ? 'HOÀN THÀNH' : 'THẤT BẠI'}
                       </span>
                     </td>
                     <td className="px-6 py-4 font-bold text-ink-primary">{b.total_images}</td>
-                    <td className="px-6 py-4 text-emerald-600 font-bold">{b.processed_images}</td>
+                    <td className="px-6 py-4">
+                      {b.status === 'queued' || b.status === 'running' ? (
+                        <div className="flex items-center gap-1 font-bold text-amber-600">
+                          <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                          <span>{b.processed_images}/{b.total_images}</span>
+                        </div>
+                      ) : (
+                        <span className="text-emerald-600 font-bold">{b.processed_images}</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-red-600 font-bold">{b.failed_images}</td>
                     <td className="px-6 py-4 text-ink-muted">
                       {new Date(b.created_at).toLocaleString('vi-VN')}
