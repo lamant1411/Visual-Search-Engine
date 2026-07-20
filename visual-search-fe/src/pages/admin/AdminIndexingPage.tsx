@@ -17,6 +17,8 @@ import {
 import { PageContainer } from '@/components/layout/PageContainer'
 import { adminApi, type IndexingBatch } from '@/lib/api/admin'
 
+const INDEXING_POLL_INTERVAL_MS = 2_000
+
 export default function AdminIndexingPage() {
   const [batches, setBatches] = useState<IndexingBatch[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -39,6 +41,12 @@ export default function AdminIndexingPage() {
   const [indexedCount, setIndexedCount] = useState(0)
   const [failedIndexCount, setFailedIndexCount] = useState(0)
   const [totalIndexCount, setTotalIndexCount] = useState(0)
+  const [queuedIndexCount, setQueuedIndexCount] = useState(0)
+  const [runningIndexCount, setRunningIndexCount] = useState(0)
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [stalledSeconds, setStalledSeconds] = useState(0)
+  const [activeBatchId, setActiveBatchId] = useState<string | null>(null)
+  const [activeBatchStatus, setActiveBatchStatus] = useState<IndexingBatch['status'] | null>(null)
 
   // Progress error states
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -51,6 +59,9 @@ export default function AdminIndexingPage() {
 
   const pollingRef = useRef<number | null>(null)
   const uploadedFilesRef = useRef<{ name: string; url: string }[]>([])
+  const operationStartedAtRef = useRef<number | null>(null)
+  const lastProgressAtRef = useRef<number | null>(null)
+  const lastFinishedCountRef = useRef(0)
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes'
@@ -59,6 +70,33 @@ export default function AdminIndexingPage() {
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
+
+  const formatElapsedTime = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor(seconds / 60)
+    const remainingSeconds = seconds % 60
+    return hours > 0
+      ? `${hours}h ${(minutes % 60).toString().padStart(2, '0')}m`
+      : minutes > 0
+      ? `${minutes}m ${remainingSeconds.toString().padStart(2, '0')}s`
+      : `${remainingSeconds}s`
+  }
+
+  useEffect(() => {
+    if (!isUploading && !isBackgroundIndexing) return
+
+    const updateRuntimeMetrics = () => {
+      if (operationStartedAtRef.current) {
+        setElapsedSeconds(Math.floor((Date.now() - operationStartedAtRef.current) / 1000))
+      }
+      if (isBackgroundIndexing && lastProgressAtRef.current) {
+        setStalledSeconds(Math.floor((Date.now() - lastProgressAtRef.current) / 1000))
+      }
+    }
+    updateRuntimeMetrics()
+    const timer = window.setInterval(updateRuntimeMetrics, 1_000)
+    return () => window.clearInterval(timer)
+  }, [isUploading, isBackgroundIndexing])
 
   // --- Drag & Drop Handlers ---
   const handleDragOver = (e: React.DragEvent) => {
@@ -122,6 +160,8 @@ export default function AdminIndexingPage() {
     setUploadedCount(0)
     setTotalUploadCount(filesToUpload.length)
     setUploadSuccess(false)
+    setUploadError(null)
+    setIndexError(null)
     setMessage(null)
     setFailedImages([])
 
@@ -130,60 +170,49 @@ export default function AdminIndexingPage() {
     setIndexedCount(0)
     setFailedIndexCount(0)
     setTotalIndexCount(filesToUpload.length)
+    setQueuedIndexCount(0)
+    setRunningIndexCount(0)
+    setElapsedSeconds(0)
+    setStalledSeconds(0)
+    setActiveBatchId(null)
+    setActiveBatchStatus('queued')
+    operationStartedAtRef.current = Date.now()
+    lastProgressAtRef.current = Date.now()
+    lastFinishedCountRef.current = 0
 
-    let batchId = ''
+    let batchId: string | null = null
+    let uploadCompleted = false
 
-    // 1. Tải lên server hàng loạt (Batch Upload)
     try {
-      const uploadRes = await adminApi.uploadBatchImages(filesToUpload, (percent) => {
-        setUploadProgress(percent)
-        setUploadedCount(Math.round((percent / 100) * filesToUpload.length))
-      })
+      // Upload theo chunk; mỗi chunk được AI queue ngay, không phải chờ toàn bộ ảnh tải xong.
+      const batch = await adminApi.createIndexingBatch()
+      const createdBatchId = batch.batch_id
+      batchId = createdBatchId
+      setActiveBatchId(createdBatchId)
+      setActiveBatchStatus(batch.status)
+      const chunkSize = 10
 
-      setIsUploading(false)
-      setUploadSuccess(true)
-      batchId = uploadRes.batch_id
-    } catch (err: any) {
-      console.error('Lỗi khi tải ảnh lên server:', err)
-      setIsUploading(false)
-      
-      const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout')
-      const errorMsg = isTimeout
-        ? 'Tải ảnh lên quá thời gian (Timeout). Tuy nhiên, máy chủ có thể vẫn đang tiếp tục lưu và xử lý dữ liệu trong nền. Vui lòng kiểm tra lịch sử đợt tải ảnh bên dưới.'
-        : (err.message || 'Lỗi hệ thống xảy ra khi tải ảnh lên server.')
-      
-      setUploadError(errorMsg)
-      setIndexError('Chưa thể bắt đầu do tải ảnh lên server thất bại.')
-      setIsBackgroundIndexing(false)
-      setMessage({
-        text: errorMsg,
-        type: 'error'
-      })
-      fetchStatus(false)
-      return
-    }
-
-    // 2. Kích hoạt và polling tiến trình index
-    try {
-      // Bắt đầu indexing trong nền trên Server
-      await adminApi.startBatchIndexing(batchId)
-
-      // Polling kiểm tra trạng thái background job
       const pollStatus = async () => {
         try {
-          const statusRes = await adminApi.getBatchStatus(batchId)
+          const statusRes = await adminApi.getBatchStatus(createdBatchId)
 
-          setTotalIndexCount(statusRes.total_images)
-          const successCount = statusRes.processed_images - statusRes.failed_images
-          setIndexedCount(Math.max(0, successCount))
+          setTotalIndexCount(Math.max(statusRes.total_images, filesToUpload.length))
+          setIndexedCount(statusRes.processed_images)
           setFailedIndexCount(statusRes.failed_images)
+          setQueuedIndexCount(statusRes.queued_images)
+          setRunningIndexCount(statusRes.running_images)
+          setActiveBatchStatus(statusRes.status)
 
-          const total = statusRes.total_images
-          const processed = statusRes.processed_images
-          const pct = total > 0 ? Math.round((processed / total) * 100) : 0
+          const total = Math.max(statusRes.total_images, filesToUpload.length)
+          const finished = statusRes.processed_images + statusRes.failed_images
+          if (finished > lastFinishedCountRef.current) {
+            lastFinishedCountRef.current = finished
+            lastProgressAtRef.current = Date.now()
+            setStalledSeconds(0)
+          }
+          const pct = total > 0 ? Math.round((finished / total) * 100) : 0
           setIndexProgress(pct)
 
-          // Cập nhật danh sách ảnh lỗi nếu có
           if (statusRes.failed_images > 0) {
             const list: typeof failedImages = []
             for (let i = 0; i < statusRes.failed_images; i++) {
@@ -198,13 +227,21 @@ export default function AdminIndexingPage() {
             setFailedImages(list)
           }
 
-          if (statusRes.status === 'completed' || statusRes.status === 'failed') {
+          if (
+            statusRes.status === 'completed' ||
+            statusRes.status === 'failed' ||
+            statusRes.status === 'cancelled'
+          ) {
+            if (operationStartedAtRef.current) {
+              setElapsedSeconds(Math.floor((Date.now() - operationStartedAtRef.current) / 1000))
+            }
             setIsBackgroundIndexing(false)
+            setStalledSeconds(0)
             if (statusRes.status === 'failed') {
-              setIndexError(statusRes.error_message || 'Đợt tối ưu hóa tìm kiếm bị thất bại trên server.')
+              const errorMessage = statusRes.error_message || 'Đợt tối ưu hóa tìm kiếm bị thất bại trên server.'
+              setIndexError(errorMessage)
             }
 
-            // Dừng polling cục bộ và khôi phục polling lịch sử chung
             if (pollingRef.current) {
               clearInterval(pollingRef.current)
               pollingRef.current = window.setInterval(() => {
@@ -219,6 +256,8 @@ export default function AdminIndexingPage() {
                 text: statusRes.error_message || 'Đợt tối ưu hóa tìm kiếm bị thất bại trên server.',
                 type: 'error'
               })
+            } else if (statusRes.status === 'cancelled') {
+              setMessage({ text: 'Đợt xử lý đã được dừng.', type: 'info' })
             } else if (statusRes.failed_images > 0) {
               setMessage({
                 text: `Tải lên hoàn tất! Phát hiện ${statusRes.failed_images} ảnh gặp sự cố tối ưu tìm kiếm (lỗi trích xuất vector).`,
@@ -236,21 +275,54 @@ export default function AdminIndexingPage() {
         }
       }
 
-      // Tạm dừng polling lịch sử chung để dồn tài nguyên polling tiến trình hiện tại
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current)
+      // Theo dõi ngay từ chunk đầu tiên để thấy upload và AI xử lý song song.
+      if (pollingRef.current) clearInterval(pollingRef.current)
+      pollingRef.current = window.setInterval(pollStatus, 2000)
+
+      for (let offset = 0; offset < filesToUpload.length; offset += chunkSize) {
+        const chunk = filesToUpload.slice(offset, offset + chunkSize)
+        await adminApi.uploadImagesToBatch(createdBatchId, chunk, (chunkPercent) => {
+          const completedFiles = offset
+          const currentChunkFiles = (chunkPercent / 100) * chunk.length
+          const uploadedFiles = Math.min(filesToUpload.length, completedFiles + currentChunkFiles)
+          setUploadedCount(Math.round(uploadedFiles))
+          setUploadProgress(Math.round((uploadedFiles / filesToUpload.length) * 100))
+        })
+        setUploadedCount(Math.min(filesToUpload.length, offset + chunk.length))
       }
 
-      // Polling mỗi 2 giây
-      const localInterval = window.setInterval(pollStatus, 2000)
-      pollingRef.current = localInterval
+      await adminApi.completeIndexingBatch(createdBatchId)
+      uploadCompleted = true
+      setUploadProgress(100)
+      setUploadedCount(filesToUpload.length)
+      setIsUploading(false)
+      setUploadSuccess(true)
+      await pollStatus()
 
     } catch (err: any) {
-      console.error('Lỗi khi kích hoạt tối ưu ảnh:', err)
+      if (batchId) {
+        try {
+          await adminApi.completeIndexingBatch(batchId)
+        } catch (completeErr) {
+          console.error('Không thể đóng batch upload sau lỗi:', completeErr)
+        }
+      }
+      console.error('Lỗi khi tải hoặc tối ưu ảnh:', err)
+      setIsUploading(false)
       setIsBackgroundIndexing(false)
-      setIndexError(err.message || 'Lỗi hệ thống xảy ra khi bắt đầu tối ưu ảnh.')
+      setActiveBatchStatus('failed')
+      const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout')
+      const errorMessage = isTimeout
+        ? 'Tải ảnh lên quá thời gian. Server có thể vẫn đang xử lý các ảnh đã nhận; hãy kiểm tra lịch sử batch.'
+        : (err.message || 'Lỗi hệ thống xảy ra khi tải hoặc tối ưu ảnh.')
+      if (uploadCompleted) {
+        setIndexError(errorMessage)
+      } else {
+        setUploadError(errorMessage)
+        setIndexError('Không thể hoàn tất batch do quá trình tải ảnh bị gián đoạn.')
+      }
       setMessage({
-        text: err.message || 'Lỗi hệ thống xảy ra khi bắt đầu tối ưu ảnh.',
+        text: errorMessage,
         type: 'error'
       })
       fetchStatus(false)
@@ -330,6 +402,54 @@ export default function AdminIndexingPage() {
     setIsActionInProgress(false)
   }
 
+  const handleCancelBatch = async (batchId: string) => {
+    if (!confirm('Dừng đợt xử lý này? Các ảnh còn đang chờ sẽ không được index.')) return
+
+    setIsActionInProgress(true)
+    try {
+      const cancelledBatch = await adminApi.cancelIndexingBatch(batchId)
+      if (activeBatchId === batchId) {
+        setActiveBatchStatus(cancelledBatch.status)
+        setQueuedIndexCount(cancelledBatch.queued_images)
+        setRunningIndexCount(cancelledBatch.running_images)
+        setIsBackgroundIndexing(false)
+        setStalledSeconds(0)
+      }
+      setMessage({ text: `Đã dừng batch ${batchId}.`, type: 'info' })
+      await fetchStatus(false)
+    } catch (err: any) {
+      setMessage({ text: err.message || 'Không thể dừng batch.', type: 'error' })
+    } finally {
+      setIsActionInProgress(false)
+    }
+  }
+
+  const handleStartNewBatch = () => {
+    uploadedFilesRef.current.forEach((file) => URL.revokeObjectURL(file.url))
+    uploadedFilesRef.current = []
+    setSelectedFiles([])
+    setUploadSuccess(false)
+    setUploadProgress(0)
+    setUploadedCount(0)
+    setTotalUploadCount(0)
+    setIndexProgress(0)
+    setIndexedCount(0)
+    setFailedIndexCount(0)
+    setTotalIndexCount(0)
+    setQueuedIndexCount(0)
+    setRunningIndexCount(0)
+    setElapsedSeconds(0)
+    setStalledSeconds(0)
+    setActiveBatchId(null)
+    setActiveBatchStatus(null)
+    setUploadError(null)
+    setIndexError(null)
+    setMessage(null)
+    operationStartedAtRef.current = null
+    lastProgressAtRef.current = null
+    lastFinishedCountRef.current = 0
+  }
+
   // --- Load Status & Batches ---
   const fetchStatus = async (showLoadingIndicator = false) => {
     if (showLoadingIndicator) setIsLoading(true)
@@ -348,7 +468,7 @@ export default function AdminIndexingPage() {
 
     const intervalId = window.setInterval(() => {
       fetchStatus(false)
-    }, 5000)
+    }, INDEXING_POLL_INTERVAL_MS)
 
     pollingRef.current = intervalId
 
@@ -358,6 +478,38 @@ export default function AdminIndexingPage() {
       }
     }
   }, [])
+
+  const finishedIndexCount = indexedCount + failedIndexCount
+  const remainingIndexCount = Math.max(totalIndexCount - finishedIndexCount, 0)
+  const indexRatePerMinute = elapsedSeconds > 0
+    ? (finishedIndexCount / elapsedSeconds) * 60
+    : 0
+  const estimatedRemainingSeconds = finishedIndexCount > 0 && remainingIndexCount > 0
+    ? Math.ceil(remainingIndexCount / (finishedIndexCount / Math.max(elapsedSeconds, 1)))
+    : remainingIndexCount === 0 ? 0 : null
+
+  const showUploader = !isUploading && !isBackgroundIndexing && !uploadSuccess
+  const isStalled = isBackgroundIndexing && stalledSeconds >= 60
+  const didIndexingComplete = activeBatchStatus === 'completed'
+  const didIndexingFail = activeBatchStatus === 'failed'
+  const wasIndexingCancelled = activeBatchStatus === 'cancelled'
+  const displayedRemainingSeconds = isBackgroundIndexing
+    ? estimatedRemainingSeconds
+    : didIndexingComplete ? 0 : null
+
+  const currentStage = (() => {
+    if (wasIndexingCancelled) return 'Đợt xử lý đã được dừng'
+    if (didIndexingFail) return 'Đợt xử lý kết thúc do lỗi'
+    if (didIndexingComplete) return 'Đã hoàn tất upload và indexing'
+    if (isUploading && runningIndexCount > 0) return 'Đang tải ảnh và xử lý AI song song'
+    if (isUploading) return 'Đang tải ảnh lên server'
+    if (isBackgroundIndexing && runningIndexCount > 0) {
+      return 'AI đang tạo vector CLIP, đọc OCR và lưu dữ liệu'
+    }
+    if (isBackgroundIndexing && queuedIndexCount > 0) return 'Đang chờ AI worker nhận ảnh'
+    if (isBackgroundIndexing) return 'Đang đồng bộ trạng thái xử lý'
+    return 'Sẵn sàng'
+  })()
 
   return (
     <PageContainer size="default" className="py-8 space-y-6">
@@ -420,81 +572,82 @@ export default function AdminIndexingPage() {
         <div className="space-y-4">
           <div>
             <h2 className="text-sm font-bold text-ink-primary uppercase tracking-wide">
-              Chọn tệp ảnh nguồn
+              {showUploader ? 'Chọn tệp ảnh nguồn' : 'Tiến trình tải và xử lý ảnh'}
             </h2>
             <p className="text-xs text-ink-muted mt-1 leading-relaxed">
-              Kéo thả hoặc duyệt ảnh từ thiết bị của bạn. Hệ thống sẽ tự động cấu hình vector tìm kiếm trong nền.
+              {showUploader
+                ? 'Kéo thả hoặc duyệt ảnh từ thiết bị của bạn. Hệ thống sẽ tự động cấu hình vector tìm kiếm trong nền.'
+                : 'Theo dõi tiến độ upload, hàng đợi AI và kết quả indexing của batch hiện tại.'}
             </p>
           </div>
 
-          {/* Drag & Drop Zone */}
-          <div
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onClick={() => {
-              if (!isUploading && !isBackgroundIndexing) {
-                document.getElementById('file-upload-input')?.click()
-              }
-            }}
-            className={`flex flex-col items-center justify-center border border-dashed rounded-lg p-8 text-center cursor-pointer transition-all duration-200 ${isDragging
-              ? 'border-accent-600 bg-surface-1/60'
-              : 'border-border hover:border-accent-600 hover:bg-surface-1/40'
-              } ${(isUploading || isBackgroundIndexing) ? 'opacity-50 pointer-events-none' : ''}`}
-          >
-            <input
-              id="file-upload-input"
-              type="file"
-              multiple
-              accept="image/jpeg,image/png,image/webp"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-            <Upload className="h-10 w-10 text-ink-muted mb-3 animate-bounce" style={{ animationDuration: '3s' }} />
-            <p className="text-sm font-bold text-ink-primary">Kéo & thả ảnh vào đây</p>
-            <p className="text-xs text-ink-muted mt-1">hoặc nhấn để duyệt tệp tin từ máy</p>
-          </div>
-
-          {/* Files preview list */}
-          {selectedFiles.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-ink-secondary">
-                  Đã chọn {selectedFiles.length} ảnh
-                </span>
-                <button
-                  type="button"
-                  onClick={clearAllFiles}
-                  className="text-red-500 hover:text-red-700 font-semibold cursor-pointer"
-                >
-                  Xóa tất cả
-                </button>
+          {showUploader && (
+            <>
+              {/* Drag & Drop Zone */}
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => document.getElementById('file-upload-input')?.click()}
+                className={`flex flex-col items-center justify-center border border-dashed rounded-lg p-8 text-center cursor-pointer transition-all duration-200 ${isDragging
+                  ? 'border-accent-600 bg-surface-1/60'
+                  : 'border-border hover:border-accent-600 hover:bg-surface-1/40'
+                  }`}
+              >
+                <input
+                  id="file-upload-input"
+                  type="file"
+                  multiple
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <Upload className="h-10 w-10 text-ink-muted mb-3 animate-bounce" style={{ animationDuration: '3s' }} />
+                <p className="text-sm font-bold text-ink-primary">Kéo & thả ảnh vào đây</p>
+                <p className="text-xs text-ink-muted mt-1">hoặc nhấn để duyệt tệp tin từ máy</p>
               </div>
 
-              <div className="max-h-56 overflow-y-auto border border-border rounded-lg bg-surface-1/40 divide-y divide-border/60">
-                {selectedFiles.map((file, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 text-xs text-ink-secondary">
-                    <span className="truncate max-w-[280px] font-mono text-ink-primary" title={file.name}>
-                      {file.name}
+              {/* Files preview list */}
+              {selectedFiles.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-ink-secondary">
+                      Đã chọn {selectedFiles.length} ảnh
                     </span>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-ink-muted">{formatFileSize(file.size)}</span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          removeFile(index)
-                        }}
-                        disabled={isUploading}
-                        className="text-ink-muted hover:text-red-500 cursor-pointer disabled:opacity-50"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={clearAllFiles}
+                      className="text-red-500 hover:text-red-700 font-semibold cursor-pointer"
+                    >
+                      Xóa tất cả
+                    </button>
                   </div>
-                ))}
-              </div>
-            </div>
+
+                  <div className="max-h-56 overflow-y-auto border border-border rounded-lg bg-surface-1/40 divide-y divide-border/60">
+                    {selectedFiles.map((file, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 text-xs text-ink-secondary">
+                        <span className="truncate max-w-[280px] font-mono text-ink-primary" title={file.name}>
+                          {file.name}
+                        </span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-ink-muted">{formatFileSize(file.size)}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              removeFile(index)
+                            }}
+                            className="text-ink-muted hover:text-red-500 cursor-pointer"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* DUAL PROGRESS BARS */}
@@ -545,10 +698,20 @@ export default function AdminIndexingPage() {
                         <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600" />
                         Đang tối ưu hóa tìm kiếm: {indexedCount + failedIndexCount} / {totalIndexCount} ảnh
                       </>
-                    ) : (
+                    ) : didIndexingComplete ? (
                       <>
                         <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                         <span className="text-emerald-700">Tối ưu hóa tìm kiếm hoàn tất!</span>
+                      </>
+                    ) : wasIndexingCancelled ? (
+                      <>
+                        <XCircle className="h-4 w-4 text-amber-600" />
+                        <span className="text-amber-700">Đã dừng xử lý batch</span>
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="h-4 w-4 text-red-600" />
+                        <span className="text-red-700">Xử lý kết thúc do lỗi</span>
                       </>
                     )}
                   </span>
@@ -556,7 +719,16 @@ export default function AdminIndexingPage() {
                 </div>
                 <div className="w-full bg-surface-0 rounded-full h-2 border border-border overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all duration-300 ease-out ${indexError ? 'bg-red-500' : isBackgroundIndexing ? 'bg-amber-500 animate-pulse' : 'bg-emerald-600'}`}
+                    className={`h-full rounded-full transition-all duration-300 ease-out ${indexError
+                      ? 'bg-red-500'
+                      : isBackgroundIndexing
+                      ? 'bg-amber-500 animate-pulse'
+                      : didIndexingComplete
+                        ? 'bg-emerald-600'
+                        : wasIndexingCancelled
+                          ? 'bg-amber-600'
+                          : 'bg-red-600'
+                      }`}
                     style={{ width: `${indexProgress}%` }}
                   />
                 </div>
@@ -582,34 +754,125 @@ export default function AdminIndexingPage() {
                   )}
                 </div>
               </div>
+
+              <div className="space-y-3 pt-3 border-t border-border/60">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 items-center gap-2 text-xs text-ink-secondary">
+                    {isUploading || isBackgroundIndexing ? (
+                      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-accent-600" />
+                    ) : didIndexingComplete ? (
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                    ) : (
+                      <XCircle className={`h-3.5 w-3.5 shrink-0 ${wasIndexingCancelled ? 'text-amber-600' : 'text-red-600'}`} />
+                    )}
+                    <span className="font-semibold">{currentStage}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {activeBatchId && (
+                      <span className="truncate font-mono text-3xs text-ink-muted" title={activeBatchId}>
+                        Batch: {activeBatchId}
+                      </span>
+                    )}
+                    {activeBatchId && isBackgroundIndexing && !isUploading && (
+                      <button
+                        type="button"
+                        onClick={() => handleCancelBatch(activeBatchId)}
+                        disabled={isActionInProgress}
+                        className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-3xs font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                      >
+                        <XCircle className="h-3 w-3" />
+                        Dừng
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <dl className="grid grid-cols-2 border-y border-border/60 sm:grid-cols-5">
+                  <div className="py-3 pr-3 sm:border-r sm:border-border/60">
+                    <dt className="text-3xs font-semibold uppercase text-ink-muted">Đã chạy</dt>
+                    <dd className="mt-1 flex items-center gap-1.5 text-sm font-bold text-ink-primary">
+                      <Clock className="h-3.5 w-3.5 text-ink-muted" />
+                      {formatElapsedTime(elapsedSeconds)}
+                    </dd>
+                  </div>
+                  <div className="border-l border-border/60 py-3 pl-3 sm:border-l-0 sm:border-r sm:px-3">
+                    <dt className="text-3xs font-semibold uppercase text-ink-muted">Tốc độ</dt>
+                    <dd className="mt-1 text-sm font-bold text-ink-primary">
+                      {finishedIndexCount > 0 ? `${indexRatePerMinute.toFixed(1)} ảnh/phút` : '--'}
+                    </dd>
+                  </div>
+                  <div className="border-t border-border/60 py-3 pr-3 sm:border-r sm:border-t-0 sm:px-3">
+                    <dt className="text-3xs font-semibold uppercase text-ink-muted">Còn lại ước tính</dt>
+                    <dd className="mt-1 text-sm font-bold text-ink-primary">
+                      {displayedRemainingSeconds === null ? '--' : formatElapsedTime(displayedRemainingSeconds)}
+                    </dd>
+                  </div>
+                  <div className="border-l border-t border-border/60 py-3 pl-3 sm:border-l-0 sm:border-r sm:border-t-0 sm:px-3">
+                    <dt className="text-3xs font-semibold uppercase text-ink-muted">Đang chờ</dt>
+                    <dd className="mt-1 text-sm font-bold text-ink-primary">{queuedIndexCount} ảnh</dd>
+                  </div>
+                  <div className="col-span-2 border-t border-border/60 py-3 sm:col-span-1 sm:border-t-0 sm:pl-3">
+                    <dt className="text-3xs font-semibold uppercase text-ink-muted">Đang xử lý</dt>
+                    <dd className="mt-1 text-sm font-bold text-ink-primary">{runningIndexCount} ảnh</dd>
+                  </div>
+                </dl>
+
+                {isStalled && (
+                  <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                    <div>
+                      <p className="font-semibold">Không có ảnh hoàn thành trong {formatElapsedTime(stalledSeconds)}.</p>
+                      <p className="mt-0.5 text-3xs leading-relaxed text-amber-800">
+                        AI có thể đang đọc OCR trên ảnh phức tạp hoặc worker bị nghẽn. Kiểm tra log AI nếu thời gian tiếp tục tăng.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <p className="flex items-start gap-1.5 text-3xs leading-relaxed text-ink-muted">
+                  <Info className="mt-0.5 h-3 w-3 shrink-0" />
+                  Tốc độ và thời gian còn lại được ước tính từ toàn bộ thời gian đã chạy; số liệu sẽ ổn định hơn sau vài ảnh đầu tiên.
+                </p>
+              </div>
             </div>
           )}
         </div>
 
         <div className="pt-4 border-t border-border">
-          <button
-            type="button"
-            onClick={handleUploadAndIndex}
-            disabled={isUploading || isBackgroundIndexing || selectedFiles.length === 0}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold text-white bg-accent-600 hover:bg-accent-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xs cursor-pointer"
-          >
-            {isUploading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Đang tải lên server...</span>
-              </>
-            ) : isBackgroundIndexing ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Đang xử lý tối ưu...</span>
-              </>
-            ) : (
-              <>
-                <Upload className="h-4 w-4" />
-                <span>Tải ảnh lên Server</span>
-              </>
-            )}
-          </button>
+          {uploadSuccess && !isUploading && !isBackgroundIndexing ? (
+            <button
+              type="button"
+              onClick={handleStartNewBatch}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold text-ink-primary border border-border bg-surface-1 hover:bg-surface-0 transition-colors shadow-xs cursor-pointer"
+            >
+              <Upload className="h-4 w-4" />
+              <span>Tải đợt ảnh mới</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleUploadAndIndex}
+              disabled={isUploading || isBackgroundIndexing || selectedFiles.length === 0}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold text-white bg-accent-600 hover:bg-accent-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xs cursor-pointer"
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Đang tải lên server...</span>
+                </>
+              ) : isBackgroundIndexing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Đang xử lý tối ưu...</span>
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4" />
+                  <span>Tải ảnh lên Server</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
@@ -675,7 +938,8 @@ export default function AdminIndexingPage() {
                         )}
                         {b.status === 'queued' ? 'ĐANG CHỜ' :
                           b.status === 'running' ? 'ĐANG CHẠY' :
-                            b.status === 'completed' ? 'HOÀN THÀNH' : 'THẤT BẠI'}
+                          b.status === 'completed' ? 'HOÀN THÀNH' :
+                            b.status === 'cancelled' ? 'ĐÃ HỦY' : 'THẤT BẠI'}
                       </span>
                     </td>
                     <td className="px-6 py-4 font-bold text-ink-primary">{b.total_images}</td>
@@ -693,8 +957,20 @@ export default function AdminIndexingPage() {
                     <td className="px-6 py-4 text-ink-muted">
                       {new Date(b.created_at).toLocaleString('vi-VN')}
                     </td>
-                    <td className="px-6 py-4 text-red-500 font-medium max-w-xs truncate" title={b.error_message || ''}>
-                      {b.error_message || '-'}
+                    <td className="px-6 py-4 text-red-500 font-medium max-w-xs" title={b.error_message || ''}>
+                      {b.status === 'running' || b.status === 'queued' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleCancelBatch(b.batch_id)}
+                          disabled={isActionInProgress}
+                          className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                        >
+                          <XCircle className="h-3.5 w-3.5" />
+                          Dừng
+                        </button>
+                      ) : (
+                        <span className="block truncate">{b.error_message || '-'}</span>
+                      )}
                     </td>
                   </tr>
                 ))

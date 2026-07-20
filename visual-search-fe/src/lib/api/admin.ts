@@ -15,7 +15,7 @@ export interface AdminUser {
 }
 
 export interface IndexingStatus {
-  status: 'idle' | 'queued' | 'running' | 'completed' | 'failed'
+  status: 'idle' | 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
   progress: number // 0 to 100
   processed_count: number
   total_count: number
@@ -25,7 +25,7 @@ export interface IndexingStatus {
 export interface IndexingBatch {
   id: number
   batch_id: string
-  status: 'queued' | 'running' | 'completed' | 'failed'
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
   total_images: number
   processed_images: number
   failed_images: number
@@ -41,24 +41,43 @@ export interface TriggerIndexingResponse {
 
 export interface AdminIndexUploadResponse {
   batch_id: string
-  status: 'queued' | 'running' | 'completed' | 'failed'
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
   total_images: number
   uploaded_files: number
 }
 
 export interface AdminIndexStartResponse {
   batch_id: string
-  status: 'queued' | 'running' | 'completed' | 'failed'
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
   total_images: number
 }
 
 export interface AdminIndexStatusResponse {
   batch_id: string
-  status: 'queued' | 'running' | 'completed' | 'failed'
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
   total_images: number
   processed_images: number
   failed_images: number
+  queued_images: number
+  running_images: number
+  is_uploading: boolean
   error_message?: string | null
+}
+
+export interface AdminBatchCreateResponse {
+  batch_id: string
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
+  total_images: number
+  processed_images: number
+  failed_images: number
+  is_uploading: boolean
+}
+
+export interface AdminBatchImageUploadResponse {
+  batch_id: string
+  uploaded_files: number
+  total_images: number
+  queued_items: number
 }
 
 export interface PendingImage {
@@ -131,11 +150,52 @@ export const adminApi = {
     }
     return {
       status: latest.status as any,
-      progress: latest.total_images > 0 ? Math.round((latest.processed_images / latest.total_images) * 100) : 0,
+      progress: latest.total_images > 0
+        ? Math.round(((latest.processed_images + latest.failed_images) / latest.total_images) * 100)
+        : 0,
       processed_count: latest.processed_images,
       total_count: latest.total_images,
       error_message: latest.error_message
     }
+  },
+
+  async createIndexingBatch(): Promise<AdminBatchCreateResponse> {
+    const response = await apiClient.post<AdminBatchCreateResponse>('/admin/index/batches')
+    return response.data
+  },
+
+  async uploadImagesToBatch(
+    batchId: string,
+    files: File[],
+    onProgress?: (percent: number) => void
+  ): Promise<AdminBatchImageUploadResponse> {
+    const formData = new FormData()
+    files.forEach((file) => formData.append('files', file))
+
+    const response = await apiClient.post<AdminBatchImageUploadResponse>(
+      `/admin/index/batches/${batchId}/images`,
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (event) => {
+          if (event.total && onProgress) {
+            onProgress(Math.round((event.loaded * 100) / event.total))
+          }
+        },
+      }
+    )
+    return response.data
+  },
+
+  async completeIndexingBatch(batchId: string): Promise<void> {
+    await apiClient.post(`/admin/index/batches/${batchId}/complete-upload`)
+  },
+
+  async cancelIndexingBatch(batchId: string): Promise<AdminIndexStatusResponse> {
+    const response = await apiClient.post<AdminIndexStatusResponse>(
+      `/admin/index/batches/${batchId}/cancel`
+    )
+    return response.data
   },
 
   /**
@@ -243,4 +303,3 @@ export const adminApi = {
     return { message: `Legacy stub index ${_urls.length} urls`, task_id: 'legacy' }
   },
 }
-
