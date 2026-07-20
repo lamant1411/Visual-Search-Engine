@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.image import Image
 from app.models.ocr_text import OCRText
+from app.schemas.common import ImageStatus
 from app.schemas.search import SearchResponse, SearchResultItem, SearchResultMetadata
 from app.services.qdrant_service import VectorSearchHit
 
@@ -26,6 +27,7 @@ async def build_search_response_from_hits(
         select(Image, OCRText)
         .outerjoin(OCRText, OCRText.image_id == Image.id)
         .where(Image.id.in_(image_ids))
+        .where(Image.status == ImageStatus.indexed)
     )
     image_by_id = {image.id: (image, ocr_text) for image, ocr_text in rows.all()}
 
@@ -121,6 +123,7 @@ async def search_images_by_ocr_text(
         )
         .select_from(Image)
         .join(OCRText, OCRText.image_id == Image.id)
+        .where(Image.status == ImageStatus.indexed)
         .where(or_(fts_condition, ilike_condition))
         .where(OCRText.raw_text.isnot(None))
         .where(OCRText.raw_text != "")

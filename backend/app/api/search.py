@@ -99,8 +99,6 @@ async def search_by_text(
     db: AsyncSession = Depends(get_db),
 ) -> SearchResponse:
     """Đưa văn bản (semantic query) vào CLIP để tìm ảnh có ngữ nghĩa gần nhất trong Qdrant."""
-    del current_user
-
     query = q.strip()
     if not query:
         raise api_error(
@@ -127,12 +125,21 @@ async def search_by_text(
             "Vector search service is unavailable.",
         ) from exc
 
-    return await build_search_response_from_hits(
+    response = await build_search_response_from_hits(
         db,
         all_hits,
         page=page,
         limit=limit,
     )
+    db.add(
+        SearchHistory(
+            user_id=current_user.id,
+            query_type=SearchQueryType.semantic,
+            query_value=query,
+        )
+    )
+    await db.commit()
+    return response
 
 
 @router.get("/ocr", response_model=SearchResponse)
@@ -148,8 +155,6 @@ async def search_by_ocr(
     Dùng PostgreSQL full-text search (plainto_tsquery) kết hợp ILIKE fallback.
     Kết quả được sắp xếp theo độ liên quan (ts_rank) giảm dần.
     """
-    del current_user
-
     query = q.strip()
     if not query:
         raise api_error(
@@ -159,7 +164,16 @@ async def search_by_ocr(
             {"field": "q"},
         )
 
-    return await search_images_by_ocr_text(db, query, page=page, limit=limit)
+    response = await search_images_by_ocr_text(db, query, page=page, limit=limit)
+    db.add(
+        SearchHistory(
+            user_id=current_user.id,
+            query_type=SearchQueryType.ocr,
+            query_value=query,
+        )
+    )
+    await db.commit()
+    return response
 
 
 def _validate_pagination(page: int, limit: int) -> None:

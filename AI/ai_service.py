@@ -106,29 +106,12 @@ class IndexItemsResponse(BaseModel):
 
 @app.post("/api/embed/text")
 async def embed_text(text: str = Form(...)):
-<<<<<<< HEAD
-    """API biến văn bản tìm kiếm thành Vector 512 chiều (CLIP text encoder)."""
-    vector = clip_model.embed_text(text)
-    if vector is None:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=500, detail="Không thể tạo embedding cho text.")
-    return {"vector": vector}
-
-@app.post("/api/embed/image")
-async def embed_image(file: UploadFile = File(...)):
-    """API biến ảnh upload thành Vector 512 chiều (CLIP image encoder)."""
-    image_data = await file.read()
-    image = Image.open(io.BytesIO(image_data)).convert("RGB")
-    vector = clip_model.embed_image(image)
-    if vector is None:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=500, detail="Không thể tạo embedding cho ảnh.")
-    return {"vector": vector}
-=======
     """Bien text tim kiem thanh vector CLIP."""
     try:
         vector = clip_model.embed_text(text)
-        return {"status": "success", "vector": vector}
+        if vector is None:
+            raise ValueError("Khong the tao embedding cho text.")
+        return {"vector": vector}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -140,7 +123,9 @@ async def embed_image(file: UploadFile = File(...)):
         image_data = await file.read()
         image = Image.open(io.BytesIO(image_data)).convert("RGB")
         vector = clip_model.embed_image(image)
-        return {"status": "success", "vector": vector}
+        if vector is None:
+            raise ValueError("Khong the tao embedding cho anh.")
+        return {"vector": vector}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -332,7 +317,6 @@ def _count_indexable_images(image_folder: Path, max_images: int, run_all: bool) 
         return len(image_paths)
     return min(len(image_paths), max_images)
 
->>>>>>> dev
 
 if __name__ == "__main__":
     uvicorn.run("ai_service:app", host="0.0.0.0", port=8001, reload=True)
