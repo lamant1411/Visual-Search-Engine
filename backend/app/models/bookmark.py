@@ -1,9 +1,9 @@
-"""Bảng tùy chọn để lưu ảnh người dùng đánh dấu yêu thích."""
+"""Bảng lưu ảnh người dùng đã bookmark."""
 
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, func
+from sqlalchemy import DateTime, ForeignKey, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -14,8 +14,10 @@ if TYPE_CHECKING:
 
 
 class Bookmark(Base):
-    # Lưu quan hệ user nào đã bookmark ảnh nào.
+    """Lưu quan hệ user nào đã bookmark ảnh nào."""
+
     __tablename__ = "bookmarks"
+    __table_args__ = (UniqueConstraint("user_id", "image_id", name="uq_bookmarks_user_image"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)

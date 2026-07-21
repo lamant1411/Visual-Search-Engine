@@ -1,0 +1,226 @@
+"""API bookmark ảnh của người dùng."""
+
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import get_current_user
+from app.core.errors import api_error
+from app.db.session import get_db
+from app.models.bookmark import Bookmark
+from app.models.image import Image
+from app.models.ocr_text import OCRText
+from app.models.user import User
+from app.schemas.bookmark import (
+    BookmarkCreate,
+    BookmarkDeleteResponse,
+    BookmarkDetail,
+    BookmarkImageIdsResponse,
+    BookmarkItem,
+    BookmarkListResponse,
+)
+from app.schemas.common import ImageStatus
+from app.services.search import build_image_url
+
+router = APIRouter()
+
+
+@router.get("", response_model=BookmarkListResponse, response_model_by_alias=False)
+async def list_bookmarks(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> BookmarkListResponse:
+    """Trả danh sách ảnh user hiện tại đã bookmark."""
+    filters = [Bookmark.user_id == current_user.id]
+    total = int(
+        await db.scalar(select(func.count()).select_from(Bookmark).where(*filters)) or 0
+    )
+    offset = (page - 1) * limit
+    rows = (
+        await db.execute(
+            select(Bookmark, Image)
+            .join(Image, Image.id == Bookmark.image_id)
+            .where(*filters)
+            .order_by(Bookmark.created_at.desc(), Bookmark.id.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+    ).all()
+
+    return BookmarkListResponse(
+        items=[_to_bookmark_item(bookmark, image) for bookmark, image in rows],
+        page=page,
+        limit=limit,
+        total=total,
+    )
+
+
+@router.get("/image-ids", response_model=BookmarkImageIdsResponse, response_model_by_alias=False)
+async def list_bookmarked_image_ids(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> BookmarkImageIdsResponse:
+    """Trả danh sách image_id đã bookmark để FE đánh dấu trạng thái trên card."""
+    image_ids = (
+        await db.scalars(
+            select(Bookmark.image_id)
+            .where(Bookmark.user_id == current_user.id)
+            .order_by(Bookmark.created_at.desc(), Bookmark.id.desc())
+        )
+    ).all()
+    return BookmarkImageIdsResponse(image_ids=list(image_ids))
+
+
+@router.post("", response_model=BookmarkItem, status_code=status.HTTP_201_CREATED, response_model_by_alias=False)
+async def create_bookmark(
+    payload: BookmarkCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> BookmarkItem:
+    """Lưu một ảnh vào bookmark của user hiện tại."""
+    image = await db.get(Image, payload.image_id)
+    if image is None:
+        raise api_error(
+            status.HTTP_404_NOT_FOUND,
+            "IMAGE_NOT_FOUND",
+            "Image not found.",
+            {"imageId": payload.image_id},
+        )
+    if image.status != ImageStatus.indexed:
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "IMAGE_NOT_INDEXED",
+            "Only indexed images can be bookmarked.",
+            {"imageId": payload.image_id, "status": image.status},
+        )
+
+    existing = await db.scalar(
+        select(Bookmark).where(
+            Bookmark.user_id == current_user.id,
+            Bookmark.image_id == payload.image_id,
+        )
+    )
+    if existing is not None:
+        return _to_bookmark_item(existing, image)
+
+    bookmark = Bookmark(user_id=current_user.id, image_id=payload.image_id)
+    db.add(bookmark)
+    await db.commit()
+    await db.refresh(bookmark)
+
+    return _to_bookmark_item(bookmark, image)
+
+
+@router.delete("/images/{image_id}", response_model=BookmarkDeleteResponse)
+async def delete_bookmark_by_image(
+    image_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> BookmarkDeleteResponse:
+    """Xóa bookmark theo image_id, dùng cho nút toggle trên kết quả tìm kiếm."""
+    bookmark = await db.scalar(
+        select(Bookmark).where(
+            Bookmark.image_id == image_id,
+            Bookmark.user_id == current_user.id,
+        )
+    )
+    if bookmark is None:
+        raise api_error(
+            status.HTTP_404_NOT_FOUND,
+            "BOOKMARK_NOT_FOUND",
+            "Bookmark not found.",
+            {"imageId": image_id},
+        )
+
+    await db.delete(bookmark)
+    await db.commit()
+    return BookmarkDeleteResponse(message="Bookmark removed.")
+
+
+@router.get("/{bookmark_id}", response_model=BookmarkDetail, response_model_by_alias=False)
+async def get_bookmark_detail(
+    bookmark_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> BookmarkDetail:
+    """Trả chi tiết bookmark kèm metadata ảnh và OCR text."""
+    row = (
+        await db.execute(
+            select(Bookmark, Image, OCRText)
+            .join(Image, Image.id == Bookmark.image_id)
+            .outerjoin(OCRText, OCRText.image_id == Image.id)
+            .where(Bookmark.id == bookmark_id, Bookmark.user_id == current_user.id)
+        )
+    ).first()
+    if row is None:
+        raise api_error(
+            status.HTTP_404_NOT_FOUND,
+            "BOOKMARK_NOT_FOUND",
+            "Bookmark not found.",
+            {"bookmarkId": bookmark_id},
+        )
+
+    bookmark, image, ocr_text = row
+    return _to_bookmark_detail(bookmark, image, ocr_text)
+
+
+@router.delete("/{bookmark_id}", response_model=BookmarkDeleteResponse)
+async def delete_bookmark(
+    bookmark_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> BookmarkDeleteResponse:
+    """Xóa bookmark theo bookmark_id của user hiện tại."""
+    bookmark = await db.scalar(
+        select(Bookmark).where(
+            Bookmark.id == bookmark_id,
+            Bookmark.user_id == current_user.id,
+        )
+    )
+    if bookmark is None:
+        raise api_error(
+            status.HTTP_404_NOT_FOUND,
+            "BOOKMARK_NOT_FOUND",
+            "Bookmark not found.",
+            {"bookmarkId": bookmark_id},
+        )
+
+    await db.delete(bookmark)
+    await db.commit()
+    return BookmarkDeleteResponse(message="Bookmark removed.")
+
+
+def _to_bookmark_item(bookmark: Bookmark, image: Image) -> BookmarkItem:
+    return BookmarkItem(
+        id=bookmark.id,
+        image_id=image.id,
+        image_url=build_image_url(image.storage_path),
+        title=_image_title(image),
+        saved_at=bookmark.created_at,
+    )
+
+
+def _to_bookmark_detail(
+    bookmark: Bookmark,
+    image: Image,
+    ocr_text: OCRText | None,
+) -> BookmarkDetail:
+    item = _to_bookmark_item(bookmark, image).model_dump()
+    return BookmarkDetail(
+        **item,
+        width=image.width,
+        height=image.height,
+        source=image.source_type.value if hasattr(image.source_type, "value") else str(image.source_type),
+        ocr_text=ocr_text.raw_text if ocr_text else None,
+    )
+
+
+def _image_title(image: Image) -> str:
+    if image.original_filename:
+        return image.original_filename
+    filename = Path(image.storage_path.replace("\\", "/")).name
+    return filename or f"Image #{image.id}"
