@@ -1,4 +1,4 @@
-"""API lich su tim kiem cua nguoi dung."""
+"""Search history API for the current user."""
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
@@ -13,14 +13,26 @@ from app.schemas.search import SearchHistoryResponse
 router = APIRouter()
 
 
-@router.get("", response_model=SearchHistoryResponse)
+@router.get(
+    "",
+    response_model=SearchHistoryResponse,
+    summary="List search history",
+    description=(
+        "Return search history for the current user, including image, semantic, and OCR searches. "
+        "Requires Bearer access_token."
+    ),
+    responses={
+        200: {"description": "Search history returned successfully."},
+        401: {"description": "Missing, invalid, or expired token."},
+    },
+)
 async def get_search_history(
-    page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100),
+    page: int = Query(1, ge=1, description="Current page."),
+    limit: int = Query(20, ge=1, le=100, description="Number of items per page."),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SearchHistoryResponse:
-    """Tra lich su tim kiem cua user dang dang nhap."""
+    """Return search history of the current authenticated user."""
     total = int(
         await db.scalar(
             select(func.count())
@@ -40,9 +52,4 @@ async def get_search_history(
         )
     ).all()
 
-    return SearchHistoryResponse(
-        items=list(items),
-        page=page,
-        limit=limit,
-        total=total,
-    )
+    return SearchHistoryResponse(items=list(items), page=page, limit=limit, total=total)

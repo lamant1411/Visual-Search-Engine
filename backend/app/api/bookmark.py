@@ -1,4 +1,4 @@
-"""API bookmark ảnh của người dùng."""
+"""Bookmark API for the current user."""
 
 from pathlib import Path
 
@@ -27,18 +27,23 @@ from app.services.search import build_image_url
 router = APIRouter()
 
 
-@router.get("", response_model=BookmarkListResponse, response_model_by_alias=False)
+@router.get(
+    "",
+    response_model=BookmarkListResponse,
+    response_model_by_alias=False,
+    summary="List bookmarks",
+    description="Return bookmarks of the current user. Requires Bearer access_token.",
+    responses={200: {"description": "Bookmarks returned successfully."}, 401: {"description": "Missing, invalid, or expired token."}},
+)
 async def list_bookmarks(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> BookmarkListResponse:
-    """Trả danh sách ảnh user hiện tại đã bookmark."""
+    """Return bookmarks of the current authenticated user."""
     filters = [Bookmark.user_id == current_user.id]
-    total = int(
-        await db.scalar(select(func.count()).select_from(Bookmark).where(*filters)) or 0
-    )
+    total = int(await db.scalar(select(func.count()).select_from(Bookmark).where(*filters)) or 0)
     offset = (page - 1) * limit
     rows = (
         await db.execute(
@@ -59,12 +64,19 @@ async def list_bookmarks(
     )
 
 
-@router.get("/image-ids", response_model=BookmarkImageIdsResponse, response_model_by_alias=False)
+@router.get(
+    "/image-ids",
+    response_model=BookmarkImageIdsResponse,
+    response_model_by_alias=False,
+    summary="List bookmarked image IDs",
+    description="Used by the frontend to mark bookmarked search result cards. Requires Bearer access_token.",
+    responses={200: {"description": "Bookmarked image IDs returned successfully."}, 401: {"description": "Missing, invalid, or expired token."}},
+)
 async def list_bookmarked_image_ids(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> BookmarkImageIdsResponse:
-    """Trả danh sách image_id đã bookmark để FE đánh dấu trạng thái trên card."""
+    """Return bookmarked image IDs for marking search result cards."""
     image_ids = (
         await db.scalars(
             select(Bookmark.image_id)
@@ -75,21 +87,27 @@ async def list_bookmarked_image_ids(
     return BookmarkImageIdsResponse(image_ids=list(image_ids))
 
 
-@router.post("", response_model=BookmarkItem, status_code=status.HTTP_201_CREATED, response_model_by_alias=False)
+@router.post(
+    "",
+    response_model=BookmarkItem,
+    status_code=status.HTTP_201_CREATED,
+    response_model_by_alias=False,
+    summary="Create bookmark",
+    description=(
+        "Save an indexed image to the current user's bookmarks. "
+        "Request body accepts image_id or imageId. If the image was already bookmarked, the existing bookmark is returned."
+    ),
+    responses={201: {"description": "Bookmark created successfully or existing bookmark returned."}, 400: {"description": "Image is not indexed and cannot be bookmarked."}, 401: {"description": "Missing, invalid, or expired token."}, 404: {"description": "Image not found."}, 422: {"description": "Invalid request body."}},
+)
 async def create_bookmark(
     payload: BookmarkCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> BookmarkItem:
-    """Lưu một ảnh vào bookmark của user hiện tại."""
+    """Save an indexed image to the current user's bookmarks."""
     image = await db.get(Image, payload.image_id)
     if image is None:
-        raise api_error(
-            status.HTTP_404_NOT_FOUND,
-            "IMAGE_NOT_FOUND",
-            "Image not found.",
-            {"imageId": payload.image_id},
-        )
+        raise api_error(status.HTTP_404_NOT_FOUND, "IMAGE_NOT_FOUND", "Image not found.", {"imageId": payload.image_id})
     if image.status != ImageStatus.indexed:
         raise api_error(
             status.HTTP_400_BAD_REQUEST,
@@ -99,10 +117,7 @@ async def create_bookmark(
         )
 
     existing = await db.scalar(
-        select(Bookmark).where(
-            Bookmark.user_id == current_user.id,
-            Bookmark.image_id == payload.image_id,
-        )
+        select(Bookmark).where(Bookmark.user_id == current_user.id, Bookmark.image_id == payload.image_id)
     )
     if existing is not None:
         return _to_bookmark_item(existing, image)
@@ -111,43 +126,47 @@ async def create_bookmark(
     db.add(bookmark)
     await db.commit()
     await db.refresh(bookmark)
-
     return _to_bookmark_item(bookmark, image)
 
 
-@router.delete("/images/{image_id}", response_model=BookmarkDeleteResponse)
+@router.delete(
+    "/images/{image_id}",
+    response_model=BookmarkDeleteResponse,
+    summary="Delete bookmark by image ID",
+    description="Used by the search result bookmark toggle when the frontend only has image_id. Requires Bearer access_token.",
+    responses={200: {"description": "Bookmark removed successfully."}, 401: {"description": "Missing, invalid, or expired token."}, 404: {"description": "Bookmark not found."}},
+)
 async def delete_bookmark_by_image(
     image_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> BookmarkDeleteResponse:
-    """Xóa bookmark theo image_id, dùng cho nút toggle trên kết quả tìm kiếm."""
+    """Delete a bookmark by image_id for search result toggle."""
     bookmark = await db.scalar(
-        select(Bookmark).where(
-            Bookmark.image_id == image_id,
-            Bookmark.user_id == current_user.id,
-        )
+        select(Bookmark).where(Bookmark.image_id == image_id, Bookmark.user_id == current_user.id)
     )
     if bookmark is None:
-        raise api_error(
-            status.HTTP_404_NOT_FOUND,
-            "BOOKMARK_NOT_FOUND",
-            "Bookmark not found.",
-            {"imageId": image_id},
-        )
+        raise api_error(status.HTTP_404_NOT_FOUND, "BOOKMARK_NOT_FOUND", "Bookmark not found.", {"imageId": image_id})
 
     await db.delete(bookmark)
     await db.commit()
     return BookmarkDeleteResponse(message="Bookmark removed.")
 
 
-@router.get("/{bookmark_id}", response_model=BookmarkDetail, response_model_by_alias=False)
+@router.get(
+    "/{bookmark_id}",
+    response_model=BookmarkDetail,
+    response_model_by_alias=False,
+    summary="Get bookmark detail",
+    description="Return image metadata and OCR text for a bookmark owned by the current user. Requires Bearer access_token.",
+    responses={200: {"description": "Bookmark detail returned successfully."}, 401: {"description": "Missing, invalid, or expired token."}, 404: {"description": "Bookmark not found or not owned by the current user."}},
+)
 async def get_bookmark_detail(
     bookmark_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> BookmarkDetail:
-    """Trả chi tiết bookmark kèm metadata ảnh và OCR text."""
+    """Return bookmark detail with image metadata and OCR text."""
     row = (
         await db.execute(
             select(Bookmark, Image, OCRText)
@@ -157,37 +176,30 @@ async def get_bookmark_detail(
         )
     ).first()
     if row is None:
-        raise api_error(
-            status.HTTP_404_NOT_FOUND,
-            "BOOKMARK_NOT_FOUND",
-            "Bookmark not found.",
-            {"bookmarkId": bookmark_id},
-        )
+        raise api_error(status.HTTP_404_NOT_FOUND, "BOOKMARK_NOT_FOUND", "Bookmark not found.", {"bookmarkId": bookmark_id})
 
     bookmark, image, ocr_text = row
     return _to_bookmark_detail(bookmark, image, ocr_text)
 
 
-@router.delete("/{bookmark_id}", response_model=BookmarkDeleteResponse)
+@router.delete(
+    "/{bookmark_id}",
+    response_model=BookmarkDeleteResponse,
+    summary="Delete bookmark by bookmark ID",
+    description="Delete a bookmark owned by the current user by bookmark_id. Requires Bearer access_token.",
+    responses={200: {"description": "Bookmark removed successfully."}, 401: {"description": "Missing, invalid, or expired token."}, 404: {"description": "Bookmark not found or not owned by the current user."}},
+)
 async def delete_bookmark(
     bookmark_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> BookmarkDeleteResponse:
-    """Xóa bookmark theo bookmark_id của user hiện tại."""
+    """Delete a bookmark by bookmark_id."""
     bookmark = await db.scalar(
-        select(Bookmark).where(
-            Bookmark.id == bookmark_id,
-            Bookmark.user_id == current_user.id,
-        )
+        select(Bookmark).where(Bookmark.id == bookmark_id, Bookmark.user_id == current_user.id)
     )
     if bookmark is None:
-        raise api_error(
-            status.HTTP_404_NOT_FOUND,
-            "BOOKMARK_NOT_FOUND",
-            "Bookmark not found.",
-            {"bookmarkId": bookmark_id},
-        )
+        raise api_error(status.HTTP_404_NOT_FOUND, "BOOKMARK_NOT_FOUND", "Bookmark not found.", {"bookmarkId": bookmark_id})
 
     await db.delete(bookmark)
     await db.commit()
@@ -204,11 +216,7 @@ def _to_bookmark_item(bookmark: Bookmark, image: Image) -> BookmarkItem:
     )
 
 
-def _to_bookmark_detail(
-    bookmark: Bookmark,
-    image: Image,
-    ocr_text: OCRText | None,
-) -> BookmarkDetail:
+def _to_bookmark_detail(bookmark: Bookmark, image: Image, ocr_text: OCRText | None) -> BookmarkDetail:
     item = _to_bookmark_item(bookmark, image).model_dump()
     return BookmarkDetail(
         **item,

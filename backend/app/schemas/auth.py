@@ -1,28 +1,46 @@
-"""Schema Pydantic cho dữ liệu phản hồi xác thực."""
+"""Pydantic schemas for authentication."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class LoginRequest(BaseModel):
-    """Body request cho API login."""
+    """Request body for login."""
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"email": "user@example.com", "password": "Pass!123"}}
+    )
 
     email: str
     password: str
 
 
 class TokenSchema(BaseModel):
-    # Dạng phản hồi chuẩn cho bearer token.
+    """Bearer token response."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "token_type": "bearer",
+                "refresh_token": "plain-refresh-token-value",
+            }
+        }
+    )
+
     access_token: str
     token_type: str = "bearer"
     refresh_token: str | None = None
 
 
 class RefreshRequest(BaseModel):
-    """Body request để đổi refresh token lấy access token mới."""
+    """Request body for refreshing access token."""
+
+    model_config = ConfigDict(json_schema_extra={"example": {"refresh_token": "plain-refresh-token-value"}})
+
     refresh_token: str
 
 
 class LogoutResponse(BaseModel):
-    """Response khi logout thành công."""
+    """Response after successful logout."""
 
     message: str = "Logged out successfully"

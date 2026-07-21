@@ -14,6 +14,19 @@ from app.services.seed import ensure_seed_admin
 app = FastAPI(
     title="Visual Search Engine API",
     version="1.0.0",
+    description=(
+        "API for the Visual Search Engine project. Basic test flow: "
+        "1) call /api/v1/auth/login to get access_token, "
+        "2) click Authorize in Swagger and paste the Bearer token, "
+        "3) call Search, Bookmarks, or History APIs. Admin APIs require role=admin."
+    ),
+    openapi_tags=[
+        {"name": "Auth", "description": "Register, login, refresh token, logout, and current user."},
+        {"name": "Search", "description": "Search images by uploaded image, semantic text, and OCR text."},
+        {"name": "History", "description": "Search history of the current authenticated user."},
+        {"name": "Bookmarks", "description": "Create, list, view, and delete image bookmarks."},
+        {"name": "Admin", "description": "Dashboard, users, and batch indexing. Requires admin role."},
+    ],
 )
 
 app.add_middleware(

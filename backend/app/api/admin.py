@@ -36,7 +36,17 @@ ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
 
-@router.get("/dashboard", response_model=AdminDashboardResponse)
+@router.get(
+    "/dashboard",
+    response_model=AdminDashboardResponse,
+    summary="Get admin dashboard stats",
+    description="Return total images, indexed/pending/failed image counts, total users, and latest indexing batches. Requires admin role.",
+    responses={
+        200: {"description": "Dashboard stats returned successfully."},
+        401: {"description": "Missing, invalid, or expired token."},
+        403: {"description": "User does not have admin role."},
+    },
+)
 async def get_dashboard(
     _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
@@ -72,7 +82,17 @@ async def get_dashboard(
     )
 
 
-@router.get("/users", response_model=AdminUserListResponse)
+@router.get(
+    "/users",
+    response_model=AdminUserListResponse,
+    summary="List users",
+    description="Return a paginated user list for admin review. Currently read-only. Requires admin role.",
+    responses={
+        200: {"description": "Users returned successfully."},
+        401: {"description": "Missing, invalid, or expired token."},
+        403: {"description": "User does not have admin role."},
+    },
+)
 async def list_users(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
@@ -95,7 +115,18 @@ async def list_users(
     )
 
 
-@router.post("/index/batches", response_model=AdminBatchCreateResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/index/batches",
+    response_model=AdminBatchCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create indexing batch",
+    description="Create an empty batch so the frontend can upload images in chunks. After creating a batch, call /index/batches/{batch_id}/images. Requires admin role.",
+    responses={
+        201: {"description": "Batch created successfully."},
+        401: {"description": "Missing, invalid, or expired token."},
+        403: {"description": "User does not have admin role."},
+    },
+)
 async def create_indexing_batch(
     _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
@@ -122,7 +153,26 @@ async def create_indexing_batch(
     )
 
 
-@router.post("/index/batches/{batch_id}/images", response_model=AdminBatchImageUploadResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/index/batches/{batch_id}/images",
+    response_model=AdminBatchImageUploadResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload images to batch and enqueue indexing",
+    description=(
+        "Receive multipart/form-data field files. Each image is limited by ADMIN_INDEX_UPLOAD_MAX_MB, "
+        "and each batch is limited by ADMIN_INDEX_BATCH_MAX_MB. Saved images are sent to the AI queue for item-level indexing. Requires admin role."
+    ),
+    responses={
+        201: {"description": "Upload succeeded and items were enqueued to AI."},
+        400: {"description": "Missing file or unsupported file type. Only JPG, PNG, and WebP are supported."},
+        401: {"description": "Missing, invalid, or expired token."},
+        403: {"description": "User does not have admin role."},
+        404: {"description": "Batch not found."},
+        409: {"description": "Batch is closed and cannot accept more uploads."},
+        413: {"description": "File or total batch size exceeds the allowed limit."},
+        503: {"description": "AI indexing service is unavailable."},
+    },
+)
 async def upload_images_to_batch(
     batch_id: str,
     files: list[UploadFile] = File(...),
@@ -251,7 +301,18 @@ async def upload_images_to_batch(
     )
 
 
-@router.post("/index/batches/{batch_id}/complete-upload", response_model=AdminBatchCompleteUploadResponse)
+@router.post(
+    "/index/batches/{batch_id}/complete-upload",
+    response_model=AdminBatchCompleteUploadResponse,
+    summary="Complete batch upload",
+    description="Frontend calls this endpoint after all upload chunks are finished. Indexing continues for queued/running items. Requires admin role.",
+    responses={
+        200: {"description": "Batch upload marked as complete."},
+        401: {"description": "Missing, invalid, or expired token."},
+        403: {"description": "User does not have admin role."},
+        404: {"description": "Batch not found."},
+    },
+)
 async def complete_batch_upload(
     batch_id: str,
     _: User = Depends(require_admin),
@@ -277,7 +338,18 @@ async def complete_batch_upload(
     )
 
 
-@router.post("/index/batches/{batch_id}/cancel", response_model=AdminIndexStatusResponse)
+@router.post(
+    "/index/batches/{batch_id}/cancel",
+    response_model=AdminIndexStatusResponse,
+    summary="Cancel indexing batch",
+    description="Mark queued/running items in this batch as cancelled. Other batches are not affected. Requires admin role.",
+    responses={
+        200: {"description": "Batch cancelled successfully."},
+        401: {"description": "Missing, invalid, or expired token."},
+        403: {"description": "User does not have admin role."},
+        404: {"description": "Batch not found."},
+    },
+)
 async def cancel_indexing_batch(
     batch_id: str,
     _: User = Depends(require_admin),
@@ -326,7 +398,17 @@ async def cancel_indexing_batch(
     )
 
 
-@router.get("/index/{batch_id}/items", response_model=AdminIndexingItemListResponse)
+@router.get(
+    "/index/{batch_id}/items",
+    response_model=AdminIndexingItemListResponse,
+    summary="List indexing items in batch",
+    description="Return images in a batch. Can be filtered with status=queued/running/indexed/failed/cancelled. Requires admin role.",
+    responses={
+        200: {"description": "Indexing items returned successfully."},
+        401: {"description": "Missing, invalid, or expired token."},
+        403: {"description": "User does not have admin role."},
+    },
+)
 async def list_indexing_items(
     batch_id: str,
     item_status: IndexingItemStatus | None = Query(None, alias="status"),
@@ -354,7 +436,20 @@ async def list_indexing_items(
     return AdminIndexingItemListResponse(items=list(items), page=page, limit=limit, total=total)
 
 
-@router.post("/index/upload", response_model=AdminIndexUploadResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/index/upload",
+    response_model=AdminIndexUploadResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Legacy upload image batch",
+    description="Legacy flow: upload all images to the server first, then call /index/{batch_id}/start to index the folder. Prefer the new item-level batch flow. Requires admin role.",
+    responses={
+        201: {"description": "Legacy batch uploaded successfully."},
+        400: {"description": "Missing file or unsupported file type."},
+        401: {"description": "Missing, invalid, or expired token."},
+        403: {"description": "User does not have admin role."},
+        413: {"description": "File or batch size exceeds the allowed limit."},
+    },
+)
 async def upload_indexing_batch(
     files: list[UploadFile] = File(...),
     _: User = Depends(require_admin),
@@ -421,7 +516,24 @@ async def upload_indexing_batch(
     )
 
 
-@router.post("/index/{batch_id}/start", response_model=AdminIndexStartResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/index/{batch_id}/start",
+    response_model=AdminIndexStartResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Start legacy batch indexing",
+    description=(
+        "Start AI indexing for a legacy batch that was already uploaded to the server. "
+        "For the new item-level flow, images are queued immediately after upload. Requires admin role."
+    ),
+    responses={
+        202: {"description": "Indexing task accepted."},
+        400: {"description": "Batch has no uploaded images."},
+        401: {"description": "Missing, invalid, or expired token."},
+        403: {"description": "User does not have admin role."},
+        404: {"description": "Batch not found."},
+        503: {"description": "AI indexing service is unavailable."},
+    },
+)
 async def start_batch_indexing(
     batch_id: str,
     _: User = Depends(require_admin),
@@ -491,13 +603,24 @@ async def start_batch_indexing(
     )
 
 
-@router.get("/index/status/{batch_id}", response_model=AdminIndexStatusResponse)
+@router.get(
+    "/index/status/{batch_id}",
+    response_model=AdminIndexStatusResponse,
+    summary="Get indexing batch status",
+    description="Return batch progress for frontend polling and progress bar display. Requires admin role.",
+    responses={
+        200: {"description": "Batch status returned successfully."},
+        401: {"description": "Missing, invalid, or expired token."},
+        403: {"description": "User does not have admin role."},
+        404: {"description": "Batch not found."},
+    },
+)
 async def get_batch_status(
     batch_id: str,
     _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> AdminIndexStatusResponse:
-    """Trả trạng thái indexing; ưu tiên đồng bộ trạng thái mới nhất từ AI."""
+    """Tráº£ tráº¡ng thÃ¡i indexing; Æ°u tiÃªn Ä‘á»“ng bá»™ tráº¡ng thÃ¡i má»›i nháº¥t tá»« AI."""
     batch = await db.scalar(select(IndexingBatch).where(IndexingBatch.batch_id == batch_id))
     if batch is None:
         raise api_error(
@@ -560,12 +683,22 @@ async def _sync_batch_if_active(db: AsyncSession, batch: IndexingBatch) -> None:
                 pass
 
 
-@router.get("/index/batches", response_model=AdminIndexBatchListResponse)
+@router.get(
+    "/index/batches",
+    response_model=AdminIndexBatchListResponse,
+    summary="List indexing batches",
+    description="Return recent indexing batches so admin can track upload/indexing history. Requires admin role.",
+    responses={
+        200: {"description": "Indexing batches returned successfully."},
+        401: {"description": "Missing, invalid, or expired token."},
+        403: {"description": "User does not have admin role."},
+    },
+)
 async def list_batches(
     _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> AdminIndexBatchListResponse:
-    """Trả lịch sử batch indexing gần nhất cho dashboard admin."""
+    """Tráº£ lá»‹ch sá»­ batch indexing gáº§n nháº¥t cho dashboard admin."""
     items = (
         await db.scalars(
             select(IndexingBatch).order_by(IndexingBatch.created_at.desc()).limit(20)

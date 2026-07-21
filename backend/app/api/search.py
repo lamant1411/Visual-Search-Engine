@@ -21,7 +21,24 @@ ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
 
-@router.post("/image", response_model=SearchResponse)
+@router.post(
+    "/image",
+    response_model=SearchResponse,
+    summary="Search by uploaded image",
+    description=(
+        "Receive multipart/form-data with an image file and pagination fields. "
+        "Currently only file upload is implemented; image_id and imageUrl are reserved in the contract but return 501. "
+        "Requires Bearer access_token."
+    ),
+    responses={
+        200: {"description": "Search completed successfully."},
+        400: {"description": "Missing file or unsupported file type. Only JPG, PNG, and WebP are supported."},
+        401: {"description": "Missing, invalid, or expired token."},
+        413: {"description": "Uploaded file exceeds the allowed size."},
+        501: {"description": "Search by image_id or imageUrl is not implemented yet."},
+        503: {"description": "AI service or vector search service is unavailable."},
+    },
+)
 async def search_by_image(
     file: UploadFile | None = File(None),
     image_id: int | None = Form(None),
@@ -90,11 +107,26 @@ async def search_by_image(
     return response
 
 
-@router.get("/text", response_model=SearchResponse)
+@router.get(
+    "/text",
+    response_model=SearchResponse,
+    summary="Search by semantic text",
+    description=(
+        "Receive text query through the q parameter, call AI service to embed text with CLIP, "
+        "query Qdrant, and return similar images. Requires Bearer access_token."
+    ),
+    responses={
+        200: {"description": "Search completed successfully."},
+        400: {"description": "Query is empty after trimming."},
+        401: {"description": "Missing, invalid, or expired token."},
+        422: {"description": "Invalid query parameters."},
+        503: {"description": "AI service or vector search service is unavailable."},
+    },
+)
 async def search_by_text(
-    q: str = Query(..., min_length=1, max_length=500, description="Text query để tìm kiếm ảnh bằng ngữ nghĩa"),
-    page: int = Query(1, ge=1, description="Trang hiện tại"),
-    limit: int = Query(20, ge=1, le=100, description="Số kết quả mỗi trang"),
+    q: str = Query(..., min_length=1, max_length=500, description="Text query for semantic image search"),
+    page: int = Query(1, ge=1, description="Current page"),
+    limit: int = Query(20, ge=1, le=100, description="Number of results per page"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SearchResponse:
@@ -142,11 +174,25 @@ async def search_by_text(
     return response
 
 
-@router.get("/ocr", response_model=SearchResponse)
+@router.get(
+    "/ocr",
+    response_model=SearchResponse,
+    summary="Search by OCR text",
+    description=(
+        "Search images whose OCR text matches query q using PostgreSQL full-text search with ILIKE fallback. "
+        "Requires Bearer access_token."
+    ),
+    responses={
+        200: {"description": "Search completed successfully."},
+        400: {"description": "Query is empty after trimming."},
+        401: {"description": "Missing, invalid, or expired token."},
+        422: {"description": "Invalid query parameters."},
+    },
+)
 async def search_by_ocr(
-    q: str = Query(..., min_length=1, max_length=500, description="Text cần tìm trong nội dung OCR của ảnh"),
-    page: int = Query(1, ge=1, description="Trang hiện tại"),
-    limit: int = Query(20, ge=1, le=100, description="Số kết quả mỗi trang"),
+    q: str = Query(..., min_length=1, max_length=500, description="Text to search within image OCR content"),
+    page: int = Query(1, ge=1, description="Current page"),
+    limit: int = Query(20, ge=1, le=100, description="Number of results per page"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SearchResponse:
