@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useAuth } from "@/contexts/AuthContext";
@@ -30,8 +30,10 @@ type PendingAction =
 
 export function SearchPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const locationState = (location.state ?? {}) as { mode?: SearchMode };
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
-  const [mode, setMode] = useState<SearchMode>("semantic");
+  const [mode, setMode] = useState<SearchMode>(locationState.mode ?? "semantic");
   const [query, setQuery] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [cropSourceFile, setCropSourceFile] = useState<File | null>(null);

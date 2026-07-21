@@ -1,142 +1,110 @@
-import { Image, Sparkles, ScanText, Search, Trash2 } from 'lucide-react'
-import type { HistoryItem as HistoryItemType } from '@/lib/api/history'
+import { useState } from 'react'
+import { FileText, Image, RotateCcw, ScanText } from 'lucide-react'
+import type { HistoryItem as HistoryItemType, SearchQueryType } from '@/lib/api/history'
 
 interface HistoryItemProps {
   item: HistoryItemType
-  onDelete: (id: number) => Promise<void>
   onReSearch: (item: HistoryItemType) => void
-  isDeleting?: boolean
-  isSelected?: boolean
-  onToggleSelect?: () => void
+}
+
+const typeConfig: Record<
+  SearchQueryType,
+  { label: string; icon: typeof Image; iconClass: string; surfaceClass: string }
+> = {
+  image: {
+    label: 'Image',
+    icon: Image,
+    iconClass: 'text-sky-700',
+    surfaceClass: 'border-sky-100 bg-sky-50',
+  },
+  semantic: {
+    label: 'Semantic',
+    icon: FileText,
+    iconClass: 'text-accent-700',
+    surfaceClass: 'border-accent-100 bg-accent-50',
+  },
+  ocr: {
+    label: 'OCR',
+    icon: ScanText,
+    iconClass: 'text-amber-700',
+    surfaceClass: 'border-amber-100 bg-amber-50',
+  },
+}
+
+function formatDate(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('en', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date)
+}
+
+function getImagePreview(item: HistoryItemType) {
+  if (item.query_image_url) return item.query_image_url
+  if (item.query_value.startsWith('http://') || item.query_value.startsWith('https://')) {
+    return item.query_value
+  }
+  return null
 }
 
 export function HistoryItem({
   item,
-  onDelete,
   onReSearch,
-  isDeleting = false,
-  isSelected = false,
-  onToggleSelect,
 }: HistoryItemProps) {
-  // Format thời gian hiển thị gọn gàng
-  const formatTime = (isoString: string) => {
-    try {
-      const date = new Date(isoString)
-      return date.toLocaleTimeString('vi-VN', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-      })
-    } catch {
-      return isoString
-    }
-  }
-
-  // Render badge và icon tương ứng với query_type
-  const renderTypeBadge = () => {
-    switch (item.query_type) {
-      case 'image':
-        return (
-          <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-sm">
-            <Image className="h-3.5 w-3.5" />
-            <span>Hình ảnh</span>
-          </div>
-        )
-      case 'semantic':
-        return (
-          <div className="flex items-center gap-1.5 text-xs font-medium text-accent-600 bg-accent-50 px-2 py-0.5 rounded-sm">
-            <Sparkles className="h-3.5 w-3.5" />
-            <span>Nội dung ảnh</span>
-          </div>
-        )
-      case 'ocr':
-        return (
-          <div className="flex items-center gap-1.5 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-sm">
-            <ScanText className="h-3.5 w-3.5" />
-            <span>Chữ trong ảnh</span>
-          </div>
-        )
-      default:
-        return null
-    }
-  }
+  const config = typeConfig[item.query_type]
+  const Icon = config.icon
+  const previewUrl = item.query_type === 'image' ? getImagePreview(item) : null
+  const [previewFailed, setPreviewFailed] = useState(false)
+  const showPreview = Boolean(previewUrl && !previewFailed)
 
   return (
-    <div
-      className={`group flex items-center justify-between border border-border bg-surface-2 p-4 transition-all duration-200 hover:-translate-y-[1px] hover:shadow-sm rounded-sm ${isDeleting ? 'opacity-50 pointer-events-none' : ''
-        }`}
-    >
-      <div className="flex items-center gap-4 min-w-0 flex-1">
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={onToggleSelect}
-          disabled={isDeleting}
-          className="h-4 w-4 shrink-0 rounded-sm border-border text-accent-600 focus:ring-accent-600 accent-accent-600 cursor-pointer"
-          title="Chọn mục này"
-        />
-
-        {/* Hình ảnh đại diện / Icon minh họa */}
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center border border-border bg-surface-1 overflow-hidden rounded-sm">
-          {item.query_type === 'image' ? (
+    <li className="group flex flex-col gap-3 px-4 py-3.5 transition-colors duration-150 hover:bg-surface-1/70 sm:flex-row sm:items-center sm:gap-5 sm:px-5">
+      <div className="flex min-w-0 flex-1 items-center gap-3.5">
+        <div
+          className={`relative flex h-16 w-20 shrink-0 items-center justify-center overflow-hidden rounded-md border ${config.surfaceClass}`}
+        >
+          {showPreview ? (
             <img
-              src={item.query_value}
-              alt="Query thumbnail"
-              className="h-full w-full object-cover"
+              src={previewUrl ?? undefined}
+              alt={`Reference image for ${item.query_value}`}
               loading="lazy"
-              onError={(e) => {
-                // Fallback nếu ảnh lỗi
-                e.currentTarget.style.display = 'none'
-                const parent = e.currentTarget.parentElement
-                if (parent) {
-                  const fallbackIcon = document.createElement('div')
-                  fallbackIcon.className = 'text-ink-muted'
-                  fallbackIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-image"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>`
-                  parent.appendChild(fallbackIcon)
-                }
-              }}
+              className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03] motion-reduce:transform-none"
+              onError={() => setPreviewFailed(true)}
             />
-          ) : item.query_type === 'semantic' ? (
-            <Sparkles className="h-5 w-5 text-accent-600" />
           ) : (
-            <ScanText className="h-5 w-5 text-amber-600" />
+            <Icon className={`h-5 w-5 ${config.iconClass}`} aria-hidden="true" />
           )}
         </div>
 
-        {/* Nội dung text */}
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            {renderTypeBadge()}
-            <span className="text-[11px] text-ink-muted">{formatTime(item.created_at)}</span>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+            <span className="inline-flex items-center gap-1.5 font-semibold text-ink-secondary">
+              <Icon className={`h-3.5 w-3.5 ${config.iconClass}`} aria-hidden="true" />
+              {config.label}
+            </span>
+            <span className="text-ink-muted" aria-hidden="true">·</span>
+            <time dateTime={item.created_at} className="font-medium text-ink-muted">
+              {formatDate(item.created_at)}
+            </time>
           </div>
-          <p className="text-sm font-medium text-ink-primary truncate">
-            {item.query_type === 'image' ? 'Tìm kiếm bằng hình ảnh tải lên' : item.query_value}
+          <p className="mt-1.5 truncate text-sm font-semibold leading-5 text-ink-primary" title={item.query_value}>
+            {item.query_value}
           </p>
         </div>
       </div>
 
-      {/* Cụm Action Buttons */}
-      <div className="flex items-center gap-2 ml-4">
+      <div className="flex items-center justify-end sm:pl-0">
         <button
           type="button"
           onClick={() => onReSearch(item)}
-          className="flex h-8 w-8 items-center justify-center border border-border bg-surface-2 text-ink-secondary hover:text-accent-600 hover:border-accent-100 hover:bg-accent-50/50 transition-all duration-150 active:scale-95 rounded-sm"
-          title="Tìm kiếm lại với cấu hình này"
+          className="inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-white px-3 text-xs font-semibold text-ink-secondary shadow-sm shadow-slate-200/40 transition-colors hover:border-accent-100 hover:bg-accent-50 hover:text-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2"
+          title="Search again"
         >
-          <Search className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onClick={() => onDelete(item.id)}
-          className="flex h-8 w-8 items-center justify-center border border-border bg-surface-2 text-ink-secondary hover:text-red-600 hover:border-red-100 hover:bg-red-50/50 transition-all duration-150 active:scale-95 rounded-sm"
-          title="Xóa mục lịch sử này"
-        >
-          <Trash2 className="h-4 w-4" />
+          <RotateCcw className="h-3.5 w-3.5" />
+          Search again
         </button>
       </div>
-    </div>
+    </li>
   )
 }

@@ -1,4 +1,4 @@
-import { Clock } from 'lucide-react'
+import { Clock3, Search } from 'lucide-react'
 import { HistoryItem } from './HistoryItem'
 import { Skeleton } from '@/components/base/loader'
 import type { HistoryItem as HistoryItemType } from '@/lib/api/history'
@@ -6,81 +6,60 @@ import type { HistoryItem as HistoryItemType } from '@/lib/api/history'
 interface HistoryListProps {
   items: HistoryItemType[]
   isLoading: boolean
-  deletingIds: number[]
-  onDelete: (id: number) => Promise<void>
+  emptyForFilter: boolean
   onReSearch: (item: HistoryItemType) => void
-  selectedIds: number[]
-  onToggleSelect: (id: number) => void
 }
 
 export function HistoryList({
   items,
   isLoading,
-  deletingIds,
-  onDelete,
+  emptyForFilter,
   onReSearch,
-  selectedIds,
-  onToggleSelect,
 }: HistoryListProps) {
-  // Skeleton hiển thị khi đang load
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-3">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div
-            key={i}
-            className="flex items-center justify-between border border-border bg-surface-2 p-4 rounded-sm"
-          >
-            <div className="flex items-center gap-4 flex-1">
-              {/* Skeleton Checkbox */}
-              <Skeleton width={16} height={16} rounded={false} />
-              <Skeleton width={48} height={48} rounded={false} />
-              <div className="flex-1">
-                <div className="flex gap-2 mb-2">
-                  <Skeleton width={80} height={18} rounded={false} />
-                  <Skeleton width={120} height={14} rounded={false} />
-                </div>
-                <Skeleton width="60%" height={16} rounded={false} />
-              </div>
+      <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-white">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <div key={index} className="flex items-center gap-3 px-4 py-4 sm:px-5">
+            <Skeleton width={80} height={64} rounded={false} />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton width={150} height={13} rounded={false} />
+              <Skeleton width="60%" height={16} rounded={false} />
             </div>
-            <div className="flex items-center gap-2 ml-4">
-              <Skeleton width={32} height={32} rounded={false} />
-              <Skeleton width={32} height={32} rounded={false} />
-            </div>
+            <Skeleton width={72} height={32} rounded={false} />
           </div>
         ))}
       </div>
     )
   }
 
-  // Trạng thái trống
   if (items.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center border border-border border-dashed bg-surface-2 py-16 px-4 text-center rounded-sm">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-50 text-ink-muted mb-4 border border-border">
-          <Clock className="h-5 w-5" />
+      <section className="flex min-h-64 flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface-1 px-5 py-12 text-center">
+        <div className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-white text-ink-muted shadow-sm shadow-slate-200/60">
+          {emptyForFilter ? <Search className="h-5 w-5" /> : <Clock3 className="h-5 w-5" />}
         </div>
-        <h3 className="text-sm font-semibold text-ink-primary mb-1">Chưa có lịch sử tìm kiếm</h3>
-        <p className="text-xs text-ink-secondary max-w-[320px]">
-          Các lượt tìm kiếm bằng hình ảnh hoặc từ khóa của bạn sẽ được lưu giữ tự động tại đây.
+        <h2 className="mt-4 text-sm font-bold text-ink-primary">
+          {emptyForFilter ? 'No searches match this filter' : 'No search history yet'}
+        </h2>
+        <p className="mt-1 max-w-sm text-xs leading-5 text-ink-secondary">
+          {emptyForFilter
+            ? 'Choose another search type to see the rest of your history.'
+            : 'Semantic, OCR, and image searches will appear here after they complete.'}
         </p>
-      </div>
+      </section>
     )
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-white shadow-sm shadow-slate-200/40">
       {items.map((item) => (
         <HistoryItem
           key={item.id}
           item={item}
-          onDelete={onDelete}
           onReSearch={onReSearch}
-          isDeleting={deletingIds.includes(item.id)}
-          isSelected={selectedIds.includes(item.id)}
-          onToggleSelect={() => onToggleSelect(item.id)}
         />
       ))}
-    </div>
+    </ul>
   )
 }
