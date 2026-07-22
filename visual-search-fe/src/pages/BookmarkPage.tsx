@@ -1,305 +1,219 @@
-import { useState } from 'react'
-import { AlertCircle, Bookmark, BookmarkX, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import {
+  AlertCircle,
+  Bookmark,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
+} from 'lucide-react'
+import { useNavigate } from 'react-router'
+
+import { Button } from '@/components/base/button'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { useBookmark } from '@/features/bookmark/useBookmark'
-import { BookmarkDetailModal } from '@/components/feature/bookmark/BookmarkDetailModal'
-import type { BookmarkItem } from '@/lib/api/bookmark'
+import { ResultGrid } from '@/features/search/components/ResultGrid'
+import { SearchResultDetailModal } from '@/features/search/components/SearchResultDetailModal'
+import type { SearchResult } from '@/features/search/types'
 
-// ── Skeleton một card ─────────────────────────────────────────────
-
-function SkeletonCard({ height }: { height: number }) {
-  return (
-    <div
-      className="w-full rounded-xl bg-surface-1 animate-pulse"
-      style={{ height }}
-    />
-  )
-}
-
-// ── Skeleton grid khi đang load ───────────────────────────────────
-
-const SKELETON_HEIGHTS = [220, 160, 280, 200, 240, 180, 300, 160, 220, 260, 180, 200, 240, 180, 220, 160, 280, 200, 260, 180]
-
-function SkeletonGrid() {
-  return (
-    <div className="columns-2 sm:columns-3 lg:columns-4 gap-3">
-      {SKELETON_HEIGHTS.map((h, i) => (
-        <div key={i} className="mb-3 break-inside-avoid">
-          <SkeletonCard height={h} />
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ── Card một ảnh đã bookmark ──────────────────────────────────────
-
-interface BookmarkCardProps {
-  item: BookmarkItem
-  isRemoving: boolean
-  onRemove: (id: number) => void
-  onOpen: (id: number) => void
-}
-
-function BookmarkCard({ item, isRemoving, onRemove, onOpen }: BookmarkCardProps) {
-  return (
-    <div
-      className="group relative break-inside-avoid mb-3 cursor-pointer"
-      onClick={() => onOpen(item.id)}
-      role="button"
-      tabIndex={0}
-      aria-label={`Xem chi tiết: ${item.title}`}
-      onKeyDown={(e) => e.key === 'Enter' && onOpen(item.id)}
-    >
-      <div className="relative overflow-hidden rounded-xl bg-surface-1">
-        <img
-          src={item.image_url}
-          alt={item.title}
-          loading="lazy"
-          className="w-full h-auto block object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-        />
-
-        {/* Overlay hover */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-250 rounded-xl" />
-
-        {/* Nút xoá — ngăn click lan lên card */}
-        <button
-          type="button"
-          aria-label="Xoá khỏi bookmark"
-          disabled={isRemoving}
-          onClick={(e) => { e.stopPropagation(); onRemove(item.id) }}
-          className="absolute top-2 right-2 z-10 flex items-center justify-center w-8 h-8 rounded-full bg-white/90 hover:bg-white text-ink-secondary hover:text-red-500 shadow-sm transition-all duration-200 opacity-0 group-hover:opacity-100 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-        >
-          {isRemoving ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          ) : (
-            <BookmarkX className="w-3.5 h-3.5" />
-          )}
-        </button>
-
-        {/* Title */}
-        <div className="absolute bottom-0 left-0 right-0 px-3 py-2.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-          <p className="text-white text-xs font-medium line-clamp-2 leading-snug drop-shadow">
-            {item.title}
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Empty state ───────────────────────────────────────────────────
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
-      <div className="w-16 h-16 rounded-full bg-surface-1 flex items-center justify-center">
-        <Bookmark className="w-7 h-7 text-ink-muted" />
-      </div>
-      <div>
-        <p className="text-sm font-semibold text-ink-primary">Chưa có ảnh nào được lưu</p>
-        <p className="text-xs text-ink-muted mt-1">
-          Hãy lưu những hình ảnh bạn yêu thích từ kết quả tìm kiếm.
-        </p>
-      </div>
-    </div>
-  )
-}
-
-// ── Masonry Grid ──────────────────────────────────────────────────
-
-interface MasonryGridProps {
-  items: BookmarkItem[]
-  removingIds: number[]
-  onRemove: (id: number) => void
-  onOpen: (id: number) => void
-}
-
-function MasonryGrid({ items, removingIds, onRemove, onOpen }: MasonryGridProps) {
-  if (items.length === 0) return <EmptyState />
-
-  return (
-    <div className="columns-2 sm:columns-3 lg:columns-4 gap-3">
-      {items.map((item) => (
-        <BookmarkCard
-          key={item.id}
-          item={item}
-          isRemoving={removingIds.includes(item.id)}
-          onRemove={onRemove}
-          onOpen={onOpen}
-        />
-      ))}
-    </div>
-  )
-}
-
-// ── Pagination ────────────────────────────────────────────────────
-
-interface PaginationProps {
-  page: number
-  totalPages: number
-  total: number
-  onChange: (page: number) => void
-}
-
-function Pagination({ page, totalPages, total, onChange }: PaginationProps) {
-  if (totalPages <= 1) return null
-
-  // Tạo dải số trang hiển thị (tối đa 5 nút, có "...")
-  const getPageNumbers = (): (number | '...')[] => {
-    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1)
-
-    const pages: (number | '...')[] = [1]
-    if (page > 3) pages.push('...')
-    for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) {
-      pages.push(i)
-    }
-    if (page < totalPages - 2) pages.push('...')
-    pages.push(totalPages)
-    return pages
-  }
-
-  const handleChange = (newPage: number) => {
-    onChange(newPage)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-  const btnBase =
-    'flex items-center justify-center h-8 min-w-[2rem] px-2 rounded-lg text-sm font-medium transition-all duration-150 select-none'
-  const btnActive = 'bg-ink-primary text-white shadow-sm'
-  const btnDefault = 'text-ink-secondary hover:bg-surface-1 hover:text-ink-primary cursor-pointer'
-  const btnDisabled = 'text-ink-muted cursor-not-allowed opacity-40'
-
-  return (
-    <div className="flex flex-col items-center gap-3 pt-2">
-      {/* Thông tin tổng */}
-      <p className="text-xs text-ink-muted">
-        Trang <span className="font-semibold text-ink-secondary">{page}</span> / {totalPages}
-        {' · '}
-        <span className="font-semibold text-ink-secondary">{total}</span> ảnh
-      </p>
-
-      {/* Các nút phân trang */}
-      <div className="flex items-center gap-1">
-        {/* Prev */}
-        <button
-          type="button"
-          aria-label="Trang trước"
-          disabled={page === 1}
-          onClick={() => handleChange(page - 1)}
-          className={[btnBase, page === 1 ? btnDisabled : btnDefault].join(' ')}
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </button>
-
-        {/* Numbers */}
-        {getPageNumbers().map((p, i) =>
-          p === '...' ? (
-            <span key={`ellipsis-${i}`} className="px-1 text-sm text-ink-muted select-none">
-              …
-            </span>
-          ) : (
-            <button
-              key={p}
-              type="button"
-              aria-label={`Trang ${p}`}
-              onClick={() => handleChange(p as number)}
-              className={[btnBase, p === page ? btnActive : btnDefault].join(' ')}
-            >
-              {p}
-            </button>
-          ),
-        )}
-
-        {/* Next */}
-        <button
-          type="button"
-          aria-label="Trang sau"
-          disabled={page === totalPages}
-          onClick={() => handleChange(page + 1)}
-          className={[btnBase, page === totalPages ? btnDisabled : btnDefault].join(' ')}
-        >
-          <ChevronRight className="w-4 h-4" />
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// ── BookmarkPage ──────────────────────────────────────────────────
+const SKELETON_HEIGHTS = [280, 210, 340, 250, 300, 230, 360, 220, 290, 330, 240, 275]
 
 export default function BookmarkPage() {
+  const navigate = useNavigate()
   const [page, setPage] = useState(1)
-  const [selectedId, setSelectedId] = useState<number | null>(null)
-  const { items, total, totalPages, isLoading, error, removingIds, removeItem } =
-    useBookmark(page)
+  const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null)
+  const {
+    items,
+    total,
+    totalPages,
+    isLoading,
+    error,
+    removingImageId,
+    removeItem,
+    refetch,
+  } = useBookmark(page)
+  const results = useMemo<SearchResult[]>(
+    () =>
+      items.map((item) => ({
+        id: item.imageId,
+        thumbnailUrl: item.thumbnailUrl,
+        imageUrl: item.imageUrl,
+        similarityScore: 0,
+        metadata: item.metadata,
+      })),
+    [items],
+  )
+
+  function handleRemove(result: SearchResult) {
+    if (removingImageId === result.id) return
+    removeItem(result.id, {
+      onSuccess: () => {
+        if (items.length === 1 && page > 1) {
+          setPage((currentPage) => currentPage - 1)
+        }
+      },
+    })
+    if (selectedResult?.id === result.id) {
+      setSelectedResult(null)
+    }
+  }
+
+  function handleFindSimilar(result: SearchResult) {
+    setSelectedResult(null)
+    navigate(`/search/results?mode=image&imageId=${result.id}&page=1&limit=20`)
+  }
 
   return (
     <>
-    <PageContainer size="wide" className="py-8 space-y-6">
-      {/* Header */}
-      <div className="relative border-b border-border pb-6">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-1 border border-border text-ink-primary shadow-xs">
-              <Bookmark className="h-5 w-5" />
+      <PageContainer size="wide" className="space-y-7 py-8 sm:py-10">
+        <header className="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase text-accent-600">Your collection</p>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <h1 className="font-display text-3xl font-bold text-ink-primary sm:text-4xl">
+                Saved images
+              </h1>
+              {!isLoading && total > 0 && (
+                <span className="inline-flex min-h-8 items-center rounded-full border border-border bg-white px-3 text-sm font-semibold text-ink-secondary shadow-sm">
+                  {total}
+                </span>
+              )}
             </div>
-            <div>
-              <div className="flex items-center gap-2.5">
-                <h1 className="font-display text-2xl font-bold tracking-tight text-ink-primary">
-                  Ảnh đã lưu
-                </h1>
-                {!isLoading && total > 0 && (
-                  <span className="inline-flex items-center rounded-full border border-border bg-surface-1 px-2.5 py-0.5 text-xs font-semibold text-ink-secondary shadow-2xs">
-                    {total} ảnh
-                  </span>
-                )}
-              </div>
-              <p className="text-sm text-ink-secondary mt-1 max-w-xl">
-                Lưu trữ các hình ảnh yêu thích từ kết quả tìm kiếm của bạn.
-              </p>
-            </div>
+            <p className="mt-2 max-w-2xl text-sm text-ink-secondary sm:text-base">
+              Revisit images you saved from search results.
+            </p>
           </div>
-        </div>
-      </div>
+        </header>
 
-      {/* Lỗi */}
-      {error && (
-        <div className="flex items-start gap-2 p-4 border border-red-100 bg-red-50 text-red-700 text-sm rounded-sm">
-          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-          <span>{error}</span>
-        </div>
-      )}
+        {error ? (
+          <ErrorState onRetry={() => void refetch()} />
+        ) : isLoading ? (
+          <BookmarkGridSkeleton />
+        ) : results.length === 0 ? (
+          <EmptyState onSearch={() => navigate('/search')} />
+        ) : (
+          <ResultGrid
+            results={results}
+            isBookmarked={() => true}
+            showSimilarity={false}
+            onBookmark={handleRemove}
+            onSelectResult={setSelectedResult}
+          />
+        )}
 
-      {/* Grid */}
-      {isLoading ? (
-        <SkeletonGrid />
-      ) : (
-        <MasonryGrid
-          items={items}
-          removingIds={removingIds}
-          onRemove={removeItem}
-          onOpen={setSelectedId}
+        {!isLoading && !error && totalPages > 1 && (
+          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+        )}
+      </PageContainer>
+
+      {selectedResult && (
+        <SearchResultDetailModal
+          result={selectedResult}
+          isBookmarked
+          showSimilarity={false}
+          onBookmark={handleRemove}
+          onClose={() => setSelectedResult(null)}
+          onFindSimilar={handleFindSimilar}
         />
       )}
-
-      {/* Pagination */}
-      {!isLoading && (
-        <Pagination
-          page={page}
-          totalPages={totalPages}
-          total={total}
-          onChange={setPage}
-        />
-      )}
-    </PageContainer>
-
-    {/* Modal chi tiết */}
-    <BookmarkDetailModal
-      bookmarkId={selectedId}
-      onClose={() => setSelectedId(null)}
-    />
     </>
   )
 }
 
+function BookmarkGridSkeleton() {
+  return (
+    <div className="columns-1 gap-5 sm:columns-2 lg:columns-3 xl:columns-4" role="status">
+      <span className="sr-only">Loading saved images...</span>
+      {SKELETON_HEIGHTS.map((height, index) => (
+        <div
+          key={`${height}-${index}`}
+          className="mb-5 w-full break-inside-avoid animate-pulse rounded-lg bg-slate-200"
+          style={{ height }}
+        />
+      ))}
+    </div>
+  )
+}
+
+function EmptyState({ onSearch }: { onSearch: () => void }) {
+  return (
+    <section className="flex min-h-[360px] flex-col items-center justify-center border-y border-border px-5 text-center">
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-surface-1 text-ink-secondary">
+        <Bookmark className="h-6 w-6" />
+      </div>
+      <h2 className="font-display mt-5 text-xl font-bold text-ink-primary">No saved images yet</h2>
+      <p className="mt-2 max-w-md text-sm text-ink-secondary">
+        Save an image from any search result and it will appear here.
+      </p>
+      <Button className="mt-6" type="button" onClick={onSearch}>
+        Explore images
+      </Button>
+    </section>
+  )
+}
+
+function ErrorState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <section className="flex items-start justify-between gap-4 rounded-lg border border-red-200 bg-red-50 p-5 text-red-800">
+      <div className="flex gap-3">
+        <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+        <div>
+          <h2 className="font-semibold">Unable to load saved images</h2>
+          <p className="mt-1 text-sm text-red-700">Check the connection and try again.</p>
+        </div>
+      </div>
+      <Button
+        aria-label="Retry loading saved images"
+        className="shrink-0"
+        size="icon"
+        type="button"
+        variant="ghost"
+        onClick={onRetry}
+      >
+        <RefreshCw className="h-4 w-4" />
+      </Button>
+    </section>
+  )
+}
+
+function Pagination({
+  page,
+  totalPages,
+  onChange,
+}: {
+  page: number
+  totalPages: number
+  onChange: (page: number) => void
+}) {
+  function changePage(nextPage: number) {
+    onChange(nextPage)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  return (
+    <nav className="flex items-center justify-center gap-3 border-t border-border pt-6" aria-label="Bookmark pages">
+      <Button
+        aria-label="Previous page"
+        disabled={page === 1}
+        leftIcon={<ChevronLeft className="h-4 w-4" />}
+        type="button"
+        variant="outline"
+        onClick={() => changePage(page - 1)}
+      >
+        Previous
+      </Button>
+      <span className="min-w-24 text-center text-sm font-semibold text-ink-secondary">
+        {page} / {totalPages}
+      </span>
+      <Button
+        aria-label="Next page"
+        disabled={page === totalPages}
+        rightIcon={<ChevronRight className="h-4 w-4" />}
+        type="button"
+        variant="outline"
+        onClick={() => changePage(page + 1)}
+      >
+        Next
+      </Button>
+    </nav>
+  )
+}

@@ -8,6 +8,7 @@ type ResultCardProps = {
   result: SearchResult;
   priority?: boolean;
   isBookmarked?: boolean;
+  showSimilarity?: boolean;
   onBookmark?: (result: SearchResult) => void;
   onSelect?: (result: SearchResult) => void;
 };
@@ -16,6 +17,7 @@ export function ResultCard({
   result,
   priority = false,
   isBookmarked = false,
+  showSimilarity = true,
   onBookmark,
   onSelect,
 }: ResultCardProps) {
@@ -69,10 +71,12 @@ export function ResultCard({
               }}
             />
           )}
-          <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-xs font-bold text-ink-primary shadow-sm shadow-slate-900/10 backdrop-blur">
-            <Zap className="h-3.5 w-3.5 text-accent-600" />
-            {similarityScore}%
-          </span>
+          {showSimilarity && (
+            <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-xs font-bold text-ink-primary shadow-sm shadow-slate-900/10 backdrop-blur">
+              <Zap className="h-3.5 w-3.5 text-accent-600" />
+              {similarityScore}%
+            </span>
+          )}
 
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent p-4 pt-14 text-white opacity-0 transition duration-200 group-hover:opacity-100 group-focus-visible:opacity-100">
             <h2 className="text-sm font-semibold">

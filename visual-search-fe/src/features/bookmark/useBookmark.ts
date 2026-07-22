@@ -1,56 +1,61 @@
-import { useState, useEffect, useCallback } from 'react'
-import { bookmarkApi, type BookmarkItem } from '@/lib/api/bookmark'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-const LIMIT = 20
+import { bookmarkApi, type BookmarkListResponse } from '@/lib/api/bookmark'
+import { bookmarkKeys } from '@/features/search/hooks/useBookmarks'
 
-export function useBookmark(page: number = 1) {
-  const [items, setItems] = useState<BookmarkItem[]>([])
-  const [total, setTotal] = useState(0)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [removingIds, setRemovingIds] = useState<number[]>([])
+export const BOOKMARK_PAGE_LIMIT = 20
 
-  const fetchBookmarks = useCallback(async () => {
-    setIsLoading(true)
-    setError(null)
-    try {
-      const res = await bookmarkApi.list({ page, limit: LIMIT })
-      setItems(res.items)
-      setTotal(res.total)
-    } catch (err) {
-      console.error('[useBookmark] Lỗi khi tải bookmark:', err)
-      setError('Không thể tải danh sách bookmark. Vui lòng thử lại.')
-    } finally {
-      setIsLoading(false)
-    }
-  }, [page])
+export function useBookmark(page = 1) {
+  const queryClient = useQueryClient()
+  const listKey = bookmarkKeys.list(page, BOOKMARK_PAGE_LIMIT)
+  const listQuery = useQuery({
+    queryKey: listKey,
+    queryFn: () => bookmarkApi.list({ page, limit: BOOKMARK_PAGE_LIMIT }),
+  })
+  const removeMutation = useMutation({
+    mutationFn: bookmarkApi.remove,
+    onMutate: async (imageId) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: listKey }),
+        queryClient.cancelQueries({ queryKey: bookmarkKeys.imageIds }),
+      ])
+      const previousList = queryClient.getQueryData<BookmarkListResponse>(listKey)
+      const previousIds = queryClient.getQueryData<number[]>(bookmarkKeys.imageIds) ?? []
 
-  const removeItem = useCallback(async (id: number) => {
-    setRemovingIds((prev) => [...prev, id])
-    try {
-      await bookmarkApi.remove(id)
-      setItems((prev) => prev.filter((item) => item.id !== id))
-      setTotal((prev) => prev - 1)
-    } catch (err) {
-      console.error('[useBookmark] Lỗi khi xoá bookmark:', err)
-    } finally {
-      setRemovingIds((prev) => prev.filter((rid) => rid !== id))
-    }
-  }, [])
+      queryClient.setQueryData<BookmarkListResponse>(listKey, (currentList) =>
+        currentList
+          ? {
+              ...currentList,
+              items: currentList.items.filter((item) => item.imageId !== imageId),
+              total: Math.max(0, currentList.total - 1),
+            }
+          : currentList,
+      )
+      queryClient.setQueryData<number[]>(bookmarkKeys.imageIds, (currentIds = []) =>
+        currentIds.filter((id) => id !== imageId),
+      )
 
-  useEffect(() => {
-    fetchBookmarks()
-  }, [fetchBookmarks])
+      return { previousList, previousIds }
+    },
+    onError: (_error, _imageId, context) => {
+      queryClient.setQueryData(listKey, context?.previousList)
+      queryClient.setQueryData(bookmarkKeys.imageIds, context?.previousIds ?? [])
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: bookmarkKeys.all })
+    },
+  })
+
+  const total = listQuery.data?.total ?? 0
 
   return {
-    items,
+    items: listQuery.data?.items ?? [],
     total,
-    totalPages: Math.ceil(total / LIMIT),
-    isLoading,
-    error,
-    removingIds,
-    removeItem,
-    refetch: fetchBookmarks,
+    totalPages: Math.ceil(total / BOOKMARK_PAGE_LIMIT),
+    isLoading: listQuery.isLoading,
+    error: listQuery.error ?? removeMutation.error,
+    removingImageId: removeMutation.isPending ? removeMutation.variables : null,
+    removeItem: removeMutation.mutate,
+    refetch: listQuery.refetch,
   }
 }
-

@@ -4,6 +4,7 @@ import { ResultCard } from "./ResultCard";
 type ResultGridProps = {
   results: SearchResult[];
   isBookmarked?: (imageId: number) => boolean;
+  showSimilarity?: boolean;
   onBookmark?: (result: SearchResult) => void;
   onSelectResult?: (result: SearchResult) => void;
 };
@@ -11,6 +12,7 @@ type ResultGridProps = {
 export function ResultGrid({
   results,
   isBookmarked,
+  showSimilarity = true,
   onBookmark,
   onSelectResult,
 }: ResultGridProps) {
@@ -23,6 +25,7 @@ export function ResultGrid({
             result={result}
             priority={index < 4}
             isBookmarked={isBookmarked?.(result.id)}
+            showSimilarity={showSimilarity}
             onBookmark={onBookmark}
             onSelect={onSelectResult}
           />

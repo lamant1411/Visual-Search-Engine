@@ -95,6 +95,70 @@ Query params:
 
 Response is the same shape as image search.
 
+## Bookmarks
+
+All bookmark endpoints require a bearer access token.
+
+### GET /bookmarks
+
+Query params:
+
+- `page`: optional, default `1`
+- `limit`: optional, default `20`, maximum `100`
+
+Response:
+
+```json
+{
+  "items": [
+    {
+      "id": 7,
+      "image_id": 42,
+      "image_url": "http://localhost:8000/static/images/42.jpg",
+      "title": "42.jpg",
+      "saved_at": "2026-07-19T08:30:00Z"
+    }
+  ],
+  "page": 1,
+  "limit": 20,
+  "total": 1
+}
+```
+
+### GET /bookmarks/image-ids
+
+Returns the current user's saved image IDs so search result cards can display
+their saved state.
+
+```json
+{
+  "image_ids": [12, 42, 81]
+}
+```
+
+### POST /bookmarks
+
+Saves an indexed image. The operation is idempotent: saving an existing bookmark
+returns the existing resource instead of creating a duplicate.
+
+```json
+{
+  "image_id": 42
+}
+```
+
+### GET /bookmarks/{bookmarkId}
+
+Returns one saved image with its dimensions, source, and OCR text.
+
+### DELETE /bookmarks/images/{imageId}
+
+Removes a bookmark from a search result using its image ID.
+
+### DELETE /bookmarks/{bookmarkId}
+
+Removes a bookmark using its bookmark resource ID.
+
 ## Admin
 
 ### GET /admin/stats
