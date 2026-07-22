@@ -214,17 +214,19 @@ export default function AdminIndexingPage() {
           setIndexProgress(pct)
 
           if (statusRes.failed_images > 0) {
-            const list: typeof failedImages = []
-            for (let i = 0; i < statusRes.failed_images; i++) {
-              const fileInfo = uploadedFilesRef.current[i % uploadedFilesRef.current.length] || { name: 'image.jpg', url: '' }
-              list.push({
-                id: `fail_${Date.now()}_${i}`,
-                url: fileInfo.url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100',
-                filename: fileInfo.name,
-                error_message: 'Trích xuất CLIP embedding thất bại hoặc tệp tin bị hỏng.'
-              })
-            }
-            setFailedImages(list)
+            const failedItems = await adminApi.listIndexingItems(createdBatchId, {
+              status: 'failed',
+              page: 1,
+              limit: 100,
+            })
+            setFailedImages(failedItems.items.map((item) => ({
+              id: String(item.id),
+              url: item.image_url,
+              filename: item.filename,
+              error_message: item.error_message ?? 'Tr?ch xu?t CLIP embedding th?t b?i ho?c t?p tin b? h?ng.',
+            })))
+          } else {
+            setFailedImages([])
           }
 
           if (
@@ -350,27 +352,11 @@ export default function AdminIndexingPage() {
     }
   }
 
-  const handleRetryFailedImage = async (url: string) => {
-    const target = failedImages.find(img => img.url === url)
-    if (!target) return
-
-    // Remove from active failed view temporarily
-    setFailedImages(prev => prev.filter(img => img.url !== url))
-    setFailedIndexCount(prev => Math.max(0, prev - 1))
-
-    try {
-      const result = await adminApi.indexSingleImage(url)
-      if (result.success) {
-        setIndexedCount(prev => prev + 1)
-      } else {
-        // Put back to failed list with updated message
-        setFailedImages(prev => [...prev, { ...target, error_message: result.error_message }])
-        setFailedIndexCount(prev => prev + 1)
-      }
-    } catch (err: any) {
-      setFailedImages(prev => [...prev, { ...target, error_message: err.message }])
-      setFailedIndexCount(prev => prev + 1)
-    }
+  const handleRetryFailedImage = async (_url: string) => {
+    setMessage({
+      text: 'Vui long upload lai file anh loi de thuc hien index lai.',
+      type: 'info'
+    })
   }
 
   // Bulk Actions

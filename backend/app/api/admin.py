@@ -2,8 +2,9 @@
 
 import uuid
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,11 +25,13 @@ from app.schemas.admin import (
     AdminIndexStartResponse,
     AdminIndexStatusResponse,
     AdminIndexingItemListResponse,
+    AdminIndexingItemOut,
     AdminIndexUploadResponse,
     AdminUserListResponse,
 )
 from app.schemas.common import BatchStatus, ImageSourceType, ImageStatus, IndexingItemStatus
 from app.services.admin_indexing import AIIndexingServiceError, AIIndexItemPayload, ai_indexing_client
+from app.services.search import build_image_url
 
 router = APIRouter()
 
@@ -159,8 +162,7 @@ async def create_indexing_batch(
     status_code=status.HTTP_201_CREATED,
     summary="Upload images to batch and enqueue indexing",
     description=(
-        "Receive multipart/form-data field files. Each image is limited by ADMIN_INDEX_UPLOAD_MAX_MB, "
-        "and each batch is limited by ADMIN_INDEX_BATCH_MAX_MB. Saved images are sent to the AI queue for item-level indexing. Requires admin role."
+        "Receive multipart/form-data field files. Optional image_urls can be sent with the same length as files to replace failed images in this batch. Each new image is limited by ADMIN_INDEX_UPLOAD_MAX_MB, and each batch is limited by ADMIN_INDEX_BATCH_MAX_MB. Saved images are sent to the AI queue for item-level indexing. Requires admin role."
     ),
     responses={
         201: {"description": "Upload succeeded and items were enqueued to AI."},
@@ -176,10 +178,11 @@ async def create_indexing_batch(
 async def upload_images_to_batch(
     batch_id: str,
     files: list[UploadFile] = File(...),
+    image_urls: list[str] | None = Form(None),
     _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> AdminBatchImageUploadResponse:
-    """Upload anh vao batch va queue index tung anh ngay sau khi luu thanh cong."""
+    """Upload anh moi hoac upload lai file thay the cho anh failed trong cung batch."""
     batch = await db.scalar(select(IndexingBatch).where(IndexingBatch.batch_id == batch_id))
     if batch is None:
         raise api_error(
@@ -187,13 +190,6 @@ async def upload_images_to_batch(
             "NOT_FOUND",
             "Indexing batch not found.",
             {"batch_id": batch_id},
-        )
-    if batch.status in {BatchStatus.completed, BatchStatus.failed, BatchStatus.cancelled}:
-        raise api_error(
-            status.HTTP_409_CONFLICT,
-            "INDEXING_BATCH_CLOSED",
-            "Cannot upload images to a closed batch.",
-            {"batch_id": batch_id, "status": batch.status},
         )
     if not files:
         raise api_error(
@@ -203,9 +199,21 @@ async def upload_images_to_batch(
             {"field": "files"},
         )
 
+    normalized_image_urls = _normalize_optional_image_urls(image_urls, len(files))
+    is_retry_only = bool(normalized_image_urls) and all(normalized_image_urls)
+    if batch.status == BatchStatus.cancelled or (batch.status in {BatchStatus.completed, BatchStatus.failed} and not is_retry_only):
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            "INDEXING_BATCH_CLOSED",
+            "Cannot upload new images to a closed batch. Only failed-image replacements are allowed.",
+            {"batch_id": batch_id, "status": batch.status},
+        )
+
     upload_dir = Path(settings.admin_index_upload_dir) / batch_id
     upload_dir.mkdir(parents=True, exist_ok=True)
-    uploaded_items: list[AIIndexItemPayload] = []
+    queued_items: list[AIIndexItemPayload] = []
+    saved_new_paths: list[Path] = []
+    new_item_count = 0
     uploaded_bytes = int(
         await db.scalar(
             select(func.coalesce(func.sum(Image.file_size), 0))
@@ -217,8 +225,21 @@ async def upload_images_to_batch(
     max_batch_bytes = settings.admin_index_batch_max_mb * 1024 * 1024
 
     try:
-        for file in files:
+        for index, file in enumerate(files):
             content = await _read_and_validate_upload_file(file)
+            retry_image_url = normalized_image_urls[index] if normalized_image_urls else None
+
+            if retry_image_url:
+                image, item = await _prepare_failed_replacement_item(
+                    db=db,
+                    batch_id=batch_id,
+                    image_url=retry_image_url,
+                    file=file,
+                    content=content,
+                )
+                queued_items.append(_build_ai_item_payload(item, image))
+                continue
+
             uploaded_bytes += len(content)
             if uploaded_bytes > max_batch_bytes:
                 raise api_error(
@@ -232,9 +253,10 @@ async def upload_images_to_batch(
                     },
                 )
 
-            filename = _safe_filename(file.filename or f"image_{len(uploaded_items) + 1}.jpg")
+            filename = _safe_filename(file.filename or f"image_{len(queued_items) + 1}.jpg")
             target = _dedupe_path(upload_dir / filename)
             target.write_bytes(content)
+            saved_new_paths.append(target)
             storage_path = f"/static/images/admin_uploads/{batch_id}/{target.name}"
 
             image = Image(
@@ -255,8 +277,9 @@ async def upload_images_to_batch(
             )
             db.add(item)
             await db.flush()
+            new_item_count += 1
 
-            uploaded_items.append(
+            queued_items.append(
                 AIIndexItemPayload(
                     item_id=item.id,
                     image_id=image.id,
@@ -268,13 +291,11 @@ async def upload_images_to_batch(
 
         batch.status = BatchStatus.running
         batch.is_uploading = True
-        batch.total_images += len(uploaded_items)
+        batch.total_images += new_item_count
         await db.commit()
     except Exception:
         await db.rollback()
-        for payload in uploaded_items:
-            filename = Path(payload.image_path).name
-            uploaded_file = upload_dir / filename
+        for uploaded_file in saved_new_paths:
             if uploaded_file.is_file():
                 uploaded_file.unlink(missing_ok=True)
         raise
@@ -282,10 +303,10 @@ async def upload_images_to_batch(
     try:
         ai_response = await ai_indexing_client.enqueue_indexing_items(
             batch_id=batch_id,
-            items=uploaded_items,
+            items=queued_items,
         )
     except AIIndexingServiceError as exc:
-        await _mark_uploaded_items_failed(db, [item.item_id for item in uploaded_items], str(exc))
+        await _mark_uploaded_items_failed(db, [item.item_id for item in queued_items], str(exc))
         await _sync_batch_counts(db, batch)
         raise api_error(
             status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -295,7 +316,7 @@ async def upload_images_to_batch(
 
     return AdminBatchImageUploadResponse(
         batch_id=batch_id,
-        uploaded_files=len(uploaded_items),
+        uploaded_files=len(queued_items),
         total_images=batch.total_images,
         queued_items=ai_response.queued_items,
     )
@@ -424,16 +445,22 @@ async def list_indexing_items(
 
     total = await _count_rows(db, select(func.count()).select_from(IndexingItem).where(*filters))
     offset = (page - 1) * limit
-    items = (
-        await db.scalars(
-            select(IndexingItem)
+    rows = (
+        await db.execute(
+            select(IndexingItem, Image)
+            .join(Image, Image.id == IndexingItem.image_id)
             .where(*filters)
             .order_by(IndexingItem.created_at.desc(), IndexingItem.id.desc())
             .offset(offset)
             .limit(limit)
         )
     ).all()
-    return AdminIndexingItemListResponse(items=list(items), page=page, limit=limit, total=total)
+    return AdminIndexingItemListResponse(
+        items=[_to_admin_indexing_item(item, image) for item, image in rows],
+        page=page,
+        limit=limit,
+        total=total,
+    )
 
 
 @router.post(
@@ -708,6 +735,178 @@ async def list_batches(
     return AdminIndexBatchListResponse(items=list(items))
 
 
+def _to_admin_indexing_item(item: IndexingItem, image: Image) -> AdminIndexingItemOut:
+    return AdminIndexingItemOut(
+        id=item.id,
+        batch_id=item.batch_id,
+        image_id=item.image_id,
+        image_url=build_image_url(image.storage_path),
+        storage_path=image.storage_path,
+        filename=image.original_filename or Path(image.storage_path.replace("\\", "/")).name or f"image_{image.id}",
+        status=item.status,
+        retry_count=item.retry_count,
+        max_retries=item.max_retries,
+        error_message=item.error_message,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
+    )
+
+
+def _normalize_optional_image_urls(image_urls: list[str] | None, file_count: int) -> list[str] | None:
+    if image_urls is None:
+        return None
+    if len(image_urls) != file_count:
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "VALIDATION_ERROR",
+            "image_urls must have the same length as files when provided.",
+            {"imageUrls": len(image_urls), "files": file_count},
+        )
+    normalized = [value.strip() for value in image_urls]
+    has_retry = any(normalized)
+    if not has_retry:
+        return None
+    return normalized
+
+
+async def _prepare_failed_replacement_item(
+    *,
+    db: AsyncSession,
+    batch_id: str,
+    image_url: str,
+    file: UploadFile,
+    content: bytes,
+) -> tuple[Image, IndexingItem]:
+    storage_path = _normalize_image_url_to_storage_path(image_url)
+    image = await db.scalar(select(Image).where(Image.storage_path == storage_path))
+    if image is None:
+        raise api_error(
+            status.HTTP_404_NOT_FOUND,
+            "IMAGE_NOT_FOUND",
+            "Image not found for the provided URL.",
+            {"image_url": image_url, "storage_path": storage_path},
+        )
+    if image.status != ImageStatus.failed:
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            "IMAGE_NOT_FAILED",
+            "Only failed images can be replaced and queued for re-indexing.",
+            {"image_id": image.id, "status": image.status},
+        )
+
+    item = await db.scalar(
+        select(IndexingItem)
+        .where(IndexingItem.image_id == image.id, IndexingItem.batch_id == batch_id)
+        .order_by(IndexingItem.updated_at.desc(), IndexingItem.id.desc())
+        .limit(1)
+    )
+    if item is None:
+        raise api_error(
+            status.HTTP_404_NOT_FOUND,
+            "INDEXING_ITEM_NOT_FOUND",
+            "Failed image does not belong to this indexing batch.",
+            {"batch_id": batch_id, "image_id": image.id},
+        )
+    if item.status in {IndexingItemStatus.queued, IndexingItemStatus.running}:
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            "IMAGE_INDEXING_ALREADY_ACTIVE",
+            "Image is already queued or running for indexing.",
+            {"image_id": image.id, "item_id": item.id, "status": item.status},
+        )
+    if item.status != IndexingItemStatus.failed:
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            "INDEXING_ITEM_NOT_FAILED",
+            "Only failed indexing items can be retried.",
+            {"image_id": image.id, "item_id": item.id, "status": item.status},
+        )
+
+    target_path = _storage_path_to_backend_path(image.storage_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_bytes(content)
+
+    image.original_filename = file.filename or image.original_filename or target_path.name
+    image.mime_type = file.content_type
+    image.file_size = len(content)
+    image.width = None
+    image.height = None
+    image.checksum = None
+    image.status = ImageStatus.failed
+    item.error_message = None
+    return image, item
+
+
+def _normalize_image_url_to_storage_path(image_url: str) -> str:
+    raw_value = image_url.strip()
+    if not raw_value:
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "VALIDATION_ERROR",
+            "image_url is required.",
+            {"field": "image_url"},
+        )
+
+    parsed = urlparse(raw_value)
+    path = parsed.path if parsed.scheme or parsed.netloc else raw_value
+    path = unquote(path).replace("\\", "/")
+    if path.startswith(settings.image_base_url.rstrip("/")):
+        path = urlparse(path).path
+    if path.startswith("static/"):
+        path = f"/{path}"
+    if not path.startswith("/static/"):
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "INVALID_IMAGE_URL",
+            "image_url must point to a stored /static image.",
+            {"image_url": image_url},
+        )
+    return path
+
+
+def _storage_path_to_backend_path(storage_path: str) -> Path:
+    normalized = storage_path.replace("\\", "/")
+    if normalized.startswith("/static/"):
+        relative_path = normalized.removeprefix("/static/")
+    elif normalized.startswith("static/"):
+        relative_path = normalized.removeprefix("static/")
+    else:
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "INVALID_STORAGE_PATH",
+            "Only local /static images can be replaced.",
+            {"storage_path": storage_path},
+        )
+
+    static_root = Path(settings.static_files_dir).resolve()
+    target_path = (static_root / relative_path).resolve()
+    if target_path != static_root and static_root not in target_path.parents:
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "INVALID_STORAGE_PATH",
+            "Resolved image path is outside the static directory.",
+            {"storage_path": storage_path},
+        )
+    return target_path
+
+def _storage_path_to_ai_path(storage_path: str) -> str:
+    normalized = storage_path.replace("\\", "/")
+    if normalized.startswith("/static/"):
+        return f"/app{normalized}"
+    if normalized.startswith("static/"):
+        return f"/app/{normalized}"
+    return normalized
+
+
+def _build_ai_item_payload(item: IndexingItem, image: Image) -> AIIndexItemPayload:
+    return AIIndexItemPayload(
+        item_id=item.id,
+        image_id=image.id,
+        image_path=_storage_path_to_ai_path(image.storage_path),
+        storage_path=image.storage_path,
+        original_filename=image.original_filename,
+    )
+
 async def _count_rows(db: AsyncSession, statement) -> int:
     value = await db.scalar(statement)
     return int(value or 0)
@@ -885,3 +1084,7 @@ async def _mark_uploaded_items_failed(db: AsyncSession, item_ids: list[int], err
         image.status = ImageStatus.failed
 
     await db.commit()
+
+
+
+

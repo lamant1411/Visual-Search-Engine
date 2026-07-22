@@ -80,6 +80,22 @@ export interface AdminBatchImageUploadResponse {
   queued_items: number
 }
 
+export interface AdminIndexingItem {
+  id: number
+  batch_id: string
+  image_id: number
+  image_url: string
+  storage_path: string
+  filename: string
+  status: 'queued' | 'running' | 'indexed' | 'failed' | 'cancelled'
+  retry_count: number
+  max_retries: number
+  error_message?: string | null
+  created_at: string
+  updated_at?: string | null
+}
+
+
 export interface PendingImage {
   id: string
   url: string
@@ -167,10 +183,12 @@ export const adminApi = {
   async uploadImagesToBatch(
     batchId: string,
     files: File[],
-    onProgress?: (percent: number) => void
+    onProgress?: (percent: number) => void,
+    imageUrls?: string[]
   ): Promise<AdminBatchImageUploadResponse> {
     const formData = new FormData()
     files.forEach((file) => formData.append('files', file))
+    imageUrls?.forEach((url) => formData.append('image_urls', url))
 
     const response = await apiClient.post<AdminBatchImageUploadResponse>(
       `/admin/index/batches/${batchId}/images`,
@@ -261,19 +279,28 @@ export const adminApi = {
     return response.data
   },
 
+  async listIndexingItems(
+    batchId: string,
+    params?: { status?: AdminIndexingItem['status']; page?: number; limit?: number }
+  ): Promise<PaginatedResponse<AdminIndexingItem>> {
+    const response = await apiClient.get<PaginatedResponse<AdminIndexingItem>>(
+      `/admin/index/${batchId}/items`,
+      { params }
+    )
+    return response.data
+  },
+
   /**
-   * Tác vụ với ảnh đơn trong modal lỗi (Xử lý cục bộ trên giao diện)
+   * Upload lai file thay the cho cac anh loi thong qua endpoint upload batch ban dau.
    */
-  async indexSingleImage(_url: string): Promise<{ success: boolean; error_message?: string }> {
-    await delay(600)
-    const isFailed = Math.random() < 0.15
-    if (isFailed) {
-      return {
-        success: false,
-        error_message: 'Thử lại thất bại: Lỗi trích xuất vector hoặc ảnh lỗi.'
-      }
-    }
-    return { success: true }
+  async uploadAndRetryFailedImages(
+    batchId: string,
+    imageUrls: string[],
+    files: File[],
+    onProgress?: (percent: number) => void
+  ): Promise<{ success: boolean; queued_items: number; error_message?: string }> {
+    const response = await this.uploadImagesToBatch(batchId, files, onProgress, imageUrls)
+    return { success: true, queued_items: response.queued_items }
   },
 
   async deletePendingImage(_url: string): Promise<{ success: boolean }> {
@@ -303,3 +330,6 @@ export const adminApi = {
     return { message: `Legacy stub index ${_urls.length} urls`, task_id: 'legacy' }
   },
 }
+
+
+
