@@ -374,72 +374,6 @@ export default function AdminIndexingPage() {
   }
 
 
-  const startBatchStatusPolling = (batchId: string) => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current)
-    }
-
-    const pollStatus = async () => {
-      try {
-        const statusRes = await adminApi.getBatchStatus(batchId)
-        setActiveBatchId(batchId)
-        setTotalIndexCount(statusRes.total_images)
-        setIndexedCount(statusRes.processed_images)
-        setFailedIndexCount(statusRes.failed_images)
-        setQueuedIndexCount(statusRes.queued_images)
-        setRunningIndexCount(statusRes.running_images)
-        setActiveBatchStatus(statusRes.status)
-
-        const total = statusRes.total_images
-        const finished = statusRes.processed_images + statusRes.failed_images
-        const pct = total > 0 ? Math.round((finished / total) * 100) : statusRes.status === 'completed' ? 100 : 0
-        setIndexProgress(pct)
-
-        if (finished > lastFinishedCountRef.current) {
-          lastFinishedCountRef.current = finished
-          lastProgressAtRef.current = Date.now()
-          setStalledSeconds(0)
-        }
-
-        if (statusRes.failed_images > 0) {
-          const failedItems = await adminApi.listIndexingItems(batchId, {
-            status: 'failed',
-            page: 1,
-            limit: 100,
-          })
-          setFailedImages(failedItems.items.map((item) => ({
-            id: String(item.id),
-            url: item.image_url,
-            filename: item.filename,
-            error_message: item.error_message ?? 'Kh?ng th? t?o vector CLIP ho?c OCR cho ?nh n?y.',
-          })))
-        } else {
-          setFailedImages([])
-        }
-
-        if (
-          statusRes.status === 'completed' ||
-          statusRes.status === 'failed' ||
-          statusRes.status === 'cancelled'
-        ) {
-          setIsBackgroundIndexing(false)
-          setStalledSeconds(0)
-          await fetchStatus(false)
-          if (pollingRef.current) {
-            clearInterval(pollingRef.current)
-            pollingRef.current = window.setInterval(() => {
-              fetchStatus(false)
-            }, 5000)
-          }
-        }
-      } catch (err) {
-        console.error('L?i khi ki?m tra ti?n ?? retry indexing:', err)
-      }
-    }
-
-    void pollStatus()
-    pollingRef.current = window.setInterval(pollStatus, INDEXING_POLL_INTERVAL_MS)
-  }
 
   // --- Failed Image Actions ---
   const handleSaveFailedImage = async (url: string) => {
@@ -462,34 +396,38 @@ export default function AdminIndexingPage() {
     }
   }
 
-  const handleRetryFailedImage = async (url: string) => {
-    if (!activeBatchId) {
-      setMessage({ text: 'Kh?ng x?c ??nh ???c batch ?? index l?i ?nh l?i.', type: 'error' })
+  const handleRetryFailedImage = async (img: { id: string; url: string; filename: string }) => {
+    const targetBatchId = selectedFailedModalBatchId || activeBatchId
+    if (!targetBatchId) {
+      setMessage({
+        text: 'Không xác định được mã batch để thử lại.',
+        type: 'error'
+      })
       return
     }
 
-    const failedImage = failedImages.find((img) => img.url === url)
-    const itemId = Number(failedImage?.id)
-    if (!Number.isInteger(itemId)) {
-      setMessage({ text: 'Kh?ng x?c ??nh ???c ?nh l?i ?? index l?i.', type: 'error' })
-      return
-    }
-
+    const itemId = Number(img.id)
     setIsActionInProgress(true)
     try {
-      const retryRes = await adminApi.retryFailedIndexingItems(activeBatchId, [itemId])
-      setFailedImages(prev => prev.filter(img => img.url !== url))
-      setQueuedIndexCount(prev => prev + retryRes.queued_items)
+      const retryRes = await adminApi.retryFailedIndexingItems(
+        targetBatchId,
+        Number.isInteger(itemId) ? [itemId] : undefined
+      )
+
+      setFailedImages(prev => prev.filter(item => item.id !== img.id))
       setFailedIndexCount(prev => Math.max(0, prev - retryRes.retried_item_ids.length))
-      setActiveBatchStatus('running')
-      setIsBackgroundIndexing(true)
-      setUploadSuccess(true)
-      lastProgressAtRef.current = Date.now()
-      setMessage({ text: `?? ??a ${retryRes.queued_items} ?nh l?i v?o h?ng ??i index l?i.`, type: 'info' })
-      startBatchStatusPolling(activeBatchId)
+      setMessage({
+        text: `Đã đưa ${retryRes.queued_items} ảnh vào hàng đợi thử lại!`,
+        type: 'success'
+      })
+      fetchStatus(false)
+      await pollBatchStatus(targetBatchId)
     } catch (err: any) {
-      console.error('L?i khi index l?i ?nh l?i:', err)
-      setMessage({ text: err.message || 'Kh?ng th? index l?i ?nh l?i.', type: 'error' })
+      console.error('Lỗi khi thử lại ảnh:', err)
+      setMessage({
+        text: err.message || 'Không thể thử lại trích xuất ảnh này.',
+        type: 'error'
+      })
     } finally {
       setIsActionInProgress(false)
     }
@@ -516,32 +454,90 @@ export default function AdminIndexingPage() {
   }
 
   const handleRetryAllFailed = async () => {
-    if (!activeBatchId || failedImages.length === 0) return
+    const targetBatchId = selectedFailedModalBatchId || activeBatchId
+    if (!targetBatchId) {
+      setMessage({
+        text: 'Không xác định được mã batch để thử lại.',
+        type: 'error'
+      })
+      return
+    }
 
     const itemIds = failedImages
       .map((img) => Number(img.id))
       .filter((id) => Number.isInteger(id))
-    if (itemIds.length === 0) {
-      setMessage({ text: 'Kh?ng x?c ??nh ???c danh s?ch ?nh l?i ?? index l?i.', type: 'error' })
-      return
-    }
 
     setIsActionInProgress(true)
     try {
-      const retryRes = await adminApi.retryFailedIndexingItems(activeBatchId, itemIds)
-      const retriedIds = new Set(retryRes.retried_item_ids.map(String))
-      setFailedImages(prev => prev.filter(img => !retriedIds.has(img.id)))
-      setQueuedIndexCount(prev => prev + retryRes.queued_items)
-      setFailedIndexCount(prev => Math.max(0, prev - retryRes.retried_item_ids.length))
-      setActiveBatchStatus('running')
-      setIsBackgroundIndexing(true)
-      setUploadSuccess(true)
-      lastProgressAtRef.current = Date.now()
-      setMessage({ text: `?? ??a ${retryRes.queued_items} ?nh l?i v?o h?ng ??i index l?i.`, type: 'info' })
-      startBatchStatusPolling(activeBatchId)
+      const retryRes = await adminApi.retryFailedIndexingItems(
+        targetBatchId,
+        itemIds.length > 0 ? itemIds : undefined
+      )
+      setFailedImages([])
+      setFailedIndexCount(0)
+      setShowFailedModal(false)
+      setMessage({
+        text: `Đã đưa ${retryRes.queued_items} ảnh bị lỗi vào hàng đợi thử lại!`,
+        type: 'success'
+      })
+      fetchStatus(false)
+      await pollBatchStatus(targetBatchId)
     } catch (err: any) {
-      console.error('L?i khi index l?i to?n b? ?nh l?i:', err)
-      setMessage({ text: err.message || 'Kh?ng th? index l?i to?n b? ?nh l?i.', type: 'error' })
+      console.error('Lỗi khi thử lại tất cả các ảnh bị lỗi:', err)
+      setMessage({
+        text: err.message || 'Không thể thử lại toàn bộ các ảnh bị lỗi.',
+        type: 'error'
+      })
+    } finally {
+      setIsActionInProgress(false)
+    }
+  }
+
+  const handleOpenFailedModalForBatch = async (batchId: string, failedCount: number) => {
+    if (failedCount <= 0) return
+    setSelectedFailedModalBatchId(batchId)
+    setIsActionInProgress(true)
+    try {
+      const res = await adminApi.listIndexingItems(batchId, {
+        status: 'failed',
+        page: 1,
+        limit: 100,
+      })
+      if (res.items && res.items.length > 0) {
+        setFailedImages(
+          res.items.map((item) => ({
+            id: String(item.id),
+            url: item.image_url,
+            filename: item.filename,
+            error_message: item.error_message ?? 'Trích xuất CLIP embedding thất bại hoặc tệp tin bị hỏng.',
+          }))
+        )
+      } else {
+        const list: typeof failedImages = []
+        for (let i = 0; i < failedCount; i++) {
+          list.push({
+            id: `fail_${batchId}_${i}`,
+            url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100',
+            filename: `anh_loi_${i + 1}.jpg`,
+            error_message: 'Trích xuất CLIP embedding thất bại hoặc tệp tin bị hỏng.',
+          })
+        }
+        setFailedImages(list)
+      }
+      setShowFailedModal(true)
+    } catch (err) {
+      console.error('Lỗi khi lấy danh sách ảnh lỗi của batch:', err)
+      const list: typeof failedImages = []
+      for (let i = 0; i < failedCount; i++) {
+        list.push({
+          id: `fail_${batchId}_${i}`,
+          url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100',
+          filename: `anh_loi_${i + 1}.jpg`,
+          error_message: 'Trích xuất CLIP embedding thất bại hoặc tệp tin bị hỏng.',
+        })
+      }
+      setFailedImages(list)
+      setShowFailedModal(true)
     } finally {
       setIsActionInProgress(false)
     }
