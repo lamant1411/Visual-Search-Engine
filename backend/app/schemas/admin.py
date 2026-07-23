@@ -91,6 +91,7 @@ class AdminBatchImageUploadResponse(BaseModel):
     uploaded_files: int
     total_images: int
     queued_items: int
+    skipped_files: int = 0
 
 
 class AdminBatchCompleteUploadResponse(BaseModel):

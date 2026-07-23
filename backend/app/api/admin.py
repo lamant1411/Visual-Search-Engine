@@ -1,5 +1,6 @@
 """API quản trị cho dashboard và batch indexing."""
 
+import hashlib
 import uuid
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -30,7 +31,7 @@ from app.schemas.admin import (
     AdminUserListResponse,
 )
 from app.schemas.common import BatchStatus, ImageSourceType, ImageStatus, IndexingItemStatus
-from app.services.admin_indexing import AIIndexingServiceError, AIIndexItemPayload, ai_indexing_client
+from app.services.admin_indexing import AIIndexingServiceError, AIIndexItemPayload, AIIndexItemsResponse, ai_indexing_client
 from app.services.search import build_image_url
 
 router = APIRouter()
@@ -214,6 +215,7 @@ async def upload_images_to_batch(
     queued_items: list[AIIndexItemPayload] = []
     saved_new_paths: list[Path] = []
     new_item_count = 0
+    skipped_files = 0
     uploaded_bytes = int(
         await db.scalar(
             select(func.coalesce(func.sum(Image.file_size), 0))
@@ -238,6 +240,14 @@ async def upload_images_to_batch(
                     content=content,
                 )
                 queued_items.append(_build_ai_item_payload(item, image))
+                continue
+
+            checksum = hashlib.sha256(content).hexdigest()
+            existing_indexed_image_id = await db.scalar(
+                select(Image.id).where(Image.checksum == checksum, Image.status == ImageStatus.indexed).limit(1)
+            )
+            if existing_indexed_image_id is not None:
+                skipped_files += 1
                 continue
 
             uploaded_bytes += len(content)
@@ -265,6 +275,7 @@ async def upload_images_to_batch(
                 original_filename=file.filename or target.name,
                 mime_type=file.content_type,
                 file_size=len(content),
+                checksum=checksum,
                 status=ImageStatus.pending,
             )
             db.add(image)
@@ -301,10 +312,13 @@ async def upload_images_to_batch(
         raise
 
     try:
-        ai_response = await ai_indexing_client.enqueue_indexing_items(
-            batch_id=batch_id,
-            items=queued_items,
-        )
+        if queued_items:
+            ai_response = await ai_indexing_client.enqueue_indexing_items(
+                batch_id=batch_id,
+                items=queued_items,
+            )
+        else:
+            ai_response = AIIndexItemsResponse(batch_id=batch_id, queued_items=0)
     except AIIndexingServiceError as exc:
         await _mark_uploaded_items_failed(db, [item.item_id for item in queued_items], str(exc))
         await _sync_batch_counts(db, batch)
@@ -319,6 +333,7 @@ async def upload_images_to_batch(
         uploaded_files=len(queued_items),
         total_images=batch.total_images,
         queued_items=ai_response.queued_items,
+        skipped_files=skipped_files,
     )
 
 
@@ -663,6 +678,12 @@ async def get_batch_status(
     )
     if item_count > 0:
         await _sync_batch_counts(db, batch)
+    elif not batch.is_uploading and batch.total_images == 0:
+        batch.status = BatchStatus.completed
+        batch.processed_images = 0
+        batch.failed_images = 0
+        batch.error_message = None
+        await db.commit()
     else:
         try:
             ai_status = await ai_indexing_client.get_indexing_status(batch_id)
@@ -1013,8 +1034,13 @@ async def _sync_batch_counts_for_batches(
     for batch in batches:
         counts = counts_by_batch_id.get(batch.batch_id)
         if counts is None:
-            # Legacy folder batches have no indexing_items and are synced from AI status.
-            if batch.status in {BatchStatus.queued, BatchStatus.running}:
+            if not batch.is_uploading and batch.total_images == 0:
+                batch.status = BatchStatus.completed
+                batch.processed_images = 0
+                batch.failed_images = 0
+                batch.error_message = None
+                has_item_batches = True
+            elif batch.status in {BatchStatus.queued, BatchStatus.running}:
                 legacy_active_batches.append(batch)
             continue
 

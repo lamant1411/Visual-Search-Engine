@@ -78,6 +78,7 @@ export interface AdminBatchImageUploadResponse {
   uploaded_files: number
   total_images: number
   queued_items: number
+  skipped_files: number
 }
 
 export interface AdminIndexingItem {

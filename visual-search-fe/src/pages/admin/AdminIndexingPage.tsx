@@ -182,6 +182,7 @@ export default function AdminIndexingPage() {
 
     let batchId: string | null = null
     let uploadCompleted = false
+    let skippedFiles = 0
 
     try {
       // Upload theo chunk; mỗi chunk được AI queue ngay, không phải chờ toàn bộ ảnh tải xong.
@@ -196,21 +197,21 @@ export default function AdminIndexingPage() {
         try {
           const statusRes = await adminApi.getBatchStatus(createdBatchId)
 
-          setTotalIndexCount(Math.max(statusRes.total_images, filesToUpload.length))
+          setTotalIndexCount(statusRes.total_images)
           setIndexedCount(statusRes.processed_images)
           setFailedIndexCount(statusRes.failed_images)
           setQueuedIndexCount(statusRes.queued_images)
           setRunningIndexCount(statusRes.running_images)
           setActiveBatchStatus(statusRes.status)
 
-          const total = Math.max(statusRes.total_images, filesToUpload.length)
+          const total = statusRes.total_images
           const finished = statusRes.processed_images + statusRes.failed_images
           if (finished > lastFinishedCountRef.current) {
             lastFinishedCountRef.current = finished
             lastProgressAtRef.current = Date.now()
             setStalledSeconds(0)
           }
-          const pct = total > 0 ? Math.round((finished / total) * 100) : 0
+          const pct = total > 0 ? Math.round((finished / total) * 100) : statusRes.status === 'completed' ? 100 : 0
           setIndexProgress(pct)
 
           if (statusRes.failed_images > 0) {
@@ -283,13 +284,14 @@ export default function AdminIndexingPage() {
 
       for (let offset = 0; offset < filesToUpload.length; offset += chunkSize) {
         const chunk = filesToUpload.slice(offset, offset + chunkSize)
-        await adminApi.uploadImagesToBatch(createdBatchId, chunk, (chunkPercent) => {
+        const uploadRes = await adminApi.uploadImagesToBatch(createdBatchId, chunk, (chunkPercent) => {
           const completedFiles = offset
           const currentChunkFiles = (chunkPercent / 100) * chunk.length
           const uploadedFiles = Math.min(filesToUpload.length, completedFiles + currentChunkFiles)
           setUploadedCount(Math.round(uploadedFiles))
           setUploadProgress(Math.round((uploadedFiles / filesToUpload.length) * 100))
         })
+        skippedFiles += uploadRes.skipped_files
         setUploadedCount(Math.min(filesToUpload.length, offset + chunk.length))
       }
 
