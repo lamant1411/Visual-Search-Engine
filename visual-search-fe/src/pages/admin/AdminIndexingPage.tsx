@@ -79,8 +79,8 @@ export default function AdminIndexingPage() {
     return hours > 0
       ? `${hours}h ${(minutes % 60).toString().padStart(2, '0')}m`
       : minutes > 0
-      ? `${minutes}m ${remainingSeconds.toString().padStart(2, '0')}s`
-      : `${remainingSeconds}s`
+        ? `${minutes}m ${remainingSeconds.toString().padStart(2, '0')}s`
+        : `${remainingSeconds}s`
   }
 
   useEffect(() => {
@@ -372,6 +372,8 @@ export default function AdminIndexingPage() {
       fetchStatus(false)
     }
   }
+
+
 
   // --- Failed Image Actions ---
   const handleSaveFailedImage = async (url: string) => {
@@ -850,12 +852,12 @@ export default function AdminIndexingPage() {
                     className={`h-full rounded-full transition-all duration-300 ease-out ${indexError
                       ? 'bg-red-500'
                       : isBackgroundIndexing
-                      ? 'bg-amber-500 animate-pulse'
-                      : didIndexingComplete
-                        ? 'bg-emerald-600'
-                        : wasIndexingCancelled
-                          ? 'bg-amber-600'
-                          : 'bg-red-600'
+                        ? 'bg-amber-500 animate-pulse'
+                        : didIndexingComplete
+                          ? 'bg-emerald-600'
+                          : wasIndexingCancelled
+                            ? 'bg-amber-600'
+                            : 'bg-red-600'
                       }`}
                     style={{ width: `${indexProgress}%` }}
                   />
@@ -1066,8 +1068,8 @@ export default function AdminIndexingPage() {
                         )}
                         {b.status === 'queued' ? 'ĐANG CHỜ' :
                           b.status === 'running' ? 'ĐANG CHẠY' :
-                          b.status === 'completed' ? 'HOÀN THÀNH' :
-                            b.status === 'cancelled' ? 'ĐÃ HỦY' : 'THẤT BẠI'}
+                            b.status === 'completed' ? 'HOÀN THÀNH' :
+                              b.status === 'cancelled' ? 'ĐÃ HỦY' : 'THẤT BẠI'}
                       </span>
                     </td>
                     <td className="px-6 py-4 font-bold text-ink-primary">{b.total_images}</td>
