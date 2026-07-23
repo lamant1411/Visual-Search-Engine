@@ -497,7 +497,7 @@ async def upload_indexing_batch(
     _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> AdminIndexUploadResponse:
-    """Nhan nhieu anh tu FE va tao batch queued, chua gui AI indexing."""
+    """Nhận nhiều ảnh từ FE và tạo batch queued, chưa gửi AI indexing."""
     if not files:
         raise api_error(
             status.HTTP_400_BAD_REQUEST,
@@ -581,7 +581,7 @@ async def start_batch_indexing(
     _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> AdminIndexStartResponse:
-    """Kich hoat AI indexing cho batch da upload."""
+    """Kích hoạt AI indexing cho batch đã upload."""
     batch = await db.scalar(select(IndexingBatch).where(IndexingBatch.batch_id == batch_id))
     if batch is None:
         raise api_error(
@@ -662,7 +662,7 @@ async def get_batch_status(
     _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> AdminIndexStatusResponse:
-    """Tráº£ tráº¡ng thÃ¡i indexing; Æ°u tiÃªn Ä‘á»“ng bá»™ tráº¡ng thÃ¡i má»›i nháº¥t tá»« AI."""
+    """Trả trạng thái indexing; ưu tiên đồng bộ trạng thái mới nhất từ AI."""
     batch = await db.scalar(select(IndexingBatch).where(IndexingBatch.batch_id == batch_id))
     if batch is None:
         raise api_error(
@@ -746,7 +746,7 @@ async def list_batches(
     _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> AdminIndexBatchListResponse:
-    """Tráº£ lá»‹ch sá»­ batch indexing gáº§n nháº¥t cho dashboard admin."""
+    """Trả danh sách batch indexing gần nhất cho dashboard admin."""
     items = (
         await db.scalars(
             select(IndexingBatch).order_by(IndexingBatch.created_at.desc()).limit(20)

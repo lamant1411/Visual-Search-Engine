@@ -46,6 +46,7 @@ class SearchHistoryItem(BaseModel):
     id: int
     query_type: SearchQueryType = Field(alias="queryType")
     query_value: str = Field(alias="queryValue")
+    query_image_url: str | None = Field(default=None, alias="queryImageUrl")
     created_at: datetime = Field(alias="createdAt")
 
 

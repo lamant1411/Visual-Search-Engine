@@ -28,6 +28,7 @@ export async function searchByImage({
   file,
   imageId,
   imageUrl,
+  historyKey,
   page = 1,
   limit = 20,
 }: ImageSearchParams): Promise<SearchResponse> {
@@ -50,6 +51,10 @@ export async function searchByImage({
 
   if (imageUrl) {
     formData.append('imageUrl', imageUrl)
+  }
+
+  if (historyKey) {
+    formData.append('historyKey', historyKey)
   }
 
   formData.append('page', String(page))

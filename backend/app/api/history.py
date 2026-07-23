@@ -8,7 +8,8 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.search_history import SearchHistory
 from app.models.user import User
-from app.schemas.search import SearchHistoryResponse
+from app.schemas.search import SearchHistoryItem, SearchHistoryResponse
+from app.services.search import build_image_url
 
 router = APIRouter()
 
@@ -52,4 +53,15 @@ async def get_search_history(
         )
     ).all()
 
-    return SearchHistoryResponse(items=list(items), page=page, limit=limit, total=total)
+    history_items = [
+        SearchHistoryItem(
+            id=item.id,
+            query_type=item.query_type,
+            query_value=item.query_value,
+            query_image_url=build_image_url(item.query_image_url) if item.query_image_url else None,
+            created_at=item.created_at,
+        )
+        for item in items
+    ]
+
+    return SearchHistoryResponse(items=history_items, page=page, limit=limit, total=total)

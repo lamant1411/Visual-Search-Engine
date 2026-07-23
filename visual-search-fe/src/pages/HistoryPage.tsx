@@ -36,6 +36,7 @@ export default function HistoryPage() {
   )
   function handleReSearch(item: HistoryItem) {
     if (item.query_type === 'image') {
+<<<<<<< HEAD
       const imgTarget = item.query_image_url || item.query_value
       const imageIdNum = Number.isInteger(Number(imgTarget)) && Number(imgTarget) > 0 ? Number(imgTarget) : undefined
 
@@ -48,6 +49,16 @@ export default function HistoryPage() {
       } else {
         navigate('/search', { state: { mode: 'image' } })
       }
+=======
+      if (!item.query_image_url) {
+        navigate('/search', { state: { mode: 'image' } })
+        return
+      }
+
+      navigate(
+        `/search/results?mode=image&imageUrl=${encodeURIComponent(item.query_image_url)}&q=${encodeURIComponent(item.query_value)}&page=1&limit=20`,
+      )
+>>>>>>> 067aee2c46ee6d8a113a0f432b440790657e76dc
       return
     }
 

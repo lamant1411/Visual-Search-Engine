@@ -13,10 +13,12 @@ import { searchByImage, searchByText } from "../services/search.api";
 import { useBookmarks } from "../hooks/useBookmarks";
 import type { SearchMode, SearchResponse, SearchResult } from "../types";
 import { getSearchErrorMessage } from "../utils/getSearchErrorMessage";
+import { loadImageSearchFile } from "../utils/imageSearchSession";
 
 type SearchLocationState = {
   file?: File;
   fileName?: string;
+  historyKey?: string;
 };
 
 const pageLimit = 20;
@@ -37,21 +39,35 @@ export function SearchResultsPage() {
   const query = searchParams.get("q") ?? "";
   const imageId = parseOptionalPositiveNumber(searchParams.get("imageId"));
   const imageUrl = searchParams.get("imageUrl") ?? undefined;
+  const historyKey = searchParams.get("historyKey") ?? state.historyKey;
+  const [restoredImageFile, setRestoredImageFile] = useState<File | null>(null);
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(
     null,
   );
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const { isBookmarked, toggleBookmark } = useBookmarks();
-  const resultTitle = getResultTitle(mode, query, state.fileName, imageId, imageUrl);
-  const isMissingImageReference = mode === "image" && !state.file && !imageId && !imageUrl;
+  const searchFile = state.file ?? restoredImageFile ?? undefined;
+  const searchFileName = state.fileName ?? restoredImageFile?.name ?? query;
+  const resultTitle = getResultTitle(mode, query, searchFileName, imageId);
+  const referenceImageUrl = useMemo(() => {
+    if (mode !== "image") {
+      return null;
+    }
+    if (searchFile) {
+      return URL.createObjectURL(searchFile);
+    }
+    return imageUrl ?? null;
+  }, [imageUrl, mode, searchFile]);
+  const shouldRevokeReferenceUrl = Boolean(searchFile && referenceImageUrl);
+  const isMissingImageReference = mode === "image" && !searchFile && !imageId && !imageUrl;
   const queryEnabled =
-    mode === "image" ? Boolean(state.file || imageId || imageUrl) : query.trim().length > 0;
-  const imageSearchKey = state.file
-    ? `${state.file.name}-${state.file.size}-${state.file.lastModified}`
-    : imageId
-      ? `image-${imageId}`
-      : imageUrl
-        ? `imageUrl-${imageUrl}`
+    mode === "image" ? Boolean(searchFile || imageId || imageUrl) : query.trim().length > 0;
+  const imageSearchKey = searchFile
+    ? `${searchFile.name}-${searchFile.size}-${searchFile.lastModified}-${historyKey ?? "no-key"}`
+    : imageUrl
+      ? `url-${imageUrl}`
+      : imageId
+        ? `image-${imageId}`
         : "no-image";
   const searchQuery = useInfiniteQuery({
     queryKey: [
@@ -60,6 +76,7 @@ export function SearchResultsPage() {
       query,
       imageId,
       imageUrl,
+      historyKey,
       pageLimit,
       imageSearchKey,
     ],
@@ -71,7 +88,8 @@ export function SearchResultsPage() {
         imageUrl,
         page: pageParam,
         limit: pageLimit,
-        file: state.file,
+        file: searchFile,
+        historyKey,
       }),
     enabled: queryEnabled,
     initialPageParam: 1,
@@ -110,6 +128,31 @@ export function SearchResultsPage() {
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = searchQuery;
 
   useEffect(() => {
+    if (mode !== "image" || state.file || restoredImageFile || imageId || !historyKey) {
+      return;
+    }
+
+    let isActive = true;
+    void loadImageSearchFile(historyKey).then((file) => {
+      if (isActive) {
+        setRestoredImageFile(file);
+      }
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [historyKey, imageId, mode, restoredImageFile, state.file]);
+
+  useEffect(() => {
+    return () => {
+      if (shouldRevokeReferenceUrl && referenceImageUrl) {
+        URL.revokeObjectURL(referenceImageUrl);
+      }
+    };
+  }, [referenceImageUrl, shouldRevokeReferenceUrl]);
+
+  useEffect(() => {
     const target = loadMoreRef.current;
     if (!target || !queryEnabled || !hasNextPage) {
       return;
@@ -138,6 +181,24 @@ export function SearchResultsPage() {
           <h1 className="font-display mt-2 text-3xl font-bold text-ink-primary sm:text-4xl">
             {resultTitle}
           </h1>
+
+          {referenceImageUrl && (
+            <div className="mx-auto mt-6 flex w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-border bg-white text-left shadow-sm shadow-slate-200/70 sm:flex-row">
+              <img
+                src={referenceImageUrl}
+                alt={`Reference image ${searchFileName ?? "uploaded image"}`}
+                className="h-56 w-full bg-surface-1 object-contain sm:h-64 sm:w-[420px]"
+              />
+              <div className="flex min-w-0 flex-1 flex-col justify-center p-5">
+                <p className="text-xs font-bold uppercase tracking-wide text-ink-muted">
+                  Reference image
+                </p>
+                <p className="mt-2 break-words text-lg font-semibold leading-6 text-ink-primary">
+                  {searchFileName ?? searchFile?.name}
+                </p>
+              </div>
+            </div>
+          )}
         </section>
 
         {queryEnabled ? (
@@ -163,8 +224,8 @@ export function SearchResultsPage() {
               Choose a reference image again
             </p>
             <p className="mx-auto mt-2 max-w-md text-sm text-ink-secondary">
-              Uploaded files are kept only for the current browser navigation
-              and are cleared after a page refresh.
+              This history item no longer has a valid reference image.
+              Choose a reference image again to search.
             </p>
             <Button
               className="mt-5"
@@ -338,6 +399,7 @@ function runSearch({
   page,
   limit,
   file,
+  historyKey,
 }: {
   mode: SearchMode;
   query: string;
@@ -346,9 +408,10 @@ function runSearch({
   page: number;
   limit: number;
   file?: File;
+  historyKey?: string;
 }): Promise<SearchResponse> {
   if (mode === "image") {
-    return searchByImage({ file, imageId, imageUrl, page, limit });
+    return searchByImage({ file, imageId, imageUrl, historyKey, page, limit });
   }
 
   return searchByText({
