@@ -406,14 +406,18 @@ export default function AdminIndexingPage() {
       return
     }
 
+    const itemId = Number(img.id)
     setIsActionInProgress(true)
     try {
-      await adminApi.startBatchIndexing(targetBatchId)
+      const retryRes = await adminApi.retryFailedIndexingItems(
+        targetBatchId,
+        Number.isInteger(itemId) ? [itemId] : undefined
+      )
 
       setFailedImages(prev => prev.filter(item => item.id !== img.id))
-      setFailedIndexCount(prev => Math.max(0, prev - 1))
+      setFailedIndexCount(prev => Math.max(0, prev - retryRes.retried_item_ids.length))
       setMessage({
-        text: `Đã kích hoạt thử lại trích xuất cho batch ${targetBatchId}.`,
+        text: `Đã đưa ${retryRes.queued_items} ảnh vào hàng đợi thử lại!`,
         type: 'success'
       })
       fetchStatus(false)
@@ -459,14 +463,21 @@ export default function AdminIndexingPage() {
       return
     }
 
+    const itemIds = failedImages
+      .map((img) => Number(img.id))
+      .filter((id) => Number.isInteger(id))
+
     setIsActionInProgress(true)
     try {
-      await adminApi.startBatchIndexing(targetBatchId)
+      const retryRes = await adminApi.retryFailedIndexingItems(
+        targetBatchId,
+        itemIds.length > 0 ? itemIds : undefined
+      )
       setFailedImages([])
       setFailedIndexCount(0)
       setShowFailedModal(false)
       setMessage({
-        text: `Đã kích hoạt thử lại trích xuất cho batch ${targetBatchId}!`,
+        text: `Đã đưa ${retryRes.queued_items} ảnh bị lỗi vào hàng đợi thử lại!`,
         type: 'success'
       })
       fetchStatus(false)
