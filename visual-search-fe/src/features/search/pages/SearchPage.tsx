@@ -13,6 +13,7 @@ import { SearchResultDetailModal } from "../components/SearchResultDetailModal";
 import { useBookmarks } from "../hooks/useBookmarks";
 import type { SearchMode, SearchResult } from "../types";
 import { validateSearchImageFile } from "../utils/imageValidation";
+import { createImageSearchHistoryKey, saveImageSearchFile } from "../utils/imageSearchSession";
 
 const featuredImageHeights = [
   "h-72",
@@ -127,15 +128,22 @@ export function SearchPage() {
       return;
     }
 
-    executeSearch();
+    void executeSearch();
   }
 
-  function executeSearch() {
+  async function executeSearch() {
     if (mode === "image") {
-      navigate("/search/results?mode=image&page=1&limit=20", {
+      if (!selectedFile) {
+        return;
+      }
+
+      const historyKey = createImageSearchHistoryKey();
+      await saveImageSearchFile(historyKey, selectedFile);
+      navigate(`/search/results?mode=image&page=1&limit=20&historyKey=${encodeURIComponent(historyKey)}`, {
         state: {
           file: selectedFile,
-          fileName: selectedFile?.name,
+          fileName: selectedFile.name,
+          historyKey,
         },
       });
       return;
@@ -178,7 +186,7 @@ export function SearchPage() {
     }
 
     if (action.type === "search") {
-      executeSearch();
+      void executeSearch();
     } else if (action.type === "bookmark") {
       toggleBookmark(action.result.id);
     } else {

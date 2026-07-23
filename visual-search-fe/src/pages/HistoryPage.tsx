@@ -36,7 +36,14 @@ export default function HistoryPage() {
   )
   function handleReSearch(item: HistoryItem) {
     if (item.query_type === 'image') {
-      navigate('/search', { state: { mode: 'image' } })
+      if (!item.query_image_url) {
+        navigate('/search', { state: { mode: 'image' } })
+        return
+      }
+
+      navigate(
+        `/search/results?mode=image&imageUrl=${encodeURIComponent(item.query_image_url)}&q=${encodeURIComponent(item.query_value)}&page=1&limit=20`,
+      )
       return
     }
 

@@ -35,6 +35,7 @@ export type ImageSearchParams = {
   file?: File
   imageId?: number
   imageUrl?: string
+  historyKey?: string
   page?: number
   limit?: number
 }
