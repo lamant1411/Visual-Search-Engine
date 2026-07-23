@@ -7,6 +7,7 @@ from cpu_runtime import configure_torch_runtime
 from dynamic_batcher import DynamicBatcher
 
 import torch
+import torch.nn.functional as F
 from deep_translator import GoogleTranslator
 from PIL import Image
 from transformers import CLIPProcessor, CLIPModel
@@ -15,6 +16,9 @@ from transformers import CLIPProcessor, CLIPModel
 configure_torch_runtime(torch)
 
 class CLIPEmbedder:
+    _SHORT_QUERY_MAX_WORDS = 4
+    _SHORT_QUERY_PROMPT_WEIGHTS = (0.15, 0.50, 0.35)
+
     def __init__(self, model_id="openai/clip-vit-base-patch32"):
         print(f"Đang tải mô hình {model_id}...")
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -112,18 +116,69 @@ class CLIPEmbedder:
             raise ValueError("Query tìm kiếm không được để trống.")
 
         try:
-            # 1. Tiền xử lý: Dịch truy vấn sang tiếng Anh một cách tự động
-            translated_query = self.translator.translate(query)
-            print(f"[AI Service] Query gốc: '{query}' -> Đã dịch: '{translated_query}'")
-            
-            # 2. Đưa câu tiếng Anh vào mô hình CLIP gốc
-            inputs = self.processor(text=[translated_query], return_tensors="pt", padding=True).to(self.device)
+            # Query ngắn được đặt vào câu tiếng Việt đầy đủ trước khi dịch.
+            # Cách này giúp bộ dịch chọn cụm tiếng Anh tự nhiên hơn cho CLIP.
+            source_prompts, weights = self._build_source_text_prompts(query)
+            prompts = self._translate_text_prompts(source_prompts)
+            print(f"[AI Service] Query gốc: '{query}' -> Đã dịch: {prompts}")
+
+            if len(prompts) > 1:
+                print(
+                    "[AI Service] Short-query contextual prompt ensemble: "
+                    f"{list(zip(prompts, weights))}"
+                )
+
+            # Chạy toàn bộ prompt trong một forward pass để giữ latency thấp.
+            inputs = self.processor(
+                text=prompts,
+                return_tensors="pt",
+                padding=True,
+            ).to(self.device)
             
             with self._model_lock, torch.inference_mode():
                 text_features = self.model.get_text_features(**inputs)
-                
-            return text_features.cpu().numpy().flatten().tolist()
+
+            # Chuẩn hóa từng prompt trước khi trộn để magnitude không làm
+            # lệch trọng số, sau đó chuẩn hóa lại vector truy vấn cuối.
+            normalized_features = F.normalize(text_features, p=2, dim=-1)
+            prompt_weights = normalized_features.new_tensor(weights).unsqueeze(1)
+            query_features = torch.sum(
+                normalized_features * prompt_weights,
+                dim=0,
+            )
+            query_features = F.normalize(query_features, p=2, dim=0)
+
+            return query_features.detach().cpu().tolist()
         
         except Exception as e:
             print(f"Lỗi khi xử lý text trong mô hình CLIP: {e}")
             return None
+
+    def _build_source_text_prompts(self, query: str) -> tuple[list[str], list[float]]:
+        cleaned_query = " ".join(query.strip().split())
+        word_count = len(cleaned_query.split())
+
+        if word_count > self._SHORT_QUERY_MAX_WORDS:
+            return [cleaned_query], [1.0]
+
+        prompts = [
+            cleaned_query,
+            f"một bức ảnh có {cleaned_query}",
+            f"một bức ảnh tập trung vào {cleaned_query}",
+        ]
+        return prompts, list(self._SHORT_QUERY_PROMPT_WEIGHTS)
+
+    def _translate_text_prompts(self, source_prompts: list[str]) -> list[str]:
+        if len(source_prompts) == 1:
+            translated_prompts = [self.translator.translate(source_prompts[0])]
+        else:
+            translated_prompts = self.translator.translate_batch(source_prompts)
+
+        if (
+            not isinstance(translated_prompts, list)
+            or len(translated_prompts) != len(source_prompts)
+            or any(not isinstance(prompt, str) or not prompt.strip() for prompt in translated_prompts)
+        ):
+            raise ValueError("Bộ dịch trả về danh sách prompt không hợp lệ.")
+
+        return [" ".join(prompt.strip().split()) for prompt in translated_prompts]

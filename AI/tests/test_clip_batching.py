@@ -131,5 +131,112 @@ class ClipBatchingTests(unittest.TestCase):
         self.assertEqual(results[1][0], 40.0)
 
 
+class ClipTextPromptTests(unittest.TestCase):
+    @patch.object(clip_module.CLIPProcessor, "from_pretrained")
+    @patch.object(clip_module.CLIPModel, "from_pretrained")
+    def test_short_query_uses_normalized_weighted_prompt_ensemble(
+        self,
+        load_model,
+        load_processor,
+    ):
+        model = MagicMock()
+        load_model.return_value.to.return_value = model
+
+        processor = MagicMock()
+        processor.return_value = _FakeInputs(
+            input_ids=torch.tensor([[0], [1], [2]])
+        )
+        load_processor.return_value = processor
+
+        features = torch.zeros((3, 512), dtype=torch.float32)
+        features[0, 0] = 2.0
+        features[1, 1] = 3.0
+        features[2, 2] = 4.0
+        model.get_text_features.return_value = features
+
+        with patch("builtins.print"):
+            embedder = clip_module.CLIPEmbedder("fake-clip")
+        embedder.translator.translate = MagicMock()
+        embedder.translator.translate_batch = MagicMock(
+            return_value=[
+                "black cat",
+                "a photo with a black cat",
+                "a photo focused on a black cat",
+            ]
+        )
+
+        with patch("builtins.print"):
+            vector = embedder.embed_text("mèo đen")
+        embedder._image_batcher.close()
+
+        embedder.translator.translate_batch.assert_called_once_with(
+            [
+                "mèo đen",
+                "một bức ảnh có mèo đen",
+                "một bức ảnh tập trung vào mèo đen",
+            ]
+        )
+        embedder.translator.translate.assert_not_called()
+        processor.assert_called_once_with(
+            text=[
+                "black cat",
+                "a photo with a black cat",
+                "a photo focused on a black cat",
+            ],
+            return_tensors="pt",
+            padding=True,
+        )
+        expected_norm = (0.15**2 + 0.50**2 + 0.35**2) ** 0.5
+        self.assertAlmostEqual(vector[0], 0.15 / expected_norm, places=6)
+        self.assertAlmostEqual(vector[1], 0.50 / expected_norm, places=6)
+        self.assertAlmostEqual(vector[2], 0.35 / expected_norm, places=6)
+        self.assertAlmostEqual(
+            torch.linalg.vector_norm(torch.tensor(vector)).item(),
+            1.0,
+            places=6,
+        )
+
+    @patch.object(clip_module.CLIPProcessor, "from_pretrained")
+    @patch.object(clip_module.CLIPModel, "from_pretrained")
+    def test_long_query_keeps_single_prompt_and_normalizes_vector(
+        self,
+        load_model,
+        load_processor,
+    ):
+        model = MagicMock()
+        load_model.return_value.to.return_value = model
+
+        processor = MagicMock()
+        processor.return_value = _FakeInputs(input_ids=torch.tensor([[0]]))
+        load_processor.return_value = processor
+
+        features = torch.zeros((1, 512), dtype=torch.float32)
+        features[0, 0] = 3.0
+        features[0, 1] = 4.0
+        model.get_text_features.return_value = features
+
+        with patch("builtins.print"):
+            embedder = clip_module.CLIPEmbedder("fake-clip")
+        translated_query = "a black cat sitting on a chair"
+        embedder.translator.translate = MagicMock(return_value=translated_query)
+        embedder.translator.translate_batch = MagicMock()
+
+        with patch("builtins.print"):
+            vector = embedder.embed_text("một con mèo đen đang ngồi trên ghế")
+        embedder._image_batcher.close()
+
+        embedder.translator.translate.assert_called_once_with(
+            "một con mèo đen đang ngồi trên ghế"
+        )
+        embedder.translator.translate_batch.assert_not_called()
+        processor.assert_called_once_with(
+            text=[translated_query],
+            return_tensors="pt",
+            padding=True,
+        )
+        self.assertAlmostEqual(vector[0], 0.6, places=6)
+        self.assertAlmostEqual(vector[1], 0.8, places=6)
+
+
 if __name__ == "__main__":
     unittest.main()
