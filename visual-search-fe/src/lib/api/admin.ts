@@ -80,6 +80,12 @@ export interface AdminBatchImageUploadResponse {
   queued_items: number
   skipped_files: number
 }
+export interface AdminIndexRetryItemsResponse {
+  batch_id: string
+  queued_items: number
+  retried_item_ids: number[]
+}
+
 
 export interface AdminIndexingItem {
   id: number
@@ -287,6 +293,17 @@ export const adminApi = {
     const response = await apiClient.get<PaginatedResponse<AdminIndexingItem>>(
       `/admin/index/${batchId}/items`,
       { params }
+    )
+    return response.data
+  },
+
+  async retryFailedIndexingItems(
+    batchId: string,
+    itemIds?: number[]
+  ): Promise<AdminIndexRetryItemsResponse> {
+    const response = await apiClient.post<AdminIndexRetryItemsResponse>(
+      `/admin/index/${batchId}/items/retry`,
+      itemIds && itemIds.length > 0 ? { item_ids: itemIds } : {}
     )
     return response.data
   },

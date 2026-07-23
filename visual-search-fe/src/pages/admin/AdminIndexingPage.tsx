@@ -333,6 +333,74 @@ export default function AdminIndexingPage() {
     }
   }
 
+
+  const startBatchStatusPolling = (batchId: string) => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current)
+    }
+
+    const pollStatus = async () => {
+      try {
+        const statusRes = await adminApi.getBatchStatus(batchId)
+        setActiveBatchId(batchId)
+        setTotalIndexCount(statusRes.total_images)
+        setIndexedCount(statusRes.processed_images)
+        setFailedIndexCount(statusRes.failed_images)
+        setQueuedIndexCount(statusRes.queued_images)
+        setRunningIndexCount(statusRes.running_images)
+        setActiveBatchStatus(statusRes.status)
+
+        const total = statusRes.total_images
+        const finished = statusRes.processed_images + statusRes.failed_images
+        const pct = total > 0 ? Math.round((finished / total) * 100) : statusRes.status === 'completed' ? 100 : 0
+        setIndexProgress(pct)
+
+        if (finished > lastFinishedCountRef.current) {
+          lastFinishedCountRef.current = finished
+          lastProgressAtRef.current = Date.now()
+          setStalledSeconds(0)
+        }
+
+        if (statusRes.failed_images > 0) {
+          const failedItems = await adminApi.listIndexingItems(batchId, {
+            status: 'failed',
+            page: 1,
+            limit: 100,
+          })
+          setFailedImages(failedItems.items.map((item) => ({
+            id: String(item.id),
+            url: item.image_url,
+            filename: item.filename,
+            error_message: item.error_message ?? 'Kh?ng th? t?o vector CLIP ho?c OCR cho ?nh n?y.',
+          })))
+        } else {
+          setFailedImages([])
+        }
+
+        if (
+          statusRes.status === 'completed' ||
+          statusRes.status === 'failed' ||
+          statusRes.status === 'cancelled'
+        ) {
+          setIsBackgroundIndexing(false)
+          setStalledSeconds(0)
+          await fetchStatus(false)
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current)
+            pollingRef.current = window.setInterval(() => {
+              fetchStatus(false)
+            }, 5000)
+          }
+        }
+      } catch (err) {
+        console.error('L?i khi ki?m tra ti?n ?? retry indexing:', err)
+      }
+    }
+
+    void pollStatus()
+    pollingRef.current = window.setInterval(pollStatus, INDEXING_POLL_INTERVAL_MS)
+  }
+
   // --- Failed Image Actions ---
   const handleSaveFailedImage = async (url: string) => {
     try {
@@ -354,11 +422,37 @@ export default function AdminIndexingPage() {
     }
   }
 
-  const handleRetryFailedImage = async (_url: string) => {
-    setMessage({
-      text: 'Vui long upload lai file anh loi de thuc hien index lai.',
-      type: 'info'
-    })
+  const handleRetryFailedImage = async (url: string) => {
+    if (!activeBatchId) {
+      setMessage({ text: 'Kh?ng x?c ??nh ???c batch ?? index l?i ?nh l?i.', type: 'error' })
+      return
+    }
+
+    const failedImage = failedImages.find((img) => img.url === url)
+    const itemId = Number(failedImage?.id)
+    if (!Number.isInteger(itemId)) {
+      setMessage({ text: 'Kh?ng x?c ??nh ???c ?nh l?i ?? index l?i.', type: 'error' })
+      return
+    }
+
+    setIsActionInProgress(true)
+    try {
+      const retryRes = await adminApi.retryFailedIndexingItems(activeBatchId, [itemId])
+      setFailedImages(prev => prev.filter(img => img.url !== url))
+      setQueuedIndexCount(prev => prev + retryRes.queued_items)
+      setFailedIndexCount(prev => Math.max(0, prev - retryRes.retried_item_ids.length))
+      setActiveBatchStatus('running')
+      setIsBackgroundIndexing(true)
+      setUploadSuccess(true)
+      lastProgressAtRef.current = Date.now()
+      setMessage({ text: `?? ??a ${retryRes.queued_items} ?nh l?i v?o h?ng ??i index l?i.`, type: 'info' })
+      startBatchStatusPolling(activeBatchId)
+    } catch (err: any) {
+      console.error('L?i khi index l?i ?nh l?i:', err)
+      setMessage({ text: err.message || 'Kh?ng th? index l?i ?nh l?i.', type: 'error' })
+    } finally {
+      setIsActionInProgress(false)
+    }
   }
 
   // Bulk Actions
@@ -382,12 +476,35 @@ export default function AdminIndexingPage() {
   }
 
   const handleRetryAllFailed = async () => {
-    setIsActionInProgress(true)
-    const list = [...failedImages]
-    for (const img of list) {
-      await handleRetryFailedImage(img.url)
+    if (!activeBatchId || failedImages.length === 0) return
+
+    const itemIds = failedImages
+      .map((img) => Number(img.id))
+      .filter((id) => Number.isInteger(id))
+    if (itemIds.length === 0) {
+      setMessage({ text: 'Kh?ng x?c ??nh ???c danh s?ch ?nh l?i ?? index l?i.', type: 'error' })
+      return
     }
-    setIsActionInProgress(false)
+
+    setIsActionInProgress(true)
+    try {
+      const retryRes = await adminApi.retryFailedIndexingItems(activeBatchId, itemIds)
+      const retriedIds = new Set(retryRes.retried_item_ids.map(String))
+      setFailedImages(prev => prev.filter(img => !retriedIds.has(img.id)))
+      setQueuedIndexCount(prev => prev + retryRes.queued_items)
+      setFailedIndexCount(prev => Math.max(0, prev - retryRes.retried_item_ids.length))
+      setActiveBatchStatus('running')
+      setIsBackgroundIndexing(true)
+      setUploadSuccess(true)
+      lastProgressAtRef.current = Date.now()
+      setMessage({ text: `?? ??a ${retryRes.queued_items} ?nh l?i v?o h?ng ??i index l?i.`, type: 'info' })
+      startBatchStatusPolling(activeBatchId)
+    } catch (err: any) {
+      console.error('L?i khi index l?i to?n b? ?nh l?i:', err)
+      setMessage({ text: err.message || 'Kh?ng th? index l?i to?n b? ?nh l?i.', type: 'error' })
+    } finally {
+      setIsActionInProgress(false)
+    }
   }
 
   const handleCancelBatch = async (batchId: string) => {

@@ -123,5 +123,15 @@ class AdminIndexingItemListResponse(BaseModel):
     total: int
 
 
+class AdminIndexRetryItemsRequest(BaseModel):
+    item_ids: list[int] | None = None
+
+
+class AdminIndexRetryItemsResponse(BaseModel):
+    batch_id: str
+    queued_items: int
+    retried_item_ids: list[int]
+
+
 class AdminIndexBatchListResponse(BaseModel):
     items: list[IndexingBatchOut]
