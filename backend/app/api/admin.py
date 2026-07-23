@@ -25,6 +25,8 @@ from app.schemas.admin import (
     AdminIndexBatchListResponse,
     AdminIndexStartResponse,
     AdminIndexStatusResponse,
+    AdminIndexRetryItemsRequest,
+    AdminIndexRetryItemsResponse,
     AdminIndexingItemListResponse,
     AdminIndexingItemOut,
     AdminIndexUploadResponse,
@@ -475,6 +477,115 @@ async def list_indexing_items(
         page=page,
         limit=limit,
         total=total,
+    )
+
+
+@router.post(
+    "/index/{batch_id}/items/retry",
+    response_model=AdminIndexRetryItemsResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Retry failed indexing items",
+    description=(
+        "Requeue failed images that are already stored on the server. "
+        "If item_ids is omitted, all failed items in the batch are retried. Requires admin role."
+    ),
+    responses={
+        202: {"description": "Failed items were requeued for indexing."},
+        400: {"description": "No failed items are available to retry."},
+        401: {"description": "Missing, invalid, or expired token."},
+        403: {"description": "User does not have admin role."},
+        404: {"description": "Batch not found."},
+        503: {"description": "AI indexing service is unavailable."},
+    },
+)
+async def retry_failed_indexing_items(
+    batch_id: str,
+    payload: AdminIndexRetryItemsRequest | None = None,
+    _: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> AdminIndexRetryItemsResponse:
+    """Dua lai cac anh failed vao hang doi AI ma khong can upload lai file."""
+    batch = await db.scalar(select(IndexingBatch).where(IndexingBatch.batch_id == batch_id))
+    if batch is None:
+        raise api_error(
+            status.HTTP_404_NOT_FOUND,
+            "NOT_FOUND",
+            "Indexing batch not found.",
+            {"batch_id": batch_id},
+        )
+
+    filters = [
+        IndexingItem.batch_id == batch_id,
+        IndexingItem.status == IndexingItemStatus.failed,
+    ]
+    requested_item_ids = payload.item_ids if payload and payload.item_ids else None
+    if requested_item_ids:
+        filters.append(IndexingItem.id.in_(requested_item_ids))
+
+    rows = (
+        await db.execute(
+            select(IndexingItem, Image)
+            .join(Image, Image.id == IndexingItem.image_id)
+            .where(*filters)
+            .order_by(IndexingItem.updated_at.desc(), IndexingItem.id.desc())
+        )
+    ).all()
+
+    if not rows:
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "NO_FAILED_ITEMS",
+            "No failed indexing items are available to retry.",
+            {"batch_id": batch_id, "item_ids": requested_item_ids or []},
+        )
+
+    queued_items: list[AIIndexItemPayload] = []
+    retried_item_ids: list[int] = []
+    for item, image in rows:
+        image_path = _storage_path_to_backend_path(image.storage_path)
+        if not image_path.is_file():
+            item.error_message = "Stored image file was not found on server."
+            continue
+
+        item.status = IndexingItemStatus.queued
+        item.error_message = None
+        image.status = ImageStatus.pending
+        queued_items.append(_build_ai_item_payload(item, image))
+        retried_item_ids.append(item.id)
+
+    if not queued_items:
+        await db.commit()
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "NO_RETRYABLE_ITEMS",
+            "Failed items exist but their stored files are no longer available.",
+            {"batch_id": batch_id},
+        )
+
+    batch.status = BatchStatus.running
+    batch.error_message = None
+    batch.is_uploading = False
+    await db.commit()
+
+    try:
+        ai_response = await ai_indexing_client.enqueue_indexing_items(
+            batch_id=batch_id,
+            items=queued_items,
+        )
+    except AIIndexingServiceError as exc:
+        await _mark_uploaded_items_failed(db, retried_item_ids, str(exc))
+        await _sync_batch_counts(db, batch)
+        raise api_error(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "AI_INDEXING_SERVICE_UNAVAILABLE",
+            str(exc),
+        ) from exc
+
+    await _sync_batch_counts(db, batch)
+    return AdminIndexRetryItemsResponse(
+        batch_id=batch_id,
+        queued_items=ai_response.queued_items,
+        retried_item_ids=retried_item_ids,
     )
 
 
