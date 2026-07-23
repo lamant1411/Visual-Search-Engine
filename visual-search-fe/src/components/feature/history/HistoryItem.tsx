@@ -59,7 +59,10 @@ export function HistoryItem({
   const showPreview = Boolean(previewUrl && !previewFailed)
 
   return (
-    <li className="group flex flex-col gap-3 px-4 py-3.5 transition-colors duration-150 hover:bg-surface-1/70 sm:flex-row sm:items-center sm:gap-5 sm:px-5">
+    <li
+      onClick={() => onReSearch(item)}
+      className="group flex flex-col gap-3 px-4 py-3.5 transition-colors duration-150 hover:bg-surface-1/70 sm:flex-row sm:items-center sm:gap-5 sm:px-5 cursor-pointer"
+    >
       <div className="flex min-w-0 flex-1 items-center gap-3.5">
         <div
           className={`relative flex h-16 w-20 shrink-0 items-center justify-center overflow-hidden rounded-md border ${config.surfaceClass}`}
@@ -97,7 +100,10 @@ export function HistoryItem({
       <div className="flex items-center justify-end sm:pl-0">
         <button
           type="button"
-          onClick={() => onReSearch(item)}
+          onClick={(e) => {
+            e.stopPropagation()
+            onReSearch(item)
+          }}
           className="inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-white px-3 text-xs font-semibold text-ink-secondary shadow-sm shadow-slate-200/40 transition-colors hover:border-accent-100 hover:bg-accent-50 hover:text-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2"
           title="Search again"
         >

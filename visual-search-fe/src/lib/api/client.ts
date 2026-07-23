@@ -26,8 +26,17 @@ apiClient.interceptors.response.use(
     }
 
     if (axios.isAxiosError(error)) {
-      const apiMessage = error.response?.data?.detail?.message
-      if (typeof apiMessage === 'string' && apiMessage.trim()) {
+      const data = error.response?.data
+      const apiMessage =
+        typeof data?.message === 'string' && data.message.trim()
+          ? data.message
+          : typeof data?.detail?.message === 'string' && data.detail.message.trim()
+            ? data.detail.message
+            : typeof data?.detail === 'string' && data.detail.trim()
+              ? data.detail
+              : undefined
+
+      if (apiMessage) {
         error.message = apiMessage
       }
     }

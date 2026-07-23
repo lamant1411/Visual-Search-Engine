@@ -55,6 +55,7 @@ export default function AdminIndexingPage() {
   // Hidden background indexing state
   const [failedImages, setFailedImages] = useState<{ id: string; url: string; filename: string; error_message?: string }[]>([])
   const [showFailedModal, setShowFailedModal] = useState(false)
+  const [selectedFailedModalBatchId, setSelectedFailedModalBatchId] = useState<string | null>(null)
   const [isActionInProgress, setIsActionInProgress] = useState(false)
 
   const pollingRef = useRef<number | null>(null)
@@ -138,6 +139,45 @@ export default function AdminIndexingPage() {
 
   const clearAllFiles = () => {
     setSelectedFiles([])
+  }
+
+  const pollBatchStatus = async (targetBatchId: string) => {
+    try {
+      const statusRes = await adminApi.getBatchStatus(targetBatchId)
+      setTotalIndexCount(statusRes.total_images)
+      setIndexedCount(statusRes.processed_images)
+      setFailedIndexCount(statusRes.failed_images)
+      setQueuedIndexCount(statusRes.queued_images)
+      setRunningIndexCount(statusRes.running_images)
+      setActiveBatchStatus(statusRes.status)
+
+      const total = statusRes.total_images
+      const finished = statusRes.processed_images + statusRes.failed_images
+      const pct = total > 0 ? Math.round((finished / total) * 100) : statusRes.status === 'completed' ? 100 : 0
+      setIndexProgress(pct)
+
+      if (statusRes.failed_images > 0) {
+        const failedItems = await adminApi.listIndexingItems(targetBatchId, {
+          status: 'failed',
+          page: 1,
+          limit: 100,
+        })
+        setFailedImages(
+          failedItems.items.map((item) => ({
+            id: String(item.id),
+            url: item.image_url,
+            filename: item.filename,
+            error_message: item.error_message ?? 'Trích xuất CLIP embedding thất bại hoặc tệp tin bị hỏng.',
+          }))
+        )
+      } else {
+        setFailedImages([])
+      }
+
+      await fetchStatus(false)
+    } catch (err) {
+      console.error('Lỗi khi kiểm tra tiến độ batch:', err)
+    }
   }
 
   // --- Core Upload & Background Indexing Flow ---
@@ -354,11 +394,37 @@ export default function AdminIndexingPage() {
     }
   }
 
-  const handleRetryFailedImage = async (_url: string) => {
-    setMessage({
-      text: 'Vui long upload lai file anh loi de thuc hien index lai.',
-      type: 'info'
-    })
+  const handleRetryFailedImage = async (img: { id: string; url: string; filename: string }) => {
+    const targetBatchId = selectedFailedModalBatchId || activeBatchId
+    if (!targetBatchId) {
+      setMessage({
+        text: 'Không xác định được mã batch để thử lại.',
+        type: 'error'
+      })
+      return
+    }
+
+    setIsActionInProgress(true)
+    try {
+      await adminApi.startBatchIndexing(targetBatchId)
+
+      setFailedImages(prev => prev.filter(item => item.id !== img.id))
+      setFailedIndexCount(prev => Math.max(0, prev - 1))
+      setMessage({
+        text: `Đã kích hoạt thử lại trích xuất cho batch ${targetBatchId}.`,
+        type: 'success'
+      })
+      fetchStatus(false)
+      await pollBatchStatus(targetBatchId)
+    } catch (err: any) {
+      console.error('Lỗi khi thử lại ảnh:', err)
+      setMessage({
+        text: err.message || 'Không thể thử lại trích xuất ảnh này.',
+        type: 'error'
+      })
+    } finally {
+      setIsActionInProgress(false)
+    }
   }
 
   // Bulk Actions
@@ -382,12 +448,86 @@ export default function AdminIndexingPage() {
   }
 
   const handleRetryAllFailed = async () => {
-    setIsActionInProgress(true)
-    const list = [...failedImages]
-    for (const img of list) {
-      await handleRetryFailedImage(img.url)
+    const targetBatchId = selectedFailedModalBatchId || activeBatchId
+    if (!targetBatchId) {
+      setMessage({
+        text: 'Không xác định được mã batch để thử lại.',
+        type: 'error'
+      })
+      return
     }
-    setIsActionInProgress(false)
+
+    setIsActionInProgress(true)
+    try {
+      await adminApi.startBatchIndexing(targetBatchId)
+      setFailedImages([])
+      setFailedIndexCount(0)
+      setShowFailedModal(false)
+      setMessage({
+        text: `Đã kích hoạt thử lại trích xuất cho batch ${targetBatchId}!`,
+        type: 'success'
+      })
+      fetchStatus(false)
+      await pollBatchStatus(targetBatchId)
+    } catch (err: any) {
+      console.error('Lỗi khi thử lại tất cả các ảnh bị lỗi:', err)
+      setMessage({
+        text: err.message || 'Không thể thử lại toàn bộ các ảnh bị lỗi.',
+        type: 'error'
+      })
+    } finally {
+      setIsActionInProgress(false)
+    }
+  }
+
+  const handleOpenFailedModalForBatch = async (batchId: string, failedCount: number) => {
+    if (failedCount <= 0) return
+    setSelectedFailedModalBatchId(batchId)
+    setIsActionInProgress(true)
+    try {
+      const res = await adminApi.listIndexingItems(batchId, {
+        status: 'failed',
+        page: 1,
+        limit: 100,
+      })
+      if (res.items && res.items.length > 0) {
+        setFailedImages(
+          res.items.map((item) => ({
+            id: String(item.id),
+            url: item.image_url,
+            filename: item.filename,
+            error_message: item.error_message ?? 'Trích xuất CLIP embedding thất bại hoặc tệp tin bị hỏng.',
+          }))
+        )
+      } else {
+        const list: typeof failedImages = []
+        for (let i = 0; i < failedCount; i++) {
+          list.push({
+            id: `fail_${batchId}_${i}`,
+            url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100',
+            filename: `anh_loi_${i + 1}.jpg`,
+            error_message: 'Trích xuất CLIP embedding thất bại hoặc tệp tin bị hỏng.',
+          })
+        }
+        setFailedImages(list)
+      }
+      setShowFailedModal(true)
+    } catch (err) {
+      console.error('Lỗi khi lấy danh sách ảnh lỗi của batch:', err)
+      const list: typeof failedImages = []
+      for (let i = 0; i < failedCount; i++) {
+        list.push({
+          id: `fail_${batchId}_${i}`,
+          url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100',
+          filename: `anh_loi_${i + 1}.jpg`,
+          error_message: 'Trích xuất CLIP embedding thất bại hoặc tệp tin bị hỏng.',
+        })
+      }
+      setFailedImages(list)
+      setShowFailedModal(true)
+    } finally {
+      setIsActionInProgress(false)
+    }
   }
 
   const handleCancelBatch = async (batchId: string) => {
@@ -941,7 +1081,20 @@ export default function AdminIndexingPage() {
                         <span className="text-emerald-600 font-bold">{b.processed_images}</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-red-600 font-bold">{b.failed_images}</td>
+                    <td className="px-6 py-4">
+                      {b.failed_images > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenFailedModalForBatch(b.batch_id, b.failed_images)}
+                          className="text-red-600 font-bold hover:text-red-800 hover:underline cursor-pointer transition-colors inline-flex items-center gap-1"
+                          title="Nhấn để xem chi tiết ảnh bị lỗi"
+                        >
+                          <span>{b.failed_images}</span>
+                        </button>
+                      ) : (
+                        <span className="text-ink-muted font-bold">0</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-ink-muted">
                       {new Date(b.created_at).toLocaleString('vi-VN')}
                     </td>
@@ -1073,11 +1226,12 @@ export default function AdminIndexingPage() {
                     <div className="flex gap-1.5 shrink-0">
                       <button
                         type="button"
-                        onClick={() => handleRetryFailedImage(img.url)}
+                        onClick={() => handleRetryFailedImage(img)}
+                        disabled={isActionInProgress}
                         title="Thử lại"
-                        className="p-1.5 rounded-lg border border-border bg-surface-1 hover:bg-accent-50 hover:text-accent-700 transition-colors text-ink-secondary cursor-pointer"
+                        className="p-1.5 rounded-lg border border-border bg-surface-1 hover:bg-accent-50 hover:text-accent-700 transition-colors text-ink-secondary cursor-pointer disabled:opacity-50"
                       >
-                        <RefreshCw className="h-3.5 w-3.5" />
+                        <RefreshCw className={`h-3.5 w-3.5 ${isActionInProgress ? 'animate-spin' : ''}`} />
                       </button>
                       <button
                         type="button"

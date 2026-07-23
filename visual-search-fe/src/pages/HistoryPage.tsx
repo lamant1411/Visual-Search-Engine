@@ -36,7 +36,18 @@ export default function HistoryPage() {
   )
   function handleReSearch(item: HistoryItem) {
     if (item.query_type === 'image') {
-      navigate('/search', { state: { mode: 'image' } })
+      const imgTarget = item.query_image_url || item.query_value
+      const imageIdNum = Number.isInteger(Number(imgTarget)) && Number(imgTarget) > 0 ? Number(imgTarget) : undefined
+
+      if (imageIdNum) {
+        navigate(`/search/results?mode=image&imageId=${imageIdNum}`)
+      } else if (imgTarget) {
+        navigate(
+          `/search/results?mode=image&imageUrl=${encodeURIComponent(imgTarget)}&q=${encodeURIComponent(item.query_value)}`,
+        )
+      } else {
+        navigate('/search', { state: { mode: 'image' } })
+      }
       return
     }
 

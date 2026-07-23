@@ -36,26 +36,30 @@ export function SearchResultsPage() {
   const mode = parseSearchMode(searchParams.get("mode"));
   const query = searchParams.get("q") ?? "";
   const imageId = parseOptionalPositiveNumber(searchParams.get("imageId"));
+  const imageUrl = searchParams.get("imageUrl") ?? undefined;
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(
     null,
   );
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const { isBookmarked, toggleBookmark } = useBookmarks();
-  const resultTitle = getResultTitle(mode, query, state.fileName, imageId);
-  const isMissingImageReference = mode === "image" && !state.file && !imageId;
+  const resultTitle = getResultTitle(mode, query, state.fileName, imageId, imageUrl);
+  const isMissingImageReference = mode === "image" && !state.file && !imageId && !imageUrl;
   const queryEnabled =
-    mode === "image" ? Boolean(state.file || imageId) : query.trim().length > 0;
+    mode === "image" ? Boolean(state.file || imageId || imageUrl) : query.trim().length > 0;
   const imageSearchKey = state.file
     ? `${state.file.name}-${state.file.size}-${state.file.lastModified}`
     : imageId
       ? `image-${imageId}`
-      : "no-image";
+      : imageUrl
+        ? `imageUrl-${imageUrl}`
+        : "no-image";
   const searchQuery = useInfiniteQuery({
     queryKey: [
       "search-results",
       mode,
       query,
       imageId,
+      imageUrl,
       pageLimit,
       imageSearchKey,
     ],
@@ -64,6 +68,7 @@ export function SearchResultsPage() {
         mode,
         query,
         imageId,
+        imageUrl,
         page: pageParam,
         limit: pageLimit,
         file: state.file,
@@ -299,13 +304,22 @@ function getResultTitle(
   query: string,
   fileName?: string,
   imageId?: number,
+  imageUrl?: string,
 ) {
   if (mode === "image") {
     if (imageId) {
       return `Images similar to #${imageId}`;
     }
 
-    return fileName ? `Results for ${fileName}` : "Image search results";
+    if (fileName) {
+      return `Results for ${fileName}`;
+    }
+
+    if (imageUrl) {
+      return query ? `Results for ${query}` : `Image search results`;
+    }
+
+    return "Image search results";
   }
 
   return query ? `Results for “${query}”` : "Search results";
@@ -320,6 +334,7 @@ function runSearch({
   mode,
   query,
   imageId,
+  imageUrl,
   page,
   limit,
   file,
@@ -327,12 +342,13 @@ function runSearch({
   mode: SearchMode;
   query: string;
   imageId?: number;
+  imageUrl?: string;
   page: number;
   limit: number;
   file?: File;
 }): Promise<SearchResponse> {
   if (mode === "image") {
-    return searchByImage({ file, imageId, page, limit });
+    return searchByImage({ file, imageId, imageUrl, page, limit });
   }
 
   return searchByText({
