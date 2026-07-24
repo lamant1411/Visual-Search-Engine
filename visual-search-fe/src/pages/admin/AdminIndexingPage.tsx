@@ -53,7 +53,7 @@ export default function AdminIndexingPage() {
   const [indexError, setIndexError] = useState<string | null>(null)
 
   // Hidden background indexing state
-  const [failedImages, setFailedImages] = useState<{ id: string; url: string; filename: string; error_message?: string }[]>([])
+  const [failedImages, setFailedImages] = useState<{ id: string; imageId?: number; url: string; filename: string; error_message?: string }[]>([])
   const [showFailedModal, setShowFailedModal] = useState(false)
   const [selectedFailedModalBatchId, setSelectedFailedModalBatchId] = useState<string | null>(null)
   const [isActionInProgress, setIsActionInProgress] = useState(false)
@@ -165,6 +165,7 @@ export default function AdminIndexingPage() {
         setFailedImages(
           failedItems.items.map((item) => ({
             id: String(item.id),
+            imageId: item.image_id,
             url: item.image_url,
             filename: item.filename,
             error_message: item.error_message ?? 'Trích xuất CLIP embedding thất bại hoặc tệp tin bị hỏng.',
@@ -262,6 +263,7 @@ export default function AdminIndexingPage() {
             })
             setFailedImages(failedItems.items.map((item) => ({
               id: String(item.id),
+              imageId: item.image_id,
               url: item.image_url,
               filename: item.filename,
               error_message: item.error_message ?? 'Tr?ch xu?t CLIP embedding th?t b?i ho?c t?p tin b? h?ng.',
@@ -387,12 +389,27 @@ export default function AdminIndexingPage() {
   }
 
   const handleDeleteFailedImage = async (url: string) => {
+    const failedImage = failedImages.find((img) => img.url === url)
+    if (!failedImage?.imageId) {
+      setMessage({
+        text: 'Không xác định được ảnh cần xóa khỏi server.',
+        type: 'error'
+      })
+      return
+    }
+
     try {
-      await adminApi.deletePendingImage(url)
+      await adminApi.deleteImage(failedImage.imageId)
       setFailedImages(prev => prev.filter(img => img.url !== url))
       setFailedIndexCount(prev => Math.max(0, prev - 1))
+      setTotalIndexCount(prev => Math.max(0, prev - 1))
+      await fetchStatus(false)
     } catch (err: any) {
       console.error('Lỗi khi xóa ảnh lỗi:', err)
+      setMessage({
+        text: err.message || 'Không thể xóa ảnh khỏi server.',
+        type: 'error'
+      })
     }
   }
 
@@ -507,6 +524,7 @@ export default function AdminIndexingPage() {
         setFailedImages(
           res.items.map((item) => ({
             id: String(item.id),
+            imageId: item.image_id,
             url: item.image_url,
             filename: item.filename,
             error_message: item.error_message ?? 'Trích xuất CLIP embedding thất bại hoặc tệp tin bị hỏng.',
