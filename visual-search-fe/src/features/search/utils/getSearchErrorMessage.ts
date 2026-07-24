@@ -37,11 +37,18 @@ export function getSearchErrorMessage(error: unknown): SearchErrorMessage {
       };
     }
 
-    if (status === 501) {
+    if (status === 404) {
       return {
-        title: "Find similar is not available yet",
-        description:
-          "The Backend currently supports uploaded image files, but not search by an existing image ID.",
+        title: "Image no longer available",
+        description: "The source image could not be found. Choose another image and try again.",
+        canRetry: false,
+      };
+    }
+
+    if (status === 409) {
+      return {
+        title: "Image is still being processed",
+        description: "Wait for indexing to finish before finding similar images.",
         canRetry: false,
       };
     }

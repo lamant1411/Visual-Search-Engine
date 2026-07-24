@@ -12,13 +12,15 @@ from app.api.deps import get_current_user
 from app.core.config import settings
 from app.core.errors import api_error
 from app.db.session import get_db
+from app.models.image import Image
+from app.models.image_embedding import ImageEmbedding
 from app.models.search_history import SearchHistory
 from app.models.user import User
-from app.schemas.common import SearchQueryType
+from app.schemas.common import ImageStatus, SearchQueryType
 from app.schemas.search import SearchResponse
 from app.services.ai_service import AIServiceError, ai_embedding_client
 from app.services.qdrant_service import QdrantSearchService
-from app.services.search import build_search_response_from_hits, search_images_by_ocr_text
+from app.services.search import build_image_url, build_search_response_from_hits, search_images_by_ocr_text
 
 router = APIRouter()
 
@@ -32,8 +34,7 @@ ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
     summary="Search by uploaded image",
     description=(
         "Receive multipart/form-data with an image file and pagination fields. "
-        "Support uploaded files and stored /static imageUrl values for searching again from history. "
-        "image_id is reserved in the contract but returns 501. "
+        "Support uploaded files, indexed image_id values, and stored /static imageUrl values. "
         "Requires Bearer access_token."
     ),
     responses={
@@ -41,7 +42,8 @@ ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
         400: {"description": "Missing file or unsupported file type. Only JPG, PNG, and WebP are supported."},
         401: {"description": "Missing, invalid, or expired token."},
         413: {"description": "Uploaded file exceeds the allowed size."},
-        501: {"description": "Search by image_id is not implemented yet."},
+        404: {"description": "The requested image_id does not exist."},
+        409: {"description": "The requested image has not finished indexing."},
         503: {"description": "AI service or vector search service is unavailable."},
     },
 )
@@ -66,18 +68,48 @@ async def search_by_image(
             {"fields": ["file", "image_id", "imageUrl"]},
         )
 
-    if image_id is not None and file is None and not image_url:
-        raise api_error(
-            status.HTTP_501_NOT_IMPLEMENTED,
-            "NOT_IMPLEMENTED",
-            "Search by image_id is not implemented yet.",
-            {"field": "image_id"},
-        )
-
+    content: bytes | None = None
+    vector: list[float] | None = None
+    source_image_id: int | None = None
+    history_image_url: str | None = None
+    embedding: ImageEmbedding | None = None
     if file is not None:
         content = await _read_and_validate_upload_file(file)
         query_filename = file.filename or "uploaded_image"
         query_content_type = file.content_type or "application/octet-stream"
+        should_save_history = True
+    elif image_id is not None:
+        image = await db.get(Image, image_id)
+        if image is None:
+            raise api_error(
+                status.HTTP_404_NOT_FOUND,
+                "IMAGE_NOT_FOUND",
+                "Image not found.",
+                {"imageId": image_id},
+            )
+        if image.status != ImageStatus.indexed:
+            raise api_error(
+                status.HTTP_409_CONFLICT,
+                "IMAGE_NOT_READY",
+                "Image has not finished indexing.",
+                {"imageId": image_id, "status": image.status},
+            )
+
+        embedding = await db.get(ImageEmbedding, image_id)
+        if embedding is None or embedding.vector_status != "synced":
+            raise api_error(
+                status.HTTP_409_CONFLICT,
+                "IMAGE_EMBEDDING_NOT_READY",
+                "Image embedding is not ready for similarity search.",
+                {"imageId": image_id},
+            )
+
+        query_filename = image.original_filename or Path(
+            image.storage_path.replace("\\", "/")
+        ).name
+        query_content_type = image.mime_type or _guess_image_content_type(query_filename)
+        source_image_id = image.id
+        history_image_url = build_image_url(image.storage_path)
         should_save_history = True
     else:
         content = _read_static_image_url(image_url or "")
@@ -85,14 +117,27 @@ async def search_by_image(
         query_content_type = _guess_image_content_type(query_filename)
         should_save_history = False
 
+    vector_search = QdrantSearchService()
     try:
-        vector = await ai_embedding_client.embed_image(
-            content,
-            filename=query_filename,
-            content_type=query_content_type,
+        if embedding is not None:
+            vector = vector_search.get_vector(
+                embedding.qdrant_point_id,
+                collection_name=embedding.collection_name,
+            )
+        else:
+            vector = await ai_embedding_client.embed_image(
+                content or b"",
+                filename=query_filename,
+                content_type=query_content_type,
+            )
+
+        if vector is None or len(vector) != settings.image_embedding_dim:
+            raise ValueError("Stored image embedding is missing or has an invalid dimension.")
+
+        max_results = max(page * limit, settings.image_search_max_results) + (
+            1 if source_image_id else 0
         )
-        max_results = max(page * limit, settings.image_search_max_results)
-        all_hits = QdrantSearchService().search(vector, limit=max_results)
+        all_hits = vector_search.search(vector, limit=max_results)
     except AIServiceError as exc:
         raise api_error(
             status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -105,6 +150,9 @@ async def search_by_image(
             "VECTOR_SEARCH_UNAVAILABLE",
             "Vector search service is unavailable.",
         ) from exc
+
+    if source_image_id is not None:
+        all_hits = [hit for hit in all_hits if hit.image_id != source_image_id]
 
     response = await build_search_response_from_hits(
         db,
@@ -124,11 +172,13 @@ async def search_by_image(
             )
 
         if existing_history is None:
-            query_image_url = _save_query_image_for_history(
-                content=content,
-                filename=query_filename,
-                user_id=current_user.id,
-            )
+            query_image_url = history_image_url
+            if query_image_url is None:
+                query_image_url = _save_query_image_for_history(
+                    content=content or b"",
+                    filename=query_filename,
+                    user_id=current_user.id,
+                )
             db.add(
                 SearchHistory(
                     user_id=current_user.id,

@@ -45,7 +45,6 @@ class QdrantSearchService:
 
         return hits
 
-
     def delete_image_vector(self, *, point_id: str | None = None, image_id: int | None = None) -> bool:
         point_ids: list[str] = []
         if point_id:
@@ -66,6 +65,30 @@ class QdrantSearchService:
         except Exception:
             # Xoa DB van duoc uu tien; vector mo coi se khong hien thi vi BE loc qua bang images.
             return False
+
+    def get_vector(
+        self,
+        point_id: str,
+        *,
+        collection_name: str | None = None,
+    ) -> list[float] | None:
+        """Return the stored vector for an indexed image point."""
+        points = self.client.retrieve(
+            collection_name=collection_name or self.collection_name,
+            ids=[point_id],
+            with_payload=False,
+            with_vectors=True,
+        )
+        if not points:
+            return None
+
+        vector = getattr(points[0], "vector", None)
+        if isinstance(vector, dict):
+            vector = next(iter(vector.values()), None)
+        if vector is None:
+            return None
+
+        return [float(value) for value in vector]
 
     def _query_points(self, vector: list[float], *, limit: int) -> list[Any]:
         if hasattr(self.client, "query_points"):

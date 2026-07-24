@@ -56,7 +56,7 @@ Request:
 - `multipart/form-data`
 - `file`: optional JPG, PNG, or WebP image
 - `image_id`: optional existing image id
-- `imageUrl`: optional remote image URL
+- `imageUrl`: optional stored `/static` image URL
 - `page`: optional, default `1`
 - `limit`: optional, default `20`
 
