@@ -6,22 +6,28 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
-from sqlalchemy import case, func, select
+from sqlalchemy import case, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_admin
 from app.core.config import settings
 from app.core.errors import api_error
 from app.db.session import get_db
+from app.models.bookmark import Bookmark
 from app.models.image import Image
+from app.models.image_embedding import ImageEmbedding
 from app.models.indexing_item import IndexingItem
 from app.models.indexing_batch import IndexingBatch
+from app.models.ocr_text import OCRText
 from app.models.user import User
 from app.schemas.admin import (
     AdminBatchCompleteUploadResponse,
     AdminBatchCreateResponse,
     AdminBatchImageUploadResponse,
     AdminDashboardResponse,
+    AdminImageDeleteResponse,
+    AdminImageListResponse,
+    AdminImageOut,
     AdminIndexBatchListResponse,
     AdminIndexStartResponse,
     AdminIndexStatusResponse,
@@ -34,6 +40,7 @@ from app.schemas.admin import (
 )
 from app.schemas.common import BatchStatus, ImageSourceType, ImageStatus, IndexingItemStatus
 from app.services.admin_indexing import AIIndexingServiceError, AIIndexItemPayload, AIIndexItemsResponse, ai_indexing_client
+from app.services.qdrant_service import QdrantSearchService
 from app.services.search import build_image_url
 
 router = APIRouter()
@@ -118,6 +125,123 @@ async def list_users(
         page=page,
         limit=limit,
         total=total,
+    )
+
+
+@router.get(
+    "/images",
+    response_model=AdminImageListResponse,
+    summary="List stored images",
+    description="Return paginated images from the image library. Supports status filter and keyword search by filename or storage path. Requires admin role.",
+    responses={
+        200: {"description": "Images returned successfully."},
+        401: {"description": "Missing, invalid, or expired token."},
+        403: {"description": "User does not have admin role."},
+    },
+)
+async def list_images(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    image_status: ImageStatus | None = Query(None, alias="status"),
+    q: str | None = Query(None, min_length=1, max_length=255),
+    _: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> AdminImageListResponse:
+    """Tra danh sach anh trong kho de admin quan ly."""
+    filters = []
+    if image_status is not None:
+        filters.append(Image.status == image_status)
+    if q:
+        keyword = f"%{q.strip()}%"
+        filters.append(or_(Image.original_filename.ilike(keyword), Image.storage_path.ilike(keyword)))
+
+    total = await _count_rows(db, select(func.count()).select_from(Image).where(*filters))
+    offset = (page - 1) * limit
+    images = (
+        await db.scalars(
+            select(Image)
+            .where(*filters)
+            .order_by(Image.created_at.desc(), Image.id.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+    ).all()
+
+    return AdminImageListResponse(
+        items=[_to_admin_image_out(image) for image in images],
+        page=page,
+        limit=limit,
+        total=total,
+    )
+
+
+@router.delete(
+    "/images/{image_id}",
+    response_model=AdminImageDeleteResponse,
+    summary="Delete stored image",
+    description="Delete an image from the image library, including its bookmarks, OCR text, embedding metadata, indexing items, local file, and Qdrant vector when available. Requires admin role.",
+    responses={
+        200: {"description": "Image deleted successfully."},
+        401: {"description": "Missing, invalid, or expired token."},
+        403: {"description": "User does not have admin role."},
+        404: {"description": "Image not found."},
+        409: {"description": "Image is currently queued or running in an indexing batch."},
+    },
+)
+async def delete_image(
+    image_id: int,
+    _: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> AdminImageDeleteResponse:
+    """Xoa anh khoi kho anh va don cac du lieu lien quan."""
+    image = await db.get(Image, image_id)
+    if image is None:
+        raise api_error(
+            status.HTTP_404_NOT_FOUND,
+            "IMAGE_NOT_FOUND",
+            "Image not found.",
+            {"image_id": image_id},
+        )
+
+    active_item_id = await db.scalar(
+        select(IndexingItem.id)
+        .where(
+            IndexingItem.image_id == image_id,
+            IndexingItem.status.in_([IndexingItemStatus.queued, IndexingItemStatus.running]),
+        )
+        .limit(1)
+    )
+    if active_item_id is not None:
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            "IMAGE_INDEXING_ACTIVE",
+            "Cannot delete an image while it is queued or running in an indexing batch.",
+            {"image_id": image_id, "item_id": active_item_id},
+        )
+
+    storage_path = image.storage_path
+    affected_batch_ids = list(
+        await db.scalars(
+            select(IndexingItem.batch_id).where(IndexingItem.image_id == image_id).distinct()
+        )
+    )
+    embedding = await db.get(ImageEmbedding, image_id)
+    qdrant_deleted = _delete_qdrant_vector(embedding.qdrant_point_id if embedding else None, image_id)
+
+    await db.execute(delete(Bookmark).where(Bookmark.image_id == image_id))
+    await db.execute(delete(OCRText).where(OCRText.image_id == image_id))
+    await db.execute(delete(ImageEmbedding).where(ImageEmbedding.image_id == image_id))
+    await db.execute(delete(IndexingItem).where(IndexingItem.image_id == image_id))
+    await db.delete(image)
+    await _refresh_batches_after_image_delete(db, affected_batch_ids)
+    await db.commit()
+
+    file_deleted = _delete_local_image_file(storage_path)
+    return AdminImageDeleteResponse(
+        image_id=image_id,
+        deleted=True,
+        file_deleted=file_deleted,
+        qdrant_deleted=qdrant_deleted,
     )
 
 
@@ -865,6 +989,91 @@ async def list_batches(
     ).all()
     await _sync_batch_counts_for_batches(db, list(items))
     return AdminIndexBatchListResponse(items=list(items))
+
+
+async def _refresh_batches_after_image_delete(db: AsyncSession, batch_ids: list[str]) -> None:
+    for batch_id in batch_ids:
+        batch = await db.scalar(select(IndexingBatch).where(IndexingBatch.batch_id == batch_id))
+        if batch is None:
+            continue
+
+        total = await _count_rows(
+            db,
+            select(func.count()).select_from(IndexingItem).where(IndexingItem.batch_id == batch_id),
+        )
+        indexed = await _count_rows(
+            db,
+            select(func.count()).select_from(IndexingItem).where(
+                IndexingItem.batch_id == batch_id,
+                IndexingItem.status == IndexingItemStatus.indexed,
+            ),
+        )
+        failed = await _count_rows(
+            db,
+            select(func.count()).select_from(IndexingItem).where(
+                IndexingItem.batch_id == batch_id,
+                IndexingItem.status == IndexingItemStatus.failed,
+            ),
+        )
+        active = await _count_rows(
+            db,
+            select(func.count()).select_from(IndexingItem).where(
+                IndexingItem.batch_id == batch_id,
+                IndexingItem.status.in_([IndexingItemStatus.queued, IndexingItemStatus.running]),
+            ),
+        )
+
+        batch.total_images = total
+        batch.processed_images = indexed
+        batch.failed_images = failed
+        if total == 0:
+            batch.status = BatchStatus.completed
+            batch.error_message = None
+        elif active > 0 or batch.is_uploading:
+            batch.status = BatchStatus.running
+        else:
+            batch.status = BatchStatus.completed
+
+
+def _to_admin_image_out(image: Image) -> AdminImageOut:
+    return AdminImageOut(
+        id=image.id,
+        image_url=build_image_url(image.storage_path),
+        storage_path=image.storage_path,
+        filename=image.original_filename or Path(image.storage_path.replace("\\", "/")).name or f"image_{image.id}",
+        source_type=image.source_type,
+        status=image.status,
+        mime_type=image.mime_type,
+        file_size=image.file_size,
+        width=image.width,
+        height=image.height,
+        created_at=image.created_at,
+        updated_at=image.updated_at,
+    )
+
+
+def _delete_qdrant_vector(point_id: str | None, image_id: int) -> bool:
+    try:
+        return QdrantSearchService().delete_image_vector(point_id=point_id, image_id=image_id)
+    except Exception:
+        # Neu Qdrant dang loi, DB van xoa anh de anh khong con hien thi trong search.
+        return False
+
+
+def _delete_local_image_file(storage_path: str) -> bool:
+    try:
+        file_path = _storage_path_to_backend_path(storage_path)
+    except Exception:
+        return False
+
+    if not file_path.is_file():
+        return False
+
+    try:
+        file_path.unlink()
+        return True
+    except OSError:
+        return False
 
 
 def _to_admin_indexing_item(item: IndexingItem, image: Image) -> AdminIndexingItemOut:

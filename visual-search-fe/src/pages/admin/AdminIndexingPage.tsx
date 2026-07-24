@@ -53,7 +53,7 @@ export default function AdminIndexingPage() {
   const [indexError, setIndexError] = useState<string | null>(null)
 
   // Hidden background indexing state
-  const [failedImages, setFailedImages] = useState<{ id: string; url: string; filename: string; error_message?: string }[]>([])
+  const [failedImages, setFailedImages] = useState<{ id: string; imageId: number; url: string; filename: string; error_message?: string }[]>([])
   const [showFailedModal, setShowFailedModal] = useState(false)
   const [isActionInProgress, setIsActionInProgress] = useState(false)
 
@@ -222,6 +222,7 @@ export default function AdminIndexingPage() {
             })
             setFailedImages(failedItems.items.map((item) => ({
               id: String(item.id),
+              imageId: item.image_id,
               url: item.image_url,
               filename: item.filename,
               error_message: item.error_message ?? 'Tr?ch xu?t CLIP embedding th?t b?i ho?c t?p tin b? h?ng.',
@@ -369,6 +370,7 @@ export default function AdminIndexingPage() {
           })
           setFailedImages(failedItems.items.map((item) => ({
             id: String(item.id),
+            imageId: item.image_id,
             url: item.image_url,
             filename: item.filename,
             error_message: item.error_message ?? 'Kh?ng th? t?o vector CLIP ho?c OCR cho ?nh n?y.',
@@ -413,12 +415,20 @@ export default function AdminIndexingPage() {
   }
 
   const handleDeleteFailedImage = async (url: string) => {
+    const failedImage = failedImages.find((img) => img.url === url)
+    if (!failedImage) return
+
     try {
-      await adminApi.deletePendingImage(url)
+      await adminApi.deleteImage(failedImage.imageId)
       setFailedImages(prev => prev.filter(img => img.url !== url))
       setFailedIndexCount(prev => Math.max(0, prev - 1))
+      setTotalIndexCount(prev => Math.max(0, prev - 1))
+      if (activeBatchId) {
+        await fetchStatus(false)
+      }
     } catch (err: any) {
-      console.error('Lỗi khi xóa ảnh lỗi:', err)
+      console.error('L???i khi x??a ???nh l???i:', err)
+      setMessage({ text: err.message || 'Kh??ng th??? x??a ???nh kh???i server.', type: 'error' })
     }
   }
 

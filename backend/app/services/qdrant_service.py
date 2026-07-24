@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from qdrant_client import QdrantClient
+from qdrant_client.http import models
 
 from app.core.config import settings
 
@@ -43,6 +44,28 @@ class QdrantSearchService:
             )
 
         return hits
+
+
+    def delete_image_vector(self, *, point_id: str | None = None, image_id: int | None = None) -> bool:
+        point_ids: list[str] = []
+        if point_id:
+            point_ids.append(point_id)
+        elif image_id is not None:
+            point_ids.append(str(image_id))
+
+        if not point_ids:
+            return False
+
+        try:
+            self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=models.PointIdsList(points=point_ids),
+                wait=True,
+            )
+            return True
+        except Exception:
+            # Xoa DB van duoc uu tien; vector mo coi se khong hien thi vi BE loc qua bang images.
+            return False
 
     def _query_points(self, vector: list[float], *, limit: int) -> list[Any]:
         if hasattr(self.client, "query_points"):

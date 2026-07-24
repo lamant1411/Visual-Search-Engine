@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from app.schemas.common import BatchStatus, IndexingItemStatus, UserRole
+from app.schemas.common import BatchStatus, ImageSourceType, ImageStatus, IndexingItemStatus, UserRole
 
 
 class IndexingBatchOut(BaseModel):
@@ -50,6 +50,35 @@ class AdminUserListResponse(BaseModel):
     page: int
     limit: int
     total: int
+
+
+class AdminImageOut(BaseModel):
+    id: int
+    image_url: str
+    storage_path: str
+    filename: str
+    source_type: ImageSourceType
+    status: ImageStatus
+    mime_type: str | None = None
+    file_size: int | None = None
+    width: int | None = None
+    height: int | None = None
+    created_at: datetime
+    updated_at: datetime | None = None
+
+
+class AdminImageListResponse(BaseModel):
+    items: list[AdminImageOut]
+    page: int
+    limit: int
+    total: int
+
+
+class AdminImageDeleteResponse(BaseModel):
+    image_id: int
+    deleted: bool
+    file_deleted: bool = False
+    qdrant_deleted: bool = False
 
 
 class AdminIndexUploadResponse(BaseModel):

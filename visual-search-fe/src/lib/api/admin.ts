@@ -14,6 +14,29 @@ export interface AdminUser {
   created_at: string
 }
 
+
+export interface AdminImage {
+  id: number
+  image_url: string
+  storage_path: string
+  filename: string
+  source_type: 'dataset' | 'upload'
+  status: 'pending' | 'indexed' | 'failed'
+  mime_type?: string | null
+  file_size?: number | null
+  width?: number | null
+  height?: number | null
+  created_at: string
+  updated_at?: string | null
+}
+
+export interface AdminImageDeleteResponse {
+  image_id: number
+  deleted: boolean
+  file_deleted: boolean
+  qdrant_deleted: boolean
+}
+
 export interface IndexingStatus {
   status: 'idle' | 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
   progress: number // 0 to 100
@@ -157,6 +180,25 @@ export const adminApi = {
   /**
    * Lấy danh sách lịch sử các đợt Indexing
    */
+
+  async listImages(params?: {
+    page?: number
+    limit?: number
+    status?: AdminImage['status']
+    q?: string
+  }): Promise<PaginatedResponse<AdminImage>> {
+    const response = await apiClient.get<PaginatedResponse<AdminImage>>(
+      '/admin/images',
+      { params }
+    )
+    return response.data
+  },
+
+  async deleteImage(imageId: number): Promise<AdminImageDeleteResponse> {
+    const response = await apiClient.delete<AdminImageDeleteResponse>(`/admin/images/${imageId}`)
+    return response.data
+  },
+
   async getIndexingBatches(): Promise<IndexingBatch[]> {
     const response = await apiClient.get<{ items: IndexingBatch[] }>('/admin/index/batches')
     return response.data.items
