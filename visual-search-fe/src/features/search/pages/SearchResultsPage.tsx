@@ -365,13 +365,22 @@ function getResultTitle(
   query: string,
   fileName?: string,
   imageId?: number,
+  imageUrl?: string,
 ) {
   if (mode === "image") {
     if (imageId) {
       return `Images similar to #${imageId}`;
     }
 
-    return fileName ? `Results for ${fileName}` : "Image search results";
+    if (fileName) {
+      return `Results for ${fileName}`;
+    }
+
+    if (imageUrl) {
+      return query ? `Results for ${query}` : `Image search results`;
+    }
+
+    return "Image search results";
   }
 
   return query ? `Results for “${query}”` : "Search results";
