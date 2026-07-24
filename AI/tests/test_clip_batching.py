@@ -198,6 +198,64 @@ class ClipTextPromptTests(unittest.TestCase):
 
     @patch.object(clip_module.CLIPProcessor, "from_pretrained")
     @patch.object(clip_module.CLIPModel, "from_pretrained")
+    def test_short_english_query_uses_direct_english_prompts_without_translation(
+        self,
+        load_model,
+        load_processor,
+    ):
+        model = MagicMock()
+        load_model.return_value.to.return_value = model
+
+        processor = MagicMock()
+        processor.return_value = _FakeInputs(
+            input_ids=torch.tensor([[0], [1], [2]])
+        )
+        load_processor.return_value = processor
+        model.get_text_features.return_value = torch.ones(
+            (3, 512),
+            dtype=torch.float32,
+        )
+
+        with patch("builtins.print"):
+            embedder = clip_module.CLIPEmbedder("fake-clip")
+        embedder.translator.translate = MagicMock()
+        embedder.translator.translate_batch = MagicMock()
+
+        with patch("builtins.print"):
+            vector = embedder.embed_text("black cat")
+        embedder._image_batcher.close()
+
+        embedder.translator.translate.assert_not_called()
+        embedder.translator.translate_batch.assert_not_called()
+        processor.assert_called_once_with(
+            text=[
+                "black cat",
+                "a photo of a black cat",
+                "an image featuring a black cat",
+            ],
+            return_tensors="pt",
+            padding=True,
+        )
+        self.assertEqual(len(vector), 512)
+
+    def test_english_plural_and_uncountable_queries_do_not_add_article(self):
+        self.assertFalse(
+            clip_module.CLIPEmbedder._looks_like_vietnamese("black cat")
+        )
+        self.assertTrue(
+            clip_module.CLIPEmbedder._looks_like_vietnamese("con nguoi")
+        )
+        self.assertEqual(
+            clip_module.CLIPEmbedder._build_english_text_prompts("people"),
+            ["people", "a photo of people", "an image featuring people"],
+        )
+        self.assertEqual(
+            clip_module.CLIPEmbedder._build_english_text_prompts("water"),
+            ["water", "a photo of water", "an image featuring water"],
+        )
+
+    @patch.object(clip_module.CLIPProcessor, "from_pretrained")
+    @patch.object(clip_module.CLIPModel, "from_pretrained")
     def test_long_query_keeps_single_prompt_and_normalizes_vector(
         self,
         load_model,

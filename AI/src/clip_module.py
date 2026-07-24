@@ -1,5 +1,6 @@
 import os
 import io
+import re
 from threading import Lock
 from time import perf_counter
 
@@ -18,6 +19,75 @@ configure_torch_runtime(torch)
 class CLIPEmbedder:
     _SHORT_QUERY_MAX_WORDS = 4
     _SHORT_QUERY_PROMPT_WEIGHTS = (0.15, 0.50, 0.35)
+    _VIETNAMESE_CHARACTERS = frozenset(
+        "ăâđêôơưáàảãạấầẩẫậắằẳẵặ"
+        "éèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợ"
+        "úùủũụứừửữựýỳỷỹỵ"
+    )
+    _VIETNAMESE_ASCII_HINTS = frozenset(
+        {
+            "bai",
+            "bien",
+            "chiec",
+            "cho",
+            "khong",
+            "meo",
+            "nguoi",
+            "oto",
+            "tieng",
+            "duoc",
+            "xe",
+        }
+    )
+    _ENGLISH_DETERMINERS = frozenset(
+        {
+            "a",
+            "an",
+            "any",
+            "each",
+            "every",
+            "her",
+            "his",
+            "its",
+            "many",
+            "my",
+            "one",
+            "our",
+            "several",
+            "some",
+            "that",
+            "the",
+            "their",
+            "these",
+            "this",
+            "those",
+            "two",
+            "your",
+        }
+    )
+    _ENGLISH_IRREGULAR_PLURALS = frozenset(
+        {"children", "feet", "geese", "men", "mice", "people", "teeth", "women"}
+    )
+    _ENGLISH_UNCOUNTABLE_NOUNS = frozenset(
+        {
+            "air",
+            "art",
+            "clothing",
+            "equipment",
+            "food",
+            "furniture",
+            "grass",
+            "information",
+            "music",
+            "nature",
+            "news",
+            "sand",
+            "snow",
+            "traffic",
+            "water",
+            "weather",
+        }
+    )
 
     def __init__(self, model_id="openai/clip-vit-base-patch32"):
         print(f"Đang tải mô hình {model_id}...")
@@ -116,11 +186,18 @@ class CLIPEmbedder:
             raise ValueError("Query tìm kiếm không được để trống.")
 
         try:
-            # Query ngắn được đặt vào câu tiếng Việt đầy đủ trước khi dịch.
-            # Cách này giúp bộ dịch chọn cụm tiếng Anh tự nhiên hơn cho CLIP.
+            # Query Việt ngắn được thêm ngữ cảnh trước khi dịch; query Anh
+            # ngắn dùng prompt tiếng Anh trực tiếp để tránh câu trộn hai ngôn ngữ.
             source_prompts, weights = self._build_source_text_prompts(query)
-            prompts = self._translate_text_prompts(source_prompts)
-            print(f"[AI Service] Query gốc: '{query}' -> Đã dịch: {prompts}")
+            is_short_query = len(source_prompts) > 1
+            is_english_short_query = is_short_query and not self._looks_like_vietnamese(query)
+
+            if is_english_short_query:
+                prompts = self._build_english_text_prompts(source_prompts[0])
+                print(f"[AI Service] English query: '{query}' -> Prompts: {prompts}")
+            else:
+                prompts = self._translate_text_prompts(source_prompts)
+                print(f"[AI Service] Query gốc: '{query}' -> Đã dịch: {prompts}")
 
             if len(prompts) > 1:
                 print(
@@ -167,6 +244,49 @@ class CLIPEmbedder:
             f"một bức ảnh tập trung vào {cleaned_query}",
         ]
         return prompts, list(self._SHORT_QUERY_PROMPT_WEIGHTS)
+
+    @classmethod
+    def _looks_like_vietnamese(cls, query: str) -> bool:
+        normalized_query = query.casefold()
+        if any(character in cls._VIETNAMESE_CHARACTERS for character in normalized_query):
+            return True
+
+        ascii_words = set(re.findall(r"[a-z]+", normalized_query))
+        return bool(ascii_words & cls._VIETNAMESE_ASCII_HINTS)
+
+    @classmethod
+    def _build_english_text_prompts(cls, query: str) -> list[str]:
+        cleaned_query = " ".join(query.strip().split())
+        subject = cls._add_english_indefinite_article(cleaned_query)
+        return [
+            cleaned_query,
+            f"a photo of {subject}",
+            f"an image featuring {subject}",
+        ]
+
+    @classmethod
+    def _add_english_indefinite_article(cls, query: str) -> str:
+        words = re.findall(r"[a-z]+(?:'[a-z]+)?", query.casefold())
+        if not words:
+            return query
+
+        first_word = words[0]
+        last_word = words[-1]
+        has_determiner = first_word in cls._ENGLISH_DETERMINERS
+        is_irregular_plural = (
+            first_word in cls._ENGLISH_IRREGULAR_PLURALS
+            or last_word in cls._ENGLISH_IRREGULAR_PLURALS
+        )
+        is_regular_plural = last_word.endswith("s") and not last_word.endswith(
+            ("is", "ss", "us")
+        )
+        is_uncountable = last_word in cls._ENGLISH_UNCOUNTABLE_NOUNS
+
+        if has_determiner or is_irregular_plural or is_regular_plural or is_uncountable:
+            return query
+
+        article = "an" if first_word[0] in "aeiou" else "a"
+        return f"{article} {query}"
 
     def _translate_text_prompts(self, source_prompts: list[str]) -> list[str]:
         if len(source_prompts) == 1:
