@@ -27,9 +27,10 @@ dist/
 .git/
 .gitignore
 
-# Environment variables
-# .env — không ignore vì container cần đọc
-.env.example
+# Environment variables are injected at runtime and must not be baked into images.
+.env
+.env.*
+!.env.example
 
 # Testing
 test/
