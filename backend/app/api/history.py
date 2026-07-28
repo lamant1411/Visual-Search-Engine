@@ -8,6 +8,7 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.search_history import SearchHistory
 from app.models.user import User
+from app.schemas.common import SearchQueryType
 from app.schemas.search import SearchHistoryItem, SearchHistoryResponse
 from app.services.search import build_image_url
 
@@ -30,15 +31,23 @@ router = APIRouter()
 async def get_search_history(
     page: int = Query(1, ge=1, description="Current page."),
     limit: int = Query(20, ge=1, le=100, description="Number of items per page."),
+    query_type: SearchQueryType | None = Query(
+        None,
+        description="Optional search type filter: image, semantic, or ocr.",
+    ),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SearchHistoryResponse:
     """Return search history of the current authenticated user."""
+    filters = [SearchHistory.user_id == current_user.id]
+    if query_type is not None:
+        filters.append(SearchHistory.query_type == query_type)
+
     total = int(
         await db.scalar(
             select(func.count())
             .select_from(SearchHistory)
-            .where(SearchHistory.user_id == current_user.id)
+            .where(*filters)
         )
         or 0
     )
@@ -46,7 +55,7 @@ async def get_search_history(
     items = (
         await db.scalars(
             select(SearchHistory)
-            .where(SearchHistory.user_id == current_user.id)
+            .where(*filters)
             .order_by(SearchHistory.created_at.desc(), SearchHistory.id.desc())
             .offset(offset)
             .limit(limit)

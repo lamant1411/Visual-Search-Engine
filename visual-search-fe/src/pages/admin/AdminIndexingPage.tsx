@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import {
   Database,
   Loader2,
@@ -15,12 +15,15 @@ import {
   Info
 } from 'lucide-react'
 import { PageContainer } from '@/components/layout/PageContainer'
+import { Pagination } from '@/components/feature/result/pagination'
 import { adminApi, type IndexingBatch } from '@/lib/api/admin'
 
 const INDEXING_POLL_INTERVAL_MS = 2_000
+const BATCH_HISTORY_PAGE_LIMIT = 10
 
 export default function AdminIndexingPage() {
   const [batches, setBatches] = useState<IndexingBatch[]>([])
+  const [batchHistoryPage, setBatchHistoryPage] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null)
 
@@ -638,6 +641,13 @@ export default function AdminIndexingPage() {
     }
   }, [])
 
+  const batchHistoryTotalPages = Math.max(1, Math.ceil(batches.length / BATCH_HISTORY_PAGE_LIMIT))
+  const displayedBatchHistoryPage = Math.min(batchHistoryPage, batchHistoryTotalPages)
+  const displayedBatches = useMemo(() => {
+    const start = (displayedBatchHistoryPage - 1) * BATCH_HISTORY_PAGE_LIMIT
+    return batches.slice(start, start + BATCH_HISTORY_PAGE_LIMIT)
+  }, [batches, displayedBatchHistoryPage])
+
   const finishedIndexCount = indexedCount + failedIndexCount
   const remainingIndexCount = Math.max(totalIndexCount - finishedIndexCount, 0)
   const indexRatePerMinute = elapsedSeconds > 0
@@ -1083,7 +1093,7 @@ export default function AdminIndexingPage() {
                   </td>
                 </tr>
               ) : (
-                batches.map((b) => (
+                displayedBatches.map((b) => (
                   <tr key={b.id} className="text-ink-secondary hover:bg-surface-1/5 transition-colors">
                     <td className="px-6 py-4 font-mono font-medium text-ink-primary">{b.batch_id}</td>
                     <td className="px-6 py-4">
@@ -1150,6 +1160,19 @@ export default function AdminIndexingPage() {
             </tbody>
           </table>
         </div>
+
+        {!isLoading && batchHistoryTotalPages > 1 && (
+          <Pagination
+            ariaLabel="Các trang lịch sử tải ảnh"
+            className="pt-4"
+            nextLabel="Sau"
+            page={displayedBatchHistoryPage}
+            previousLabel="Trước"
+            scrollToTop={false}
+            totalPages={batchHistoryTotalPages}
+            onChange={setBatchHistoryPage}
+          />
+        )}
       </div>
 
       {/* FAILED IMAGES HANDLER MODAL */}
