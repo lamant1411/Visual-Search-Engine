@@ -1,6 +1,5 @@
 .env
 .env.*
-!.env.production.example
 .agents/
 node_modules/
 dist/
