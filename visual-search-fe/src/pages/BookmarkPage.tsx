@@ -1,10 +1,9 @@
-import { useMemo, useState } from 'react'
-import { AlertCircle, Bookmark, RefreshCw } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { AlertCircle, Bookmark, RefreshCw, RotateCcw } from 'lucide-react'
 import { useNavigate } from 'react-router'
 
 import { Button } from '@/components/base/button'
 import { PageContainer } from '@/components/layout/PageContainer'
-import { Pagination } from '@/components/feature/result/pagination'
 import { useBookmark } from '@/features/bookmark/useBookmark'
 import { ResultGrid, ResultGridSkeleton } from '@/features/search/components/ResultGrid'
 import { SearchResultDetailModal } from '@/features/search/components/SearchResultDetailModal'
@@ -12,18 +11,38 @@ import type { SearchResult } from '@/features/search/types'
 
 export default function BookmarkPage() {
   const navigate = useNavigate()
-  const [page, setPage] = useState(1)
+  const loadMoreRef = useRef<HTMLDivElement | null>(null)
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null)
   const {
     items,
     total,
-    totalPages,
     isLoading,
+    isFetchingNextPage,
+    isFetchNextPageError,
+    hasNextPage,
+    fetchNextPage,
     error,
     removingImageId,
     removeItem,
     refetch,
-  } = useBookmark(page)
+  } = useBookmark()
+
+  useEffect(() => {
+    const target = loadMoreRef.current
+    if (!target || !hasNextPage) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !isFetchingNextPage) {
+          void fetchNextPage()
+        }
+      },
+      { rootMargin: '500px 0px' },
+    )
+
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage])
 
   const results = useMemo<SearchResult[]>(
     () =>
@@ -39,13 +58,7 @@ export default function BookmarkPage() {
 
   function handleRemove(result: SearchResult) {
     if (removingImageId === result.id) return
-    removeItem(result.id, {
-      onSuccess: () => {
-        if (items.length === 1 && page > 1) {
-          setPage((currentPage) => currentPage - 1)
-        }
-      },
-    })
+    removeItem(result.id)
     if (selectedResult?.id === result.id) {
       setSelectedResult(null)
     }
@@ -85,23 +98,40 @@ export default function BookmarkPage() {
         ) : results.length === 0 ? (
           <EmptyState onSearch={() => navigate('/search')} />
         ) : (
-          <ResultGrid
-            results={results}
-            isBookmarked={() => true}
-            showSimilarity={false}
-            onBookmark={handleRemove}
-            onSelectResult={setSelectedResult}
-          />
+          <>
+            <ResultGrid
+              results={results}
+              isBookmarked={() => true}
+              showSimilarity={false}
+              onBookmark={handleRemove}
+              onSelectResult={setSelectedResult}
+            />
+
+            {isFetchingNextPage && (
+              <div className="mt-5">
+                <ResultGridSkeleton limit={8} />
+              </div>
+            )}
+
+            {isFetchNextPageError && (
+              <div className="flex flex-col items-center gap-3 border-t border-border pt-6 text-center">
+                <p className="text-sm font-semibold text-red-700">
+                  Unable to load more saved images.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  leftIcon={<RotateCcw className="h-4 w-4" />}
+                  onClick={() => void fetchNextPage()}
+                >
+                  Try again
+                </Button>
+              </div>
+            )}
+          </>
         )}
 
-        {!isLoading && !error && totalPages > 1 && (
-          <Pagination
-            ariaLabel="Bookmark pages"
-            page={page}
-            totalPages={totalPages}
-            onChange={setPage}
-          />
-        )}
+        {hasNextPage && <div ref={loadMoreRef} className="h-10 w-full" />}
       </PageContainer>
 
       {selectedResult && (

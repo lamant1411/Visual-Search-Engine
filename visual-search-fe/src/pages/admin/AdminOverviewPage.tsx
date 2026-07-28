@@ -40,15 +40,15 @@ export default function AdminOverviewPage() {
   }, [])
 
   return (
-    <PageContainer size="wide" className="py-8 space-y-6">
+    <PageContainer size="wide" className="space-y-6 py-5 sm:py-8">
       {/* Page Header */}
       <div className="border-b border-border pb-6">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-1 border border-border text-ink-primary shadow-xs">
             <LayoutDashboard className="h-5 w-5" />
           </div>
-          <div>
-            <h1 className="font-display text-2xl font-bold tracking-tight text-ink-primary">
+          <div className="min-w-0">
+            <h1 className="font-display text-xl font-bold tracking-tight text-ink-primary sm:text-2xl">
               Tổng quan Admin
             </h1>
             <p className="text-sm text-ink-secondary mt-1">
@@ -59,7 +59,7 @@ export default function AdminOverviewPage() {
       </div>
 
       {/* Metric Cards Grid */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {isLoading ? (
           <>
             <CardSkeleton />
@@ -69,7 +69,7 @@ export default function AdminOverviewPage() {
         ) : (
           <>
             {/* Total Indexed Images */}
-            <div className="rounded-xl bg-surface-2 border border-border p-5 shadow-2xs hover:shadow-xs transition-shadow flex items-center justify-between">
+            <div className="flex items-center justify-between rounded-xl border border-border bg-surface-2 p-4 shadow-2xs transition-shadow hover:shadow-xs sm:p-5">
               <div className="space-y-1.5">
                 <span className="text-xs font-semibold text-ink-muted uppercase tracking-wide">
                   Tổng số ảnh đã index
@@ -84,7 +84,7 @@ export default function AdminOverviewPage() {
             </div>
 
             {/* Total Users */}
-            <div className="rounded-xl bg-surface-2 border border-border p-5 shadow-2xs hover:shadow-xs transition-shadow flex items-center justify-between">
+            <div className="flex items-center justify-between rounded-xl border border-border bg-surface-2 p-4 shadow-2xs transition-shadow hover:shadow-xs sm:p-5">
               <div className="space-y-1.5">
                 <span className="text-xs font-semibold text-ink-muted uppercase tracking-wide">
                   Tổng người dùng
@@ -99,7 +99,7 @@ export default function AdminOverviewPage() {
             </div>
 
             {/* Current Indexing State */}
-            <div className="rounded-xl bg-surface-2 border border-border p-5 shadow-2xs hover:shadow-xs transition-shadow flex items-center justify-between">
+            <div className="flex items-center justify-between rounded-xl border border-border bg-surface-2 p-4 shadow-2xs transition-shadow hover:shadow-xs sm:p-5">
               <div className="space-y-1.5">
                 <span className="text-xs font-semibold text-ink-muted uppercase tracking-wide">
                   Trạng thái Indexing
@@ -129,10 +129,10 @@ export default function AdminOverviewPage() {
       </div>
 
       {/* Quick Access Area: User list (view only) & Status summary */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 xl:grid-cols-2">
         {/* User list */}
-        <div className="bg-surface-2 rounded-xl border border-border shadow-2xs p-5 space-y-4">
-          <div className="flex items-center justify-between border-b border-border pb-3">
+        <div className="space-y-4 rounded-xl border border-border bg-surface-2 p-4 shadow-2xs sm:p-5">
+          <div className="flex flex-col gap-2 border-b border-border pb-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-sm font-bold text-ink-primary uppercase tracking-wide flex items-center gap-2">
               <UserCheck className="h-4 w-4 text-ink-muted" /> Người dùng mới gần đây
             </h2>
@@ -141,7 +141,7 @@ export default function AdminOverviewPage() {
             </Link>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="hidden overflow-x-auto sm:block">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-border text-ink-muted uppercase font-bold tracking-wider">
@@ -195,17 +195,47 @@ export default function AdminOverviewPage() {
               </tbody>
             </table>
           </div>
+
+          <div className="divide-y divide-border/60 sm:hidden">
+            {isLoading ? (
+              Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="space-y-2 py-4 first:pt-0">
+                  <div className="h-4 w-3/4 animate-pulse rounded bg-surface-1" />
+                  <div className="h-4 w-1/2 animate-pulse rounded bg-surface-1" />
+                </div>
+              ))
+            ) : users.length === 0 ? (
+              <p className="py-5 text-center text-sm italic text-ink-muted">
+                Chưa có người dùng nào đăng ký.
+              </p>
+            ) : (
+              users.map((user) => (
+                <div key={user.id} className="space-y-2 py-4 first:pt-0">
+                  <p className="break-all text-sm font-semibold text-ink-primary">{user.email}</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="font-semibold uppercase text-ink-secondary">{user.role}</span>
+                    <span className={user.is_active ? 'text-emerald-700' : 'text-ink-muted'}>
+                      {user.is_active ? 'Đang hoạt động' : 'Tạm khóa'}
+                    </span>
+                    <time className="w-full text-ink-muted">
+                      {new Date(user.created_at).toLocaleDateString('vi-VN')}
+                    </time>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
         {/* System & Search metrics summary */}
-        <div className="bg-surface-2 rounded-xl border border-border shadow-2xs p-5 space-y-4">
+        <div className="space-y-4 rounded-xl border border-border bg-surface-2 p-4 shadow-2xs sm:p-5">
           <div className="border-b border-border pb-3">
             <h2 className="text-sm font-bold text-ink-primary uppercase tracking-wide">
               Thông tin hệ thống & Vector DB
             </h2>
           </div>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
               <div className="border border-border rounded-lg p-3 bg-surface-1/50">
                 <p className="text-3xs font-bold text-ink-muted uppercase tracking-wider">Vector Dimension</p>
                 <p className="text-lg font-bold text-ink-primary mt-1 font-display">512 (CLIP-ViT-B/32)</p>
