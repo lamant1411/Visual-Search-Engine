@@ -28,6 +28,8 @@ class BookmarkItem(BaseModel):
                 "image_url": "http://localhost:8000/static/images/example.jpg",
                 "title": "example.jpg",
                 "saved_at": "2026-07-21T10:00:00Z",
+                "width": 1920,
+                "height": 1080,
             }
         },
     )
@@ -37,15 +39,16 @@ class BookmarkItem(BaseModel):
     image_url: str = Field(alias="imageUrl")
     title: str
     saved_at: datetime = Field(alias="savedAt")
+    width: int | None = None
+    height: int | None = None
+    source: str | None = None
+    ocr_text: str | None = Field(default=None, alias="ocrText")
 
 
 class BookmarkDetail(BookmarkItem):
     """Bookmark detail with image metadata and OCR text."""
 
-    width: int | None = None
-    height: int | None = None
-    source: str | None = None
-    ocr_text: str | None = Field(default=None, alias="ocrText")
+    pass
 
 
 class BookmarkListResponse(BaseModel):

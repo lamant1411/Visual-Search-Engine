@@ -8,6 +8,7 @@ interface HistoryListProps {
   isLoading: boolean
   emptyForFilter: boolean
   onReSearch: (item: HistoryItemType) => void
+  onPreviewImage?: (item: HistoryItemType) => void
 }
 
 export function HistoryList({
@@ -15,6 +16,7 @@ export function HistoryList({
   isLoading,
   emptyForFilter,
   onReSearch,
+  onPreviewImage,
 }: HistoryListProps) {
   if (isLoading) {
     return (
@@ -58,6 +60,7 @@ export function HistoryList({
           key={item.id}
           item={item}
           onReSearch={onReSearch}
+          onPreviewImage={onPreviewImage}
         />
       ))}
     </ul>

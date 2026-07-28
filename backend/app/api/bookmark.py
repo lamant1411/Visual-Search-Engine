@@ -213,6 +213,9 @@ def _to_bookmark_item(bookmark: Bookmark, image: Image) -> BookmarkItem:
         image_url=build_image_url(image.storage_path),
         title=_image_title(image),
         saved_at=bookmark.created_at,
+        width=image.width,
+        height=image.height,
+        source=image.source_type.value if hasattr(image.source_type, "value") else str(image.source_type),
     )
 
 

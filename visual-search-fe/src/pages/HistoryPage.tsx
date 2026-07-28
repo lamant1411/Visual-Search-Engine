@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { AlertCircle, History, RefreshCw } from 'lucide-react'
+import { AlertCircle, History, Loader2, RefreshCw } from 'lucide-react'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { HistoryFilters } from '@/components/feature/history/HistoryFilters'
 import { HistoryList } from '@/components/feature/history/HistoryList'
+import { HistoryImageModal } from '@/components/feature/history/HistoryImageModal'
 import { useHistory } from '@/features/history/useHistory'
 import type { HistoryItem, SearchQueryType } from '@/lib/api/history'
 
@@ -11,15 +12,37 @@ type FilterType = 'all' | SearchQueryType
 
 export default function HistoryPage() {
   const navigate = useNavigate()
+  const loadMoreRef = useRef<HTMLDivElement | null>(null)
+  const [previewImageItem, setPreviewImageItem] = useState<HistoryItem | null>(null)
   const {
     items,
     total,
     isLoading,
     isFetching,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
     error,
     refetch,
   } = useHistory()
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
+
+  useEffect(() => {
+    const target = loadMoreRef.current
+    if (!target || !hasNextPage) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !isFetchingNextPage) {
+          void fetchNextPage()
+        }
+      },
+      { rootMargin: '400px 0px' },
+    )
+
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage])
 
   const filteredItems = useMemo(
     () => items.filter((item) => activeFilter === 'all' || item.query_type === activeFilter),
@@ -53,63 +76,80 @@ export default function HistoryPage() {
   }
 
   return (
-    <PageContainer size="wide" className="max-w-6xl space-y-6 pb-12 pt-8">
-      <header className="flex flex-col gap-5 border-b border-border pb-6 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-white text-ink-primary shadow-sm shadow-slate-200/60">
-            <History className="h-5 w-5" />
+    <>
+      <PageContainer size="wide" className="max-w-6xl space-y-6 pb-12 pt-8">
+        <header className="flex flex-col gap-5 border-b border-border pb-6 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-white text-ink-primary shadow-sm shadow-slate-200/60">
+              <History className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="font-display text-2xl font-bold text-ink-primary">Search history</h1>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-ink-secondary">
+                Review previous searches and run them again without rebuilding the query.
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="font-display text-2xl font-bold text-ink-primary">Search history</h1>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-ink-secondary">
-              Review previous searches and run them again without rebuilding the query.
-            </p>
-          </div>
-        </div>
 
-        <button
-          type="button"
-          onClick={() => void refetch()}
-          disabled={isFetching}
-          className="inline-flex h-9 items-center gap-2 self-start rounded-lg border border-border bg-white px-3 text-xs font-semibold text-ink-secondary shadow-sm shadow-slate-200/50 transition-colors hover:bg-surface-1 hover:text-ink-primary disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
-      </header>
-
-      {error && (
-        <div role="alert" className="flex items-center justify-between gap-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          <div className="flex min-w-0 items-start gap-2">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{error}</span>
-          </div>
           <button
             type="button"
             onClick={() => void refetch()}
-            className="shrink-0 text-xs font-bold underline underline-offset-2"
+            disabled={isFetching}
+            className="inline-flex h-9 items-center gap-2 self-start rounded-lg border border-border bg-white px-3 text-xs font-semibold text-ink-secondary shadow-sm shadow-slate-200/50 transition-colors hover:bg-surface-1 hover:text-ink-primary disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto"
           >
-            Try again
+            <RefreshCw className={`h-3.5 w-3.5 ${isFetching && !isFetchingNextPage ? 'animate-spin' : ''}`} />
+            Refresh
           </button>
-        </div>
+        </header>
+
+        {error && (
+          <div role="alert" className="flex items-center justify-between gap-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <div className="flex min-w-0 items-start gap-2">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              className="shrink-0 text-xs font-bold underline underline-offset-2"
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
+        <section aria-label="History controls" className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <HistoryFilters activeFilter={activeFilter} counts={counts} onChange={setActiveFilter} />
+            <p className="text-xs font-medium text-ink-muted">
+              Showing {filteredItems.length} of {total} searches
+            </p>
+          </div>
+        </section>
+
+        <HistoryList
+          items={filteredItems}
+          isLoading={isLoading}
+          emptyForFilter={activeFilter !== 'all'}
+          onReSearch={handleReSearch}
+          onPreviewImage={(item) => setPreviewImageItem(item)}
+        />
+
+        {hasNextPage && <div ref={loadMoreRef} className="h-10 w-full" />}
+        {isFetchingNextPage && (
+          <div className="py-6 flex justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-ink-muted" />
+          </div>
+        )}
+      </PageContainer>
+
+      {previewImageItem && (
+        <HistoryImageModal
+          item={previewImageItem}
+          onClose={() => setPreviewImageItem(null)}
+          onReSearch={handleReSearch}
+        />
       )}
-
-      <section aria-label="History controls" className="space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <HistoryFilters activeFilter={activeFilter} counts={counts} onChange={setActiveFilter} />
-          <p className="text-xs font-medium text-ink-muted">
-            Showing {filteredItems.length} of {total} searches
-          </p>
-        </div>
-
-      </section>
-
-      <HistoryList
-        items={filteredItems}
-        isLoading={isLoading}
-        emptyForFilter={activeFilter !== 'all'}
-        onReSearch={handleReSearch}
-      />
-    </PageContainer>
+    </>
   )
 }

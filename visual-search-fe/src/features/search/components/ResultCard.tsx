@@ -23,14 +23,21 @@ export function ResultCard({
 }: ResultCardProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
+  const [naturalDimensions, setNaturalDimensions] = useState<{ width: number; height: number } | null>(null);
+
+  const effectiveWidth = result.metadata.width || naturalDimensions?.width;
+  const effectiveHeight = result.metadata.height || naturalDimensions?.height;
+
   const sizeLabel =
-    result.metadata.width && result.metadata.height
-      ? `${result.metadata.width} x ${result.metadata.height}`
+    effectiveWidth && effectiveHeight
+      ? `${effectiveWidth} x ${effectiveHeight}`
       : "Unknown size";
+
   const aspectRatio =
-    result.metadata.width && result.metadata.height
-      ? `${result.metadata.width} / ${result.metadata.height}`
-      : "4 / 3";
+    effectiveWidth && effectiveHeight
+      ? `${effectiveWidth} / ${effectiveHeight}`
+      : undefined;
+
   const similarityScore = formatSimilarityScore(result.similarityScore);
 
   return (
@@ -42,14 +49,14 @@ export function ResultCard({
         onClick={() => onSelect?.(result)}
       >
         <div
-          className="relative overflow-hidden bg-surface-1"
-          style={{ aspectRatio }}
+          className="relative min-h-[160px] overflow-hidden bg-surface-1"
+          style={aspectRatio ? { aspectRatio } : undefined}
         >
           {!imageLoaded && !imageFailed && (
             <div className="absolute inset-0 animate-pulse bg-slate-200" />
           )}
           {imageFailed ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-100 px-4 text-center text-slate-500">
+            <div className="absolute inset-0 flex min-h-[160px] flex-col items-center justify-center gap-2 bg-slate-100 px-4 text-center text-slate-500">
               <ImageOff className="h-7 w-7" aria-hidden="true" />
               <span className="text-xs font-semibold">Image unavailable</span>
             </div>
@@ -57,14 +64,21 @@ export function ResultCard({
             <img
               alt={`Search result ${result.id}`}
               className={[
-                "h-full w-full object-cover transition duration-300 group-hover:scale-105",
+                "w-full object-cover transition duration-300 group-hover:scale-105",
+                aspectRatio ? "h-full" : "h-auto",
                 imageLoaded ? "opacity-100" : "opacity-0",
               ].join(" ")}
               decoding="async"
               fetchPriority={priority ? "high" : "auto"}
               loading={priority ? "eager" : "lazy"}
               src={result.thumbnailUrl}
-              onLoad={() => setImageLoaded(true)}
+              onLoad={(e) => {
+                setImageLoaded(true);
+                const { naturalWidth, naturalHeight } = e.currentTarget;
+                if (naturalWidth && naturalHeight) {
+                  setNaturalDimensions({ width: naturalWidth, height: naturalHeight });
+                }
+              }}
               onError={() => {
                 setImageLoaded(false);
                 setImageFailed(true);

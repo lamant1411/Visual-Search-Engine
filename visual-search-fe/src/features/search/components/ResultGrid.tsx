@@ -1,13 +1,14 @@
-import type { SearchResult } from "../types";
-import { ResultCard } from "./ResultCard";
+import type { SearchResult } from '../types'
+import { ResultCard } from './ResultCard'
+import { Skeleton } from '@/components/base/loader'
 
 type ResultGridProps = {
-  results: SearchResult[];
-  isBookmarked?: (imageId: number) => boolean;
-  showSimilarity?: boolean;
-  onBookmark?: (result: SearchResult) => void;
-  onSelectResult?: (result: SearchResult) => void;
-};
+  results: SearchResult[]
+  isBookmarked?: (imageId: number) => boolean
+  showSimilarity?: boolean
+  onBookmark?: (result: SearchResult) => void
+  onSelectResult?: (result: SearchResult) => void
+}
 
 export function ResultGrid({
   results,
@@ -38,5 +39,25 @@ export function ResultGrid({
         </div>
       )}
     </section>
-  );
+  )
+}
+
+export function ResultGridSkeleton({ limit }: { limit: number }) {
+  return (
+    <div className="columns-1 gap-5 sm:columns-2 lg:columns-3 xl:columns-4" role="status">
+      <span className="sr-only">Loading images...</span>
+      {Array.from({ length: limit }).map((_, index) => (
+        <div
+          key={index}
+          className="mb-5 break-inside-avoid rounded-lg bg-white p-2 shadow-sm"
+        >
+          <Skeleton
+            height={index % 3 === 0 ? 260 : index % 2 === 0 ? 320 : 190}
+            className="overflow-hidden rounded-md"
+          />
+          <Skeleton lines={1} className="mt-3" />
+        </div>
+      ))}
+    </div>
+  )
 }

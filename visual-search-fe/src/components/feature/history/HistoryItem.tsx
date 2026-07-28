@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { FileText, Image, RotateCcw, ScanText } from 'lucide-react'
+import { FileText, Image, RotateCcw, ScanText, ZoomIn } from 'lucide-react'
 import type { HistoryItem as HistoryItemType, SearchQueryType } from '@/lib/api/history'
 
 interface HistoryItemProps {
   item: HistoryItemType
   onReSearch: (item: HistoryItemType) => void
+  onPreviewImage?: (item: HistoryItemType) => void
 }
 
 const typeConfig: Record<
@@ -51,6 +52,7 @@ function getImagePreview(item: HistoryItemType) {
 export function HistoryItem({
   item,
   onReSearch,
+  onPreviewImage,
 }: HistoryItemProps) {
   const config = typeConfig[item.query_type]
   const Icon = config.icon
@@ -61,20 +63,34 @@ export function HistoryItem({
   return (
     <li
       onClick={() => onReSearch(item)}
-      className="group flex flex-col gap-3 px-4 py-3.5 transition-colors duration-150 hover:bg-surface-1/70 sm:flex-row sm:items-center sm:gap-5 sm:px-5 cursor-pointer"
+      className="group flex cursor-pointer flex-col gap-3 px-4 py-3.5 transition-colors duration-150 hover:bg-surface-1/70 sm:flex-row sm:items-center sm:gap-5 sm:px-5"
     >
       <div className="flex min-w-0 flex-1 items-center gap-3.5">
         <div
-          className={`relative flex h-16 w-20 shrink-0 items-center justify-center overflow-hidden rounded-md border ${config.surfaceClass}`}
+          onClick={(e) => {
+            if (showPreview && onPreviewImage) {
+              e.stopPropagation()
+              onPreviewImage(item)
+            }
+          }}
+          className={`group/thumb relative flex h-16 w-20 shrink-0 items-center justify-center overflow-hidden rounded-md border ${
+            config.surfaceClass
+          } ${showPreview ? 'cursor-zoom-in' : ''}`}
+          title={showPreview ? 'Click to enlarge image' : undefined}
         >
           {showPreview ? (
-            <img
-              src={previewUrl ?? undefined}
-              alt={`Reference image for ${item.query_value}`}
-              loading="lazy"
-              className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03] motion-reduce:transform-none"
-              onError={() => setPreviewFailed(true)}
-            />
+            <>
+              <img
+                src={previewUrl ?? undefined}
+                alt={`Reference image for ${item.query_value}`}
+                loading="lazy"
+                className="h-full w-full object-cover transition-transform duration-200 group-hover/thumb:scale-105 motion-reduce:transform-none"
+                onError={() => setPreviewFailed(true)}
+              />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/35 opacity-0 transition-opacity duration-150 group-hover/thumb:opacity-100">
+                <ZoomIn className="h-5 w-5 text-white drop-shadow-sm" />
+              </div>
+            </>
           ) : (
             <Icon className={`h-5 w-5 ${config.iconClass}`} aria-hidden="true" />
           )}

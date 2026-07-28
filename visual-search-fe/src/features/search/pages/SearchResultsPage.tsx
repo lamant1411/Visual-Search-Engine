@@ -5,9 +5,8 @@ import { ImageUp, RotateCcw } from "lucide-react";
 
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/base/button";
-import { Skeleton } from "@/components/base/loader";
 
-import { ResultGrid } from "../components/ResultGrid";
+import { ResultGrid, ResultGridSkeleton } from "../components/ResultGrid";
 import { SearchResultDetailModal } from "../components/SearchResultDetailModal";
 import { searchByImage, searchByText } from "../services/search.api";
 import { useBookmarks } from "../hooks/useBookmarks";
@@ -420,23 +419,4 @@ function runSearch({
     page,
     limit,
   });
-}
-
-function ResultGridSkeleton({ limit }: { limit: number }) {
-  return (
-    <div className="columns-1 gap-5 sm:columns-2 lg:columns-3 xl:columns-4">
-      {Array.from({ length: limit }).map((_, index) => (
-        <div
-          key={index}
-          className="mb-5 break-inside-avoid rounded-lg bg-white p-2 shadow-sm"
-        >
-          <Skeleton
-            height={index % 3 === 0 ? 260 : 190}
-            className="overflow-hidden rounded-md"
-          />
-          <Skeleton lines={1} className="mt-3" />
-        </div>
-      ))}
-    </div>
-  );
 }

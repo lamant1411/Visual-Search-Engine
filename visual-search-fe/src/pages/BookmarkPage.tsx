@@ -1,36 +1,49 @@
-import { useMemo, useState } from 'react'
-import {
-  AlertCircle,
-  Bookmark,
-  ChevronLeft,
-  ChevronRight,
-  RefreshCw,
-} from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { AlertCircle, Bookmark, RefreshCw, RotateCcw } from 'lucide-react'
 import { useNavigate } from 'react-router'
 
 import { Button } from '@/components/base/button'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { useBookmark } from '@/features/bookmark/useBookmark'
-import { ResultGrid } from '@/features/search/components/ResultGrid'
+import { ResultGrid, ResultGridSkeleton } from '@/features/search/components/ResultGrid'
 import { SearchResultDetailModal } from '@/features/search/components/SearchResultDetailModal'
 import type { SearchResult } from '@/features/search/types'
 
-const SKELETON_HEIGHTS = [280, 210, 340, 250, 300, 230, 360, 220, 290, 330, 240, 275]
-
 export default function BookmarkPage() {
   const navigate = useNavigate()
-  const [page, setPage] = useState(1)
+  const loadMoreRef = useRef<HTMLDivElement | null>(null)
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null)
   const {
     items,
     total,
-    totalPages,
     isLoading,
+    isFetchingNextPage,
+    isFetchNextPageError,
+    hasNextPage,
+    fetchNextPage,
     error,
     removingImageId,
     removeItem,
     refetch,
-  } = useBookmark(page)
+  } = useBookmark()
+
+  useEffect(() => {
+    const target = loadMoreRef.current
+    if (!target || !hasNextPage) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !isFetchingNextPage) {
+          void fetchNextPage()
+        }
+      },
+      { rootMargin: '500px 0px' },
+    )
+
+    observer.observe(target)
+    return () => observer.disconnect()
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage])
+
   const results = useMemo<SearchResult[]>(
     () =>
       items.map((item) => ({
@@ -45,13 +58,7 @@ export default function BookmarkPage() {
 
   function handleRemove(result: SearchResult) {
     if (removingImageId === result.id) return
-    removeItem(result.id, {
-      onSuccess: () => {
-        if (items.length === 1 && page > 1) {
-          setPage((currentPage) => currentPage - 1)
-        }
-      },
-    })
+    removeItem(result.id)
     if (selectedResult?.id === result.id) {
       setSelectedResult(null)
     }
@@ -87,22 +94,44 @@ export default function BookmarkPage() {
         {error ? (
           <ErrorState onRetry={() => void refetch()} />
         ) : isLoading ? (
-          <BookmarkGridSkeleton />
+          <ResultGridSkeleton limit={20} />
         ) : results.length === 0 ? (
           <EmptyState onSearch={() => navigate('/search')} />
         ) : (
-          <ResultGrid
-            results={results}
-            isBookmarked={() => true}
-            showSimilarity={false}
-            onBookmark={handleRemove}
-            onSelectResult={setSelectedResult}
-          />
+          <>
+            <ResultGrid
+              results={results}
+              isBookmarked={() => true}
+              showSimilarity={false}
+              onBookmark={handleRemove}
+              onSelectResult={setSelectedResult}
+            />
+
+            {isFetchingNextPage && (
+              <div className="mt-5">
+                <ResultGridSkeleton limit={8} />
+              </div>
+            )}
+
+            {isFetchNextPageError && (
+              <div className="flex flex-col items-center gap-3 border-t border-border pt-6 text-center">
+                <p className="text-sm font-semibold text-red-700">
+                  Unable to load more saved images.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  leftIcon={<RotateCcw className="h-4 w-4" />}
+                  onClick={() => void fetchNextPage()}
+                >
+                  Try again
+                </Button>
+              </div>
+            )}
+          </>
         )}
 
-        {!isLoading && !error && totalPages > 1 && (
-          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
-        )}
+        {hasNextPage && <div ref={loadMoreRef} className="h-10 w-full" />}
       </PageContainer>
 
       {selectedResult && (
@@ -116,21 +145,6 @@ export default function BookmarkPage() {
         />
       )}
     </>
-  )
-}
-
-function BookmarkGridSkeleton() {
-  return (
-    <div className="columns-1 gap-5 sm:columns-2 lg:columns-3 xl:columns-4" role="status">
-      <span className="sr-only">Loading saved images...</span>
-      {SKELETON_HEIGHTS.map((height, index) => (
-        <div
-          key={`${height}-${index}`}
-          className="mb-5 w-full break-inside-avoid animate-pulse rounded-lg bg-slate-200"
-          style={{ height }}
-        />
-      ))}
-    </div>
   )
 }
 
@@ -172,48 +186,5 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
         <RefreshCw className="h-4 w-4" />
       </Button>
     </section>
-  )
-}
-
-function Pagination({
-  page,
-  totalPages,
-  onChange,
-}: {
-  page: number
-  totalPages: number
-  onChange: (page: number) => void
-}) {
-  function changePage(nextPage: number) {
-    onChange(nextPage)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-  return (
-    <nav className="flex items-center justify-center gap-3 border-t border-border pt-6" aria-label="Bookmark pages">
-      <Button
-        aria-label="Previous page"
-        disabled={page === 1}
-        leftIcon={<ChevronLeft className="h-4 w-4" />}
-        type="button"
-        variant="outline"
-        onClick={() => changePage(page - 1)}
-      >
-        Previous
-      </Button>
-      <span className="min-w-24 text-center text-sm font-semibold text-ink-secondary">
-        {page} / {totalPages}
-      </span>
-      <Button
-        aria-label="Next page"
-        disabled={page === totalPages}
-        rightIcon={<ChevronRight className="h-4 w-4" />}
-        type="button"
-        variant="outline"
-        onClick={() => changePage(page + 1)}
-      >
-        Next
-      </Button>
-    </nav>
   )
 }

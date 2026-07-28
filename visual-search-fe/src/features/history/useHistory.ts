@@ -1,7 +1,8 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMemo } from 'react'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { historyApi } from '@/lib/api/history'
 
-const historyQueryKey = ['search-history'] as const
+export const HISTORY_PAGE_LIMIT = 20
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error
@@ -10,16 +11,32 @@ function getErrorMessage(error: unknown) {
 }
 
 export function useHistory() {
-  const historyQuery = useQuery({
-    queryKey: historyQueryKey,
-    queryFn: () => historyApi.list({ page: 1, limit: 100 }),
+  const historyQuery = useInfiniteQuery({
+    queryKey: ['search-history-infinite'],
+    queryFn: ({ pageParam = 1 }) =>
+      historyApi.list({ page: pageParam as number, limit: HISTORY_PAGE_LIMIT }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const loadedCount = allPages.reduce((sum, page) => sum + page.items.length, 0)
+      return loadedCount < lastPage.total ? allPages.length + 1 : undefined
+    },
   })
 
+  const items = useMemo(
+    () => historyQuery.data?.pages.flatMap((page) => page.items) ?? [],
+    [historyQuery.data],
+  )
+
+  const total = historyQuery.data?.pages[0]?.total ?? 0
+
   return {
-    items: historyQuery.data?.items ?? [],
-    total: historyQuery.data?.total ?? 0,
+    items,
+    total,
     isLoading: historyQuery.isLoading,
     isFetching: historyQuery.isFetching,
+    isFetchingNextPage: historyQuery.isFetchingNextPage,
+    hasNextPage: historyQuery.hasNextPage,
+    fetchNextPage: historyQuery.fetchNextPage,
     error: historyQuery.error ? getErrorMessage(historyQuery.error) : null,
     refetch: historyQuery.refetch,
   }
