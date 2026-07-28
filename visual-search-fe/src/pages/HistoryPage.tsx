@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { AlertCircle, History, RefreshCw } from 'lucide-react'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { HistoryFilters } from '@/components/feature/history/HistoryFilters'
 import { HistoryList } from '@/components/feature/history/HistoryList'
+import { Pagination } from '@/components/feature/result/pagination'
 import { useHistory } from '@/features/history/useHistory'
 import type { HistoryItem, SearchQueryType } from '@/lib/api/history'
 
@@ -11,29 +12,18 @@ type FilterType = 'all' | SearchQueryType
 
 export default function HistoryPage() {
   const navigate = useNavigate()
+  const [page, setPage] = useState(1)
+  const [activeFilter, setActiveFilter] = useState<FilterType>('all')
+  const queryType = activeFilter === 'all' ? undefined : activeFilter
   const {
     items,
     total,
+    totalPages,
     isLoading,
     isFetching,
     error,
     refetch,
-  } = useHistory()
-  const [activeFilter, setActiveFilter] = useState<FilterType>('all')
-
-  const filteredItems = useMemo(
-    () => items.filter((item) => activeFilter === 'all' || item.query_type === activeFilter),
-    [activeFilter, items],
-  )
-  const counts = useMemo(
-    () => ({
-      all: items.length,
-      image: items.filter((item) => item.query_type === 'image').length,
-      semantic: items.filter((item) => item.query_type === 'semantic').length,
-      ocr: items.filter((item) => item.query_type === 'ocr').length,
-    }),
-    [items],
-  )
+  } = useHistory(page, queryType)
   function handleReSearch(item: HistoryItem) {
     if (item.query_type === 'image') {
       if (!item.query_image_url) {
@@ -50,6 +40,11 @@ export default function HistoryPage() {
     navigate(
       `/search/results?mode=${item.query_type}&q=${encodeURIComponent(item.query_value)}&page=1&limit=20`,
     )
+  }
+
+  function handleFilterChange(filter: FilterType) {
+    setActiveFilter(filter)
+    setPage(1)
   }
 
   return (
@@ -96,20 +91,29 @@ export default function HistoryPage() {
 
       <section aria-label="History controls" className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <HistoryFilters activeFilter={activeFilter} counts={counts} onChange={setActiveFilter} />
+          <HistoryFilters activeFilter={activeFilter} onChange={handleFilterChange} />
           <p className="text-xs font-medium text-ink-muted">
-            Showing {filteredItems.length} of {total} searches
+            Showing {items.length} on this page · {total} matching searches
           </p>
         </div>
 
       </section>
 
       <HistoryList
-        items={filteredItems}
+        items={items}
         isLoading={isLoading}
         emptyForFilter={activeFilter !== 'all'}
         onReSearch={handleReSearch}
       />
+
+      {!isLoading && !error && totalPages > 1 && (
+        <Pagination
+          ariaLabel="Search history pages"
+          page={page}
+          totalPages={totalPages}
+          onChange={setPage}
+        />
+      )}
     </PageContainer>
   )
 }

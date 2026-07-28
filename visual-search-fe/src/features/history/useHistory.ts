@@ -1,7 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import { historyApi } from '@/lib/api/history'
+import { historyApi, type SearchQueryType } from '@/lib/api/history'
 
-const historyQueryKey = ['search-history'] as const
+const HISTORY_PAGE_LIMIT = 20
+
+const historyQueryKeys = {
+  list: (page: number, limit: number, queryType?: SearchQueryType) =>
+    ['search-history', 'list', page, limit, queryType ?? 'all'] as const,
+}
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error
@@ -9,15 +14,18 @@ function getErrorMessage(error: unknown) {
     : 'Something went wrong while loading your search history.'
 }
 
-export function useHistory() {
+export function useHistory(page = 1, queryType?: SearchQueryType, limit = HISTORY_PAGE_LIMIT) {
   const historyQuery = useQuery({
-    queryKey: historyQueryKey,
-    queryFn: () => historyApi.list({ page: 1, limit: 100 }),
+    queryKey: historyQueryKeys.list(page, limit, queryType),
+    queryFn: () => historyApi.list({ page, limit, query_type: queryType }),
   })
+
+  const total = historyQuery.data?.total ?? 0
 
   return {
     items: historyQuery.data?.items ?? [],
-    total: historyQuery.data?.total ?? 0,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
     isLoading: historyQuery.isLoading,
     isFetching: historyQuery.isFetching,
     error: historyQuery.error ? getErrorMessage(historyQuery.error) : null,

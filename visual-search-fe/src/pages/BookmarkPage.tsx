@@ -2,14 +2,13 @@ import { useMemo, useState } from 'react'
 import {
   AlertCircle,
   Bookmark,
-  ChevronLeft,
-  ChevronRight,
   RefreshCw,
 } from 'lucide-react'
 import { useNavigate } from 'react-router'
 
 import { Button } from '@/components/base/button'
 import { PageContainer } from '@/components/layout/PageContainer'
+import { Pagination } from '@/components/feature/result/pagination'
 import { useBookmark } from '@/features/bookmark/useBookmark'
 import { ResultGrid } from '@/features/search/components/ResultGrid'
 import { SearchResultDetailModal } from '@/features/search/components/SearchResultDetailModal'
@@ -101,7 +100,12 @@ export default function BookmarkPage() {
         )}
 
         {!isLoading && !error && totalPages > 1 && (
-          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+          <Pagination
+            ariaLabel="Bookmark pages"
+            page={page}
+            totalPages={totalPages}
+            onChange={setPage}
+          />
         )}
       </PageContainer>
 
@@ -172,48 +176,5 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
         <RefreshCw className="h-4 w-4" />
       </Button>
     </section>
-  )
-}
-
-function Pagination({
-  page,
-  totalPages,
-  onChange,
-}: {
-  page: number
-  totalPages: number
-  onChange: (page: number) => void
-}) {
-  function changePage(nextPage: number) {
-    onChange(nextPage)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-  return (
-    <nav className="flex items-center justify-center gap-3 border-t border-border pt-6" aria-label="Bookmark pages">
-      <Button
-        aria-label="Previous page"
-        disabled={page === 1}
-        leftIcon={<ChevronLeft className="h-4 w-4" />}
-        type="button"
-        variant="outline"
-        onClick={() => changePage(page - 1)}
-      >
-        Previous
-      </Button>
-      <span className="min-w-24 text-center text-sm font-semibold text-ink-secondary">
-        {page} / {totalPages}
-      </span>
-      <Button
-        aria-label="Next page"
-        disabled={page === totalPages}
-        rightIcon={<ChevronRight className="h-4 w-4" />}
-        type="button"
-        variant="outline"
-        onClick={() => changePage(page + 1)}
-      >
-        Next
-      </Button>
-    </nav>
   )
 }
