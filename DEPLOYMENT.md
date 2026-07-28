@@ -24,6 +24,15 @@ characters, URL-encode it in `DATABASE_URL`.
 
 ## 3. Validate and start
 
+The recommended command validates secrets, builds the images, waits for every
+service, and runs the public smoke tests:
+
+```bash
+./deploy/deploy.sh
+```
+
+For manual operation or troubleshooting, run the underlying commands:
+
 ```bash
 docker compose --env-file .env.production -f docker-compose.prod.yml config
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
@@ -44,12 +53,20 @@ docker compose --env-file .env.production -f docker-compose.prod.yml logs --tail
 The unauthenticated `/auth/me` request should return `401`, confirming that HTTPS,
 the reverse proxy, and Backend routing work.
 
+The smoke test can also be run independently, either from `.env.production` or
+against an explicit URL:
+
+```bash
+./deploy/smoke-test.sh
+./deploy/smoke-test.sh https://search.example.com
+```
+
 ## 5. Operations
 
 ```bash
 # Pull and deploy a new version
 git pull --ff-only origin dev
-docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+./deploy/deploy.sh
 
 # Follow logs
 docker compose --env-file .env.production -f docker-compose.prod.yml logs -f
