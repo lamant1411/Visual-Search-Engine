@@ -14,9 +14,9 @@ export function AdminShell() {
   return (
     <div className="min-h-screen bg-surface-0">
       <Header />
-      <div className="mx-auto flex max-w-6xl">
+      <div className="mx-auto flex max-w-7xl flex-col md:flex-row">
         <Sidebar />
-        <main className="flex-1 min-w-0">
+        <main className="min-w-0 flex-1">
           <Outlet />
         </main>
       </div>
