@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { AlertCircle, Users } from 'lucide-react'
 
 import { Pagination } from '@/components/feature/result/pagination'
 import { PageContainer } from '@/components/layout/PageContainer'
-import { adminApi, type AdminUser } from '@/lib/api/admin'
+import { adminApi } from '@/lib/api/admin'
 
 export default function AdminUsersPage() {
-  const [users, setUsers] = useState<AdminUser[]>([])
-  const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [limit] = useState(10)
   const [isLoading, setIsLoading] = useState(true)
@@ -107,8 +107,8 @@ export default function AdminUsersPage() {
                     <td className="px-6 py-4 font-medium text-ink-primary">{u.email}</td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-3xs font-semibold ${u.role === 'admin'
-                          ? 'bg-red-50 text-red-700 border border-red-100'
-                          : 'bg-blue-50 text-blue-700 border border-blue-100'
+                        ? 'bg-red-50 text-red-700 border border-red-100'
+                        : 'bg-blue-50 text-blue-700 border border-blue-100'
                         }`}>
                         {u.role.toUpperCase()}
                       </span>
