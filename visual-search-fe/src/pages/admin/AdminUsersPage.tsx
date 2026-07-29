@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { AlertCircle, Users } from 'lucide-react'
 
 import { Pagination } from '@/components/feature/result/pagination'
 import { PageContainer } from '@/components/layout/PageContainer'
-import { adminApi } from '@/lib/api/admin'
+import { adminApi, type AdminUser } from '@/lib/api/admin'
 
 export default function AdminUsersPage() {
+  const [users, setUsers] = useState<AdminUser[]>([])
+  const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [limit] = useState(10)
   const [isLoading, setIsLoading] = useState(true)
