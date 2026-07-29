@@ -56,33 +56,38 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
-  const [accessToken, setAccessToken] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [accessToken, setAccessToken] = useState<string | null>(() => getAccessToken())
+  const [isLoading, setIsLoading] = useState<boolean>(() => Boolean(getAccessToken()))
 
-  // Khi app mount: nếu có token trong localStorage → lưu vào state trước,
-  // sau đó gọi /me để xác minh và lấy thông tin user.
+  // Khi app mount: nếu có token trong localStorage → gọi /me để lấy thông tin user
   useEffect(() => {
+    let isCancelled = false
     const storedToken = getAccessToken()
     if (!storedToken) {
-      setIsLoading(false)
       return
     }
 
-    // Lưu token vào state trước để axios interceptor có thể gắn vào header
-    setAccessToken(storedToken)
-
     authApi.me()
       .then((meData) => {
-        setUser(meData)
+        if (!isCancelled) {
+          setUser(meData)
+        }
       })
       .catch(() => {
-        // Token không hợp lệ hoặc hết hạn → xóa đi
-        clearTokens()
-        setAccessToken(null)
+        if (!isCancelled) {
+          clearTokens()
+          setAccessToken(null)
+        }
       })
       .finally(() => {
-        setIsLoading(false)
+        if (!isCancelled) {
+          setIsLoading(false)
+        }
       })
+
+    return () => {
+      isCancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -131,6 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 // ── Hook ──────────────────────────────────────────────────────────
 
 /** Sử dụng trong bất kỳ component nào bên trong AuthProvider. */
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext)
   if (!ctx) {

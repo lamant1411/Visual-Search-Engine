@@ -11,24 +11,33 @@ export default function AdminUsersPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchUsers = async () => {
-    setIsLoading(true)
-    setError(null)
-    try {
-      const res = await adminApi.listUsers({ page, limit })
-      setUsers(res.items)
-      setTotal(res.total)
-    } catch (err) {
-      console.error('Lỗi khi tải danh sách người dùng:', err)
-      setError('Không thể tải danh sách người dùng.')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   useEffect(() => {
-    fetchUsers()
-  }, [page])
+    let isCancelled = false
+    const fetchUsers = async () => {
+      setIsLoading(true)
+      setError(null)
+      try {
+        const res = await adminApi.listUsers({ page, limit })
+        if (!isCancelled) {
+          setUsers(res.items)
+          setTotal(res.total)
+        }
+      } catch (err) {
+        console.error('Lỗi khi tải danh sách người dùng:', err)
+        if (!isCancelled) {
+          setError('Không thể tải danh sách người dùng.')
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false)
+        }
+      }
+    }
+    void fetchUsers()
+    return () => {
+      isCancelled = true
+    }
+  }, [page, limit])
 
   const totalPages = Math.ceil(total / limit)
 

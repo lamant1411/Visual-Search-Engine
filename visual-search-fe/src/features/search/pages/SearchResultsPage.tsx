@@ -48,15 +48,12 @@ export function SearchResultsPage() {
   const searchFile = state.file ?? restoredImageFile ?? undefined;
   const searchFileName = state.fileName ?? restoredImageFile?.name ?? query;
   const resultTitle = getResultTitle(mode, query, searchFileName, imageId);
-  const referenceImageUrl = useMemo(() => {
-    if (mode !== "image") {
-      return null;
-    }
-    if (searchFile) {
-      return URL.createObjectURL(searchFile);
-    }
-    return imageUrl ?? null;
-  }, [imageUrl, mode, searchFile]);
+  const referenceImageUrl =
+    mode === "image"
+      ? searchFile
+        ? URL.createObjectURL(searchFile)
+        : imageUrl ?? null
+      : null;
   const shouldRevokeReferenceUrl = Boolean(searchFile && referenceImageUrl);
   const isMissingImageReference = mode === "image" && !searchFile && !imageId && !imageUrl;
   const queryEnabled =

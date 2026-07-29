@@ -197,7 +197,7 @@ export const adminApi = {
       return { status: 'idle', progress: 0, processed_count: 0, total_count: 0 }
     }
     return {
-      status: latest.status as any,
+      status: latest.status as IndexingStatus['status'],
       progress: latest.total_images > 0
         ? Math.round(((latest.processed_images + latest.failed_images) / latest.total_images) * 100)
         : 0,
@@ -353,15 +353,18 @@ export const adminApi = {
     return { success: true, queued_items: response.queued_items }
   },
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async deletePendingImage(_url: string): Promise<{ success: boolean }> {
     return { success: true }
   },
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async saveFailedImage(_url: string): Promise<{ success: boolean }> {
     return { success: true }
   },
 
   // --- Stubs cho các phương thức legacy không sử dụng ---
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async triggerIndexing(_batchSize: number = 500): Promise<TriggerIndexingResponse> {
     return { message: 'Legacy trigger stub called', task_id: 'legacy' }
   },

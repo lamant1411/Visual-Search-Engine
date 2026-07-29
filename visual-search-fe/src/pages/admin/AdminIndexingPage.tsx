@@ -217,13 +217,14 @@ export default function AdminIndexingPage() {
     setStalledSeconds(0)
     setActiveBatchId(null)
     setActiveBatchStatus('queued')
+    // eslint-disable-next-line react-hooks/purity
     operationStartedAtRef.current = Date.now()
+    // eslint-disable-next-line react-hooks/purity
     lastProgressAtRef.current = Date.now()
     lastFinishedCountRef.current = 0
 
     let batchId: string | null = null
     let uploadCompleted = false
-    let skippedFiles = 0
 
     try {
       // Upload theo chunk; mỗi chunk được AI queue ngay, không phải chờ toàn bộ ảnh tải xong.
@@ -326,14 +327,13 @@ export default function AdminIndexingPage() {
 
       for (let offset = 0; offset < filesToUpload.length; offset += chunkSize) {
         const chunk = filesToUpload.slice(offset, offset + chunkSize)
-        const uploadRes = await adminApi.uploadImagesToBatch(createdBatchId, chunk, (chunkPercent) => {
+        await adminApi.uploadImagesToBatch(createdBatchId, chunk, (chunkPercent) => {
           const completedFiles = offset
           const currentChunkFiles = (chunkPercent / 100) * chunk.length
           const uploadedFiles = Math.min(filesToUpload.length, completedFiles + currentChunkFiles)
           setUploadedCount(Math.round(uploadedFiles))
           setUploadProgress(Math.round((uploadedFiles / filesToUpload.length) * 100))
         })
-        skippedFiles += uploadRes.skipped_files
         setUploadedCount(Math.min(filesToUpload.length, offset + chunk.length))
       }
 
@@ -345,7 +345,7 @@ export default function AdminIndexingPage() {
       setUploadSuccess(true)
       await pollStatus()
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (batchId) {
         try {
           await adminApi.completeIndexingBatch(batchId)
@@ -357,10 +357,11 @@ export default function AdminIndexingPage() {
       setIsUploading(false)
       setIsBackgroundIndexing(false)
       setActiveBatchStatus('failed')
-      const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout')
+      const errorObj = err as { code?: string; message?: string }
+      const isTimeout = errorObj.code === 'ECONNABORTED' || errorObj.message?.includes('timeout')
       const errorMessage = isTimeout
         ? 'Tải ảnh lên quá thời gian. Server có thể vẫn đang xử lý các ảnh đã nhận; hãy kiểm tra lịch sử batch.'
-        : (err.message || 'Lỗi hệ thống xảy ra khi tải hoặc tối ưu ảnh.')
+        : (errorObj.message || 'Lỗi hệ thống xảy ra khi tải hoặc tối ưu ảnh.')
       if (uploadCompleted) {
         setIndexError(errorMessage)
       } else {
@@ -383,7 +384,7 @@ export default function AdminIndexingPage() {
       await adminApi.saveFailedImage(url)
       setFailedImages(prev => prev.filter(img => img.url !== url))
       setFailedIndexCount(prev => Math.max(0, prev - 1))
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Lỗi khi lưu ảnh lỗi:', err)
     }
   }
@@ -404,10 +405,11 @@ export default function AdminIndexingPage() {
       setFailedIndexCount(prev => Math.max(0, prev - 1))
       setTotalIndexCount(prev => Math.max(0, prev - 1))
       await fetchStatus(false)
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Lỗi khi xóa ảnh lỗi:', err)
+      const errorObj = err as { message?: string }
       setMessage({
-        text: err.message || 'Không thể xóa ảnh khỏi server.',
+        text: errorObj.message || 'Không thể xóa ảnh khỏi server.',
         type: 'error'
       })
     }
@@ -439,10 +441,11 @@ export default function AdminIndexingPage() {
       })
       fetchStatus(false)
       await pollBatchStatus(targetBatchId)
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Lỗi khi thử lại ảnh:', err)
+      const errorObj = err as { message?: string }
       setMessage({
-        text: err.message || 'Không thể thử lại trích xuất ảnh này.',
+        text: errorObj.message || 'Không thể thử lại trích xuất ảnh này.',
         type: 'error'
       })
     } finally {
@@ -499,10 +502,11 @@ export default function AdminIndexingPage() {
       })
       fetchStatus(false)
       await pollBatchStatus(targetBatchId)
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Lỗi khi thử lại tất cả các ảnh bị lỗi:', err)
+      const errorObj = err as { message?: string }
       setMessage({
-        text: err.message || 'Không thể thử lại toàn bộ các ảnh bị lỗi.',
+        text: errorObj.message || 'Không thể thử lại toàn bộ các ảnh bị lỗi.',
         type: 'error'
       })
     } finally {
@@ -576,8 +580,9 @@ export default function AdminIndexingPage() {
       }
       setMessage({ text: `Đã dừng batch ${batchId}.`, type: 'info' })
       await fetchStatus(false)
-    } catch (err: any) {
-      setMessage({ text: err.message || 'Không thể dừng batch.', type: 'error' })
+    } catch (err: unknown) {
+      const errorObj = err as { message?: string }
+      setMessage({ text: errorObj.message || 'Không thể dừng batch.', type: 'error' })
     } finally {
       setIsActionInProgress(false)
     }
@@ -1235,7 +1240,7 @@ export default function AdminIndexingPage() {
                           src={img.url}
                           alt={img.filename}
                           onError={(e) => {
-                            ; (e.target as any).src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100'
+                            ; (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100'
                           }}
                           className="h-full w-full object-cover"
                         />
