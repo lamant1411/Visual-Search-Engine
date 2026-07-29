@@ -29,6 +29,7 @@ interface HistoryApiResponse {
 export interface HistoryListParams {
   page?: number
   limit?: number
+  query_type?: SearchQueryType
 }
 
 function mapHistoryItem(item: HistoryApiItem): HistoryItem {

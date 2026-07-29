@@ -241,10 +241,12 @@ export function Header() {
             {user?.role === "admin" && (
               <button
                 type="button"
-                className="hidden h-9 cursor-pointer items-center gap-2 rounded-full px-3 text-sm font-bold text-ink-secondary transition hover:bg-accent-50 hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 sm:inline-flex"
+                aria-label="Open admin dashboard"
+                title="Admin dashboard"
+                className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-ink-secondary transition hover:bg-accent-50 hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 lg:h-9 lg:w-auto lg:gap-2 lg:px-3"
                 onClick={() => navigate("/admin")}
               >
-                <Shield className="h-4 w-4" />
+                <Shield className="h-5 w-5 lg:h-4 lg:w-4" />
                 <span className="hidden lg:inline">Admin</span>
               </button>
             )}

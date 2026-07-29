@@ -5,7 +5,6 @@ type FilterType = 'all' | SearchQueryType
 
 interface HistoryFiltersProps {
   activeFilter: FilterType
-  counts: Record<FilterType, number>
   onChange: (filter: FilterType) => void
 }
 
@@ -16,7 +15,7 @@ const filters = [
   { value: 'ocr', label: 'OCR', icon: ScanText },
 ] satisfies Array<{ value: FilterType; label: string; icon: typeof Image }>
 
-export function HistoryFilters({ activeFilter, counts, onChange }: HistoryFiltersProps) {
+export function HistoryFilters({ activeFilter, onChange }: HistoryFiltersProps) {
   return (
     <div
       role="group"
@@ -39,9 +38,6 @@ export function HistoryFilters({ activeFilter, counts, onChange }: HistoryFilter
           >
             <Icon className="h-3.5 w-3.5" />
             {label}
-            <span className={`text-3xs ${isActive ? 'text-accent-700' : 'text-ink-muted'}`}>
-              {counts[value]}
-            </span>
           </button>
         )
       })}

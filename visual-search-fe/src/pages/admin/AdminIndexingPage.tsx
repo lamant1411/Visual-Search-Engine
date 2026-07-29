@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import {
   Database,
   Loader2,
@@ -15,12 +15,15 @@ import {
   Info
 } from 'lucide-react'
 import { PageContainer } from '@/components/layout/PageContainer'
+import { Pagination } from '@/components/feature/result/pagination'
 import { adminApi, type IndexingBatch } from '@/lib/api/admin'
 
 const INDEXING_POLL_INTERVAL_MS = 2_000
+const BATCH_HISTORY_PAGE_LIMIT = 10
 
 export default function AdminIndexingPage() {
   const [batches, setBatches] = useState<IndexingBatch[]>([])
+  const [batchHistoryPage, setBatchHistoryPage] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null)
 
@@ -643,6 +646,13 @@ export default function AdminIndexingPage() {
     }
   }, [])
 
+  const batchHistoryTotalPages = Math.max(1, Math.ceil(batches.length / BATCH_HISTORY_PAGE_LIMIT))
+  const displayedBatchHistoryPage = Math.min(batchHistoryPage, batchHistoryTotalPages)
+  const displayedBatches = useMemo(() => {
+    const start = (displayedBatchHistoryPage - 1) * BATCH_HISTORY_PAGE_LIMIT
+    return batches.slice(start, start + BATCH_HISTORY_PAGE_LIMIT)
+  }, [batches, displayedBatchHistoryPage])
+
   const finishedIndexCount = indexedCount + failedIndexCount
   const remainingIndexCount = Math.max(totalIndexCount - finishedIndexCount, 0)
   const indexRatePerMinute = elapsedSeconds > 0
@@ -676,15 +686,15 @@ export default function AdminIndexingPage() {
   })()
 
   return (
-    <PageContainer size="default" className="py-8 space-y-6">
+    <PageContainer size="wide" className="space-y-6 py-5 sm:py-8">
       {/* Page Header */}
       <div className="border-b border-border pb-6">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-1 border border-border text-ink-primary shadow-xs">
             <Database className="h-5 w-5" />
           </div>
-          <div>
-            <h1 className="font-display text-2xl font-bold tracking-tight text-ink-primary">
+          <div className="min-w-0">
+            <h1 className="font-display text-xl font-bold tracking-tight text-ink-primary sm:text-2xl">
               Tải ảnh lên
             </h1>
             <p className="text-sm text-ink-secondary mt-1">
@@ -696,7 +706,7 @@ export default function AdminIndexingPage() {
 
       {/* Thông báo kết quả */}
       {message && (
-        <div className={`flex items-start gap-2.5 p-4 rounded-xl border text-sm ${message.type === 'success'
+        <div className={`flex items-start gap-2.5 rounded-xl border p-3 text-sm sm:p-4 ${message.type === 'success'
           ? 'border-emerald-100 bg-emerald-50/50 text-emerald-800'
           : message.type === 'info'
             ? 'border-blue-100 bg-blue-50/50 text-blue-800'
@@ -732,7 +742,7 @@ export default function AdminIndexingPage() {
       )}
 
       {/* UPLOAD PANEL */}
-      <div className="bg-surface-2 rounded-xl border border-border shadow-2xs p-5 space-y-4">
+      <div className="space-y-4 rounded-xl border border-border bg-surface-2 p-4 shadow-2xs sm:p-5">
         <div className="space-y-4">
           <div>
             <h2 className="text-sm font-bold text-ink-primary uppercase tracking-wide">
@@ -753,7 +763,7 @@ export default function AdminIndexingPage() {
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
                 onClick={() => document.getElementById('file-upload-input')?.click()}
-                className={`flex flex-col items-center justify-center border border-dashed rounded-lg p-8 text-center cursor-pointer transition-all duration-200 ${isDragging
+                className={`flex min-h-48 flex-col items-center justify-center rounded-lg border border-dashed p-5 text-center cursor-pointer transition-all duration-200 sm:p-8 ${isDragging
                   ? 'border-accent-600 bg-surface-1/60'
                   : 'border-border hover:border-accent-600 hover:bg-surface-1/40'
                   }`}
@@ -789,8 +799,8 @@ export default function AdminIndexingPage() {
 
                   <div className="max-h-56 overflow-y-auto border border-border rounded-lg bg-surface-1/40 divide-y divide-border/60">
                     {selectedFiles.map((file, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 text-xs text-ink-secondary">
-                        <span className="truncate max-w-[280px] font-mono text-ink-primary" title={file.name}>
+                      <div key={index} className="flex items-center gap-3 p-3 text-xs text-ink-secondary">
+                        <span className="min-w-0 flex-1 truncate font-mono text-ink-primary" title={file.name}>
                           {file.name}
                         </span>
                         <div className="flex items-center gap-2 shrink-0">
@@ -816,11 +826,11 @@ export default function AdminIndexingPage() {
 
           {/* DUAL PROGRESS BARS */}
           {(isUploading || isBackgroundIndexing || uploadSuccess || uploadError || indexError) && (
-            <div className="space-y-4 p-4 border border-border bg-surface-1 rounded-xl">
+            <div className="space-y-4 rounded-xl border border-border bg-surface-1 p-3 sm:p-4">
               {/* 1. UPLOAD PROGRESS */}
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs font-semibold">
-                  <span className="text-ink-secondary flex items-center gap-1.5">
+                <div className="flex flex-col gap-2 text-xs font-semibold sm:flex-row sm:items-center sm:justify-between">
+                  <span className="flex min-w-0 items-start gap-1.5 text-ink-secondary sm:items-center">
                     {uploadError ? (
                       <>
                         <XCircle className="h-4 w-4 text-red-500 shrink-0" />
@@ -850,8 +860,8 @@ export default function AdminIndexingPage() {
 
               {/* 2. INDEXING PROGRESS */}
               <div className="space-y-1.5 pt-3 border-t border-border/60">
-                <div className="flex items-center justify-between text-xs font-semibold">
-                  <span className="text-ink-secondary flex items-center gap-1.5">
+                <div className="flex flex-col gap-2 text-xs font-semibold sm:flex-row sm:items-center sm:justify-between">
+                  <span className="flex min-w-0 items-start gap-1.5 text-ink-secondary sm:items-center">
                     {indexError ? (
                       <>
                         <XCircle className="h-4 w-4 text-red-500 shrink-0" />
@@ -897,8 +907,8 @@ export default function AdminIndexingPage() {
                   />
                 </div>
 
-                <div className="flex items-center justify-between text-3xs pt-1">
-                  <div className="flex items-center gap-2 text-ink-muted">
+                <div className="flex flex-col gap-2 pt-1 text-xs sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-wrap items-center gap-2 text-ink-muted">
                     <span className="text-emerald-600 font-medium">Thành công: {indexedCount}</span>
                     <span>|</span>
                     <span className={failedIndexCount > 0 ? "text-red-500 font-bold" : "text-ink-muted"}>
@@ -931,9 +941,9 @@ export default function AdminIndexingPage() {
                     )}
                     <span className="font-semibold">{currentStage}</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center">
                     {activeBatchId && (
-                      <span className="truncate font-mono text-3xs text-ink-muted" title={activeBatchId}>
+                      <span className="max-w-full truncate font-mono text-xs text-ink-muted" title={activeBatchId}>
                         Batch: {activeBatchId}
                       </span>
                     )}
@@ -1041,8 +1051,8 @@ export default function AdminIndexingPage() {
       </div>
 
       {/* LỊCH SỬ CÁC ĐỢT TẢI ẢNH */}
-      <div className="bg-surface-2 rounded-xl border border-border shadow-2xs p-5 space-y-4">
-        <div className="flex items-center justify-between border-b border-border pb-3">
+      <div className="space-y-4 rounded-xl border border-border bg-surface-2 p-4 shadow-2xs sm:p-5">
+        <div className="flex flex-col gap-2 border-b border-border pb-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-ink-muted" />
             <h2 className="text-sm font-bold text-ink-primary uppercase tracking-wide">
@@ -1055,7 +1065,7 @@ export default function AdminIndexingPage() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-surface-1/40 border-b border-border text-ink-muted uppercase font-bold tracking-wider">
@@ -1088,7 +1098,7 @@ export default function AdminIndexingPage() {
                   </td>
                 </tr>
               ) : (
-                batches.map((b) => (
+                displayedBatches.map((b) => (
                   <tr key={b.id} className="text-ink-secondary hover:bg-surface-1/5 transition-colors">
                     <td className="px-6 py-4 font-mono font-medium text-ink-primary">{b.batch_id}</td>
                     <td className="px-6 py-4">
@@ -1155,12 +1165,109 @@ export default function AdminIndexingPage() {
             </tbody>
           </table>
         </div>
+
+        <div className="divide-y divide-border/60 md:hidden">
+          {isLoading && batches.length === 0 ? (
+            Array.from({ length: 3 }).map((_, index) => (
+              <div key={index} className="space-y-3 py-4 first:pt-0">
+                <div className="h-4 w-3/4 animate-pulse rounded bg-surface-1" />
+                <div className="h-4 w-1/2 animate-pulse rounded bg-surface-1" />
+              </div>
+            ))
+          ) : batches.length === 0 ? (
+            <p className="py-8 text-center text-sm italic text-ink-muted">
+              Chưa có lịch sử đợt tải ảnh nào.
+            </p>
+          ) : (
+            displayedBatches.map((batch) => (
+              <article key={batch.id} className="space-y-3 py-4 first:pt-0">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-mono text-xs font-semibold text-ink-primary" title={batch.batch_id}>
+                      {batch.batch_id}
+                    </p>
+                    <time className="mt-1 block text-xs text-ink-muted">
+                      {new Date(batch.created_at).toLocaleString('vi-VN')}
+                    </time>
+                  </div>
+                  <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold ${batch.status === 'completed' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' :
+                    batch.status === 'running' ? 'border-amber-200 bg-amber-50 text-amber-700' :
+                      batch.status === 'queued' ? 'border-blue-200 bg-blue-50 text-blue-700' :
+                        'border-red-200 bg-red-50 text-red-700'
+                    }`}>
+                    {(batch.status === 'running' || batch.status === 'queued') && (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    )}
+                    {batch.status === 'queued' ? 'Đang chờ' :
+                      batch.status === 'running' ? 'Đang chạy' :
+                        batch.status === 'completed' ? 'Hoàn thành' :
+                          batch.status === 'cancelled' ? 'Đã hủy' : 'Thất bại'}
+                  </span>
+                </div>
+
+                <dl className="grid grid-cols-3 gap-2 text-xs">
+                  <div>
+                    <dt className="font-semibold text-ink-muted">Tổng</dt>
+                    <dd className="mt-1 font-bold text-ink-primary">{batch.total_images}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold text-ink-muted">Đã xử lý</dt>
+                    <dd className="mt-1 font-bold text-emerald-700">{batch.processed_images}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold text-ink-muted">Lỗi</dt>
+                    <dd className="mt-1 font-bold text-red-700">{batch.failed_images}</dd>
+                  </div>
+                </dl>
+
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  {batch.failed_images > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenFailedModalForBatch(batch.batch_id, batch.failed_images)}
+                      className="inline-flex min-h-11 items-center text-xs font-semibold text-red-700 underline underline-offset-2"
+                    >
+                      Xem {batch.failed_images} ảnh lỗi
+                    </button>
+                  )}
+                  {(batch.status === 'running' || batch.status === 'queued') && (
+                    <button
+                      type="button"
+                      onClick={() => handleCancelBatch(batch.batch_id)}
+                      disabled={isActionInProgress}
+                      className="ml-auto inline-flex min-h-11 items-center gap-1 rounded-md border border-red-200 px-3 text-xs font-semibold text-red-600 disabled:opacity-50"
+                    >
+                      <XCircle className="h-4 w-4" />
+                      Dừng
+                    </button>
+                  )}
+                  {batch.error_message && batch.status !== 'running' && batch.status !== 'queued' && (
+                    <p className="w-full break-words text-xs text-red-600">{batch.error_message}</p>
+                  )}
+                </div>
+              </article>
+            ))
+          )}
+        </div>
+
+        {!isLoading && batchHistoryTotalPages > 1 && (
+          <Pagination
+            ariaLabel="Các trang lịch sử tải ảnh"
+            className="pt-4"
+            nextLabel="Sau"
+            page={displayedBatchHistoryPage}
+            previousLabel="Trước"
+            scrollToTop={false}
+            totalPages={batchHistoryTotalPages}
+            onChange={setBatchHistoryPage}
+          />
+        )}
       </div>
 
       {/* FAILED IMAGES HANDLER MODAL */}
       {showFailedModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs">
-          <div className="bg-surface-2 border border-border w-full max-w-2xl rounded-xl shadow-xl flex flex-col max-h-[85vh] animate-in fade-in-50 zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 p-0 backdrop-blur-xs sm:items-center sm:p-4">
+          <div className="flex max-h-[92dvh] w-full max-w-2xl flex-col rounded-t-xl border border-border bg-surface-2 shadow-xl animate-in fade-in-50 zoom-in-95 duration-200 sm:max-h-[85vh] sm:rounded-xl">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-border p-4">
               <div className="flex items-center gap-2 text-red-600">
@@ -1188,9 +1295,9 @@ export default function AdminIndexingPage() {
 
             {/* Bulk Control Bar */}
             {failedImages.length > 0 && (
-              <div className="px-4 py-2.5 bg-surface-1 border-b border-border/80 flex items-center justify-between">
+              <div className="flex flex-col gap-2 border-b border-border/80 bg-surface-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-3xs font-semibold text-ink-muted">Tác vụ hàng loạt:</span>
-                <div className="flex items-center gap-2">
+                <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center">
                   <button
                     type="button"
                     onClick={handleRetryAllFailed}
@@ -1232,7 +1339,7 @@ export default function AdminIndexingPage() {
                 </div>
               ) : (
                 failedImages.map((img) => (
-                  <div key={img.id} className="flex gap-3 pt-3.5 first:pt-0 items-start justify-between">
+                  <div key={img.id} className="flex flex-col gap-3 pt-3.5 first:pt-0 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex gap-3 min-w-0">
                       {/* Image Thumbnail */}
                       <div className="h-12 w-12 rounded border border-border bg-surface-1 overflow-hidden shrink-0 flex items-center justify-center">
@@ -1259,13 +1366,13 @@ export default function AdminIndexingPage() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex gap-1.5 shrink-0">
+                    <div className="flex shrink-0 justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => handleRetryFailedImage(img)}
                         disabled={isActionInProgress}
                         title="Thử lại"
-                        className="p-1.5 rounded-lg border border-border bg-surface-1 hover:bg-accent-50 hover:text-accent-700 transition-colors text-ink-secondary cursor-pointer disabled:opacity-50"
+                        className="flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-surface-1 text-ink-secondary transition-colors hover:bg-accent-50 hover:text-accent-700 disabled:opacity-50"
                       >
                         <RefreshCw className={`h-3.5 w-3.5 ${isActionInProgress ? 'animate-spin' : ''}`} />
                       </button>
@@ -1273,7 +1380,7 @@ export default function AdminIndexingPage() {
                         type="button"
                         onClick={() => handleSaveFailedImage(img.url)}
                         title="Chấp nhận lưu"
-                        className="p-1.5 rounded-lg border border-border bg-surface-1 hover:bg-emerald-50 hover:text-emerald-700 transition-colors text-ink-secondary cursor-pointer"
+                        className="flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-surface-1 text-ink-secondary transition-colors hover:bg-emerald-50 hover:text-emerald-700"
                       >
                         <Save className="h-3.5 w-3.5" />
                       </button>
@@ -1281,7 +1388,7 @@ export default function AdminIndexingPage() {
                         type="button"
                         onClick={() => handleDeleteFailedImage(img.url)}
                         title="Xóa khỏi Server"
-                        className="p-1.5 rounded-lg border border-border bg-surface-1 hover:bg-red-50 hover:text-red-700 transition-colors text-ink-secondary cursor-pointer"
+                        className="flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-surface-1 text-ink-secondary transition-colors hover:bg-red-50 hover:text-red-700"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>

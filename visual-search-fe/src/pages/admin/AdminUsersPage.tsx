@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Users, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
+import { AlertCircle, Users } from 'lucide-react'
+
+import { Pagination } from '@/components/feature/result/pagination'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { adminApi, type AdminUser } from '@/lib/api/admin'
 
@@ -42,15 +44,15 @@ export default function AdminUsersPage() {
   const totalPages = Math.ceil(total / limit)
 
   return (
-    <PageContainer size="wide" className="py-8 space-y-6">
+    <PageContainer size="wide" className="space-y-6 py-5 sm:py-8">
       {/* Page Header */}
       <div className="border-b border-border pb-6">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-1 border border-border text-ink-primary shadow-xs">
             <Users className="h-5 w-5" />
           </div>
-          <div>
-            <h1 className="font-display text-2xl font-bold tracking-tight text-ink-primary">
+          <div className="min-w-0">
+            <h1 className="font-display text-xl font-bold tracking-tight text-ink-primary sm:text-2xl">
               Danh sách Người dùng
             </h1>
             <p className="text-sm text-ink-secondary mt-1">
@@ -69,8 +71,8 @@ export default function AdminUsersPage() {
       )}
 
       {/* Users table list */}
-      <div className="bg-surface-2 rounded-xl border border-border shadow-2xs overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="overflow-hidden rounded-xl border border-border bg-surface-2 shadow-2xs">
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-surface-1/40 border-b border-border text-ink-muted uppercase font-bold tracking-wider">
@@ -104,18 +106,16 @@ export default function AdminUsersPage() {
                     <td className="px-6 py-4 font-mono text-ink-muted text-3xs select-all">{u.id}</td>
                     <td className="px-6 py-4 font-medium text-ink-primary">{u.email}</td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-3xs font-semibold ${
-                        u.role === 'admin'
+                      <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-3xs font-semibold ${u.role === 'admin'
                           ? 'bg-red-50 text-red-700 border border-red-100'
                           : 'bg-blue-50 text-blue-700 border border-blue-100'
-                      }`}>
+                        }`}>
                         {u.role.toUpperCase()}
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-3xs font-medium ${
-                        u.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'
-                      }`}>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-3xs font-medium ${u.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'
+                        }`}>
                         <span className={`h-1 w-1 rounded-full ${u.is_active ? 'bg-emerald-500' : 'bg-gray-400'}`} />
                         {u.is_active ? 'Đang hoạt động' : 'Tạm khóa'}
                       </span>
@@ -130,34 +130,64 @@ export default function AdminUsersPage() {
           </table>
         </div>
 
+        <div className="divide-y divide-border/60 md:hidden">
+          {isLoading ? (
+            Array.from({ length: 5 }).map((_, index) => (
+              <div key={index} className="space-y-3 p-4">
+                <div className="h-4 w-3/4 animate-pulse rounded bg-surface-1" />
+                <div className="h-4 w-1/2 animate-pulse rounded bg-surface-1" />
+              </div>
+            ))
+          ) : users.length === 0 ? (
+            <p className="px-4 py-10 text-center text-sm italic text-ink-muted">
+              Chưa có người dùng nào được tạo.
+            </p>
+          ) : (
+            users.map((user) => (
+              <article key={user.id} className="space-y-3 p-4">
+                <div>
+                  <p className="break-all text-sm font-semibold text-ink-primary">{user.email}</p>
+                  <p className="mt-1 break-all font-mono text-xs text-ink-muted">ID: {user.id}</p>
+                </div>
+                <dl className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <dt className="font-semibold text-ink-muted">Vai trò</dt>
+                    <dd className="mt-1 font-bold uppercase text-ink-secondary">{user.role}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold text-ink-muted">Trạng thái</dt>
+                    <dd className={`mt-1 font-semibold ${user.is_active ? 'text-emerald-700' : 'text-ink-muted'}`}>
+                      {user.is_active ? 'Đang hoạt động' : 'Tạm khóa'}
+                    </dd>
+                  </div>
+                  <div className="col-span-2">
+                    <dt className="font-semibold text-ink-muted">Ngày tạo tài khoản</dt>
+                    <dd className="mt-1 text-ink-secondary">
+                      {new Date(user.created_at).toLocaleString('vi-VN')}
+                    </dd>
+                  </div>
+                </dl>
+              </article>
+            ))
+          )}
+        </div>
+
         {/* Pagination bar */}
         {!isLoading && totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-border px-6 py-3.5 bg-surface-1/10">
-            <span className="text-2xs text-ink-muted">
+          <div className="border-t border-border bg-surface-1/10 px-4 py-4 sm:px-6">
+            <p className="mb-3 text-center text-xs text-ink-muted sm:text-left">
               Hiển thị <span className="font-semibold text-ink-secondary">{users.length}</span> trên{' '}
               <span className="font-semibold text-ink-secondary">{total}</span> người dùng
-            </span>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="flex items-center justify-center h-7 w-7 rounded-lg border border-border text-ink-secondary hover:bg-surface-1 hover:text-ink-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <span className="text-xs font-medium text-ink-secondary px-2">
-                Trang {page} / {totalPages}
-              </span>
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="flex items-center justify-center h-7 w-7 rounded-lg border border-border text-ink-secondary hover:bg-surface-1 hover:text-ink-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
+            </p>
+            <Pagination
+              ariaLabel="Các trang người dùng"
+              className="border-0 pt-0"
+              nextLabel="Sau"
+              page={page}
+              previousLabel="Trước"
+              totalPages={totalPages}
+              onChange={setPage}
+            />
           </div>
         )}
       </div>

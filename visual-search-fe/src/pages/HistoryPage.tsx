@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { AlertCircle, History, Loader2, RefreshCw } from 'lucide-react'
-import { PageContainer } from '@/components/layout/PageContainer'
+import { AlertCircle, History, RefreshCw } from 'lucide-react'
+
 import { HistoryFilters } from '@/components/feature/history/HistoryFilters'
-import { HistoryList } from '@/components/feature/history/HistoryList'
 import { HistoryImageModal } from '@/components/feature/history/HistoryImageModal'
+import { HistoryList } from '@/components/feature/history/HistoryList'
+import { Pagination } from '@/components/feature/result/pagination'
+import { PageContainer } from '@/components/layout/PageContainer'
 import { useHistory } from '@/features/history/useHistory'
 import type { HistoryItem, SearchQueryType } from '@/lib/api/history'
 
@@ -12,51 +14,15 @@ type FilterType = 'all' | SearchQueryType
 
 export default function HistoryPage() {
   const navigate = useNavigate()
-  const loadMoreRef = useRef<HTMLDivElement | null>(null)
-  const [previewImageItem, setPreviewImageItem] = useState<HistoryItem | null>(null)
-  const {
-    items,
-    total,
-    isLoading,
-    isFetching,
-    isFetchingNextPage,
-    hasNextPage,
-    fetchNextPage,
-    error,
-    refetch,
-  } = useHistory()
+  const [page, setPage] = useState(1)
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
-
-  useEffect(() => {
-    const target = loadMoreRef.current
-    if (!target || !hasNextPage) return
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !isFetchingNextPage) {
-          void fetchNextPage()
-        }
-      },
-      { rootMargin: '400px 0px' },
-    )
-
-    observer.observe(target)
-    return () => observer.disconnect()
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage])
-
-  const filteredItems = useMemo(
-    () => items.filter((item) => activeFilter === 'all' || item.query_type === activeFilter),
-    [activeFilter, items],
+  const [previewImageItem, setPreviewImageItem] = useState<HistoryItem | null>(null)
+  const queryType = activeFilter === 'all' ? undefined : activeFilter
+  const { items, total, totalPages, isLoading, isFetching, error, refetch } = useHistory(
+    page,
+    queryType,
   )
-  const counts = useMemo(
-    () => ({
-      all: items.length,
-      image: items.filter((item) => item.query_type === 'image').length,
-      semantic: items.filter((item) => item.query_type === 'semantic').length,
-      ocr: items.filter((item) => item.query_type === 'ocr').length,
-    }),
-    [items],
-  )
+
   function handleReSearch(item: HistoryItem) {
     if (item.query_type === 'image') {
       if (!item.query_image_url) {
@@ -73,6 +39,11 @@ export default function HistoryPage() {
     navigate(
       `/search/results?mode=${item.query_type}&q=${encodeURIComponent(item.query_value)}&page=1&limit=20`,
     )
+  }
+
+  function handleFilterChange(filter: FilterType) {
+    setActiveFilter(filter)
+    setPage(1)
   }
 
   return (
@@ -97,13 +68,16 @@ export default function HistoryPage() {
             disabled={isFetching}
             className="inline-flex h-9 items-center gap-2 self-start rounded-lg border border-border bg-white px-3 text-xs font-semibold text-ink-secondary shadow-sm shadow-slate-200/50 transition-colors hover:bg-surface-1 hover:text-ink-primary disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${isFetching && !isFetchingNextPage ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
             Refresh
           </button>
         </header>
 
         {error && (
-          <div role="alert" className="flex items-center justify-between gap-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <div
+            role="alert"
+            className="flex items-center justify-between gap-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+          >
             <div className="flex min-w-0 items-start gap-2">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <span>{error}</span>
@@ -120,26 +94,28 @@ export default function HistoryPage() {
 
         <section aria-label="History controls" className="space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <HistoryFilters activeFilter={activeFilter} counts={counts} onChange={setActiveFilter} />
+            <HistoryFilters activeFilter={activeFilter} onChange={handleFilterChange} />
             <p className="text-xs font-medium text-ink-muted">
-              Showing {filteredItems.length} of {total} searches
+              Showing {items.length} on this page · {total} matching searches
             </p>
           </div>
         </section>
 
         <HistoryList
-          items={filteredItems}
+          items={items}
           isLoading={isLoading}
           emptyForFilter={activeFilter !== 'all'}
           onReSearch={handleReSearch}
-          onPreviewImage={(item) => setPreviewImageItem(item)}
+          onPreviewImage={setPreviewImageItem}
         />
 
-        {hasNextPage && <div ref={loadMoreRef} className="h-10 w-full" />}
-        {isFetchingNextPage && (
-          <div className="py-6 flex justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-ink-muted" />
-          </div>
+        {!isLoading && !error && totalPages > 1 && (
+          <Pagination
+            ariaLabel="Search history pages"
+            page={page}
+            totalPages={totalPages}
+            onChange={setPage}
+          />
         )}
       </PageContainer>
 
