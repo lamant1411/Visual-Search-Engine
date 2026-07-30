@@ -14,7 +14,6 @@ import {
   ImagePlus,
   Images,
   LogOut,
-  ScanText,
   Search,
   Shield,
   X,
@@ -24,11 +23,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { SearchLoginModal } from "@/features/search/components/SearchLoginModal";
 import { validateSearchImageFile } from "@/features/search/utils/imageValidation";
 
-type HeaderSearchMode = "image" | "semantic" | "ocr";
+type HeaderSearchMode = "image" | "text";
 
 const searchModeOptions = [
-  { value: "semantic", label: "Semantic", icon: FileText },
-  { value: "ocr", label: "OCR", icon: ScanText },
+  { value: "text", label: "Text", icon: FileText },
   { value: "image", label: "Image", icon: ImagePlus },
 ] satisfies Array<{
   value: HeaderSearchMode;
@@ -40,7 +38,7 @@ export function Header() {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading: isAuthLoading, logout, user } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [searchMode, setSearchMode] = useState<HeaderSearchMode>("semantic");
+  const [searchMode, setSearchMode] = useState<HeaderSearchMode>("text");
   const [query, setQuery] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
@@ -139,7 +137,7 @@ export function Header() {
     }
 
     navigate(
-      `/search/results?mode=${searchMode}&q=${encodeURIComponent(query.trim())}&page=1&limit=20`,
+      `/search/results?mode=text&q=${encodeURIComponent(query.trim())}&page=1&limit=20`,
     );
   }
 
@@ -232,9 +230,7 @@ export function Header() {
                 className="h-full min-w-0 flex-1 bg-transparent px-4 text-sm font-semibold text-ink-primary outline-none placeholder:text-slate-400"
                 value={query}
                 placeholder={
-                  searchMode === "semantic"
-                    ? "Search by description..."
-                    : "Search text in images..."
+                  "Describe an image or words inside it..."
                 }
                 onChange={(event) => setQuery(event.target.value)}
               />
@@ -465,18 +461,10 @@ export function Header() {
               ) : (
                 <input
                   ref={mobileSearchInputRef}
-                  aria-label={
-                    searchMode === "semantic"
-                      ? "Search by description"
-                      : "Search text in images"
-                  }
+                  aria-label="Search by text"
                   className="h-full min-w-0 flex-1 bg-transparent px-3 text-sm font-semibold text-ink-primary outline-none placeholder:text-slate-400"
                   value={query}
-                  placeholder={
-                    searchMode === "semantic"
-                      ? "Describe an image..."
-                      : "Text in images..."
-                  }
+                  placeholder="Describe or enter words..."
                   onChange={(event) => setQuery(event.target.value)}
                 />
               )}

@@ -24,8 +24,7 @@ const pageLimit = 20;
 
 const modeLabel: Record<SearchMode, string> = {
   image: "IMAGE SEARCH",
-  semantic: "SEMANTIC SEARCH",
-  ocr: "OCR SEARCH",
+  text: "TEXT SEARCH",
 };
 
 export function SearchResultsPage() {
@@ -276,7 +275,7 @@ export function SearchResultsPage() {
               Start a search to view results
             </p>
             <p className="mt-2 text-sm text-ink-secondary">
-              Enter a description, OCR text, or choose a reference image above.
+              Enter a description, type words from an image, or choose a reference image above.
             </p>
           </section>
         )}
@@ -495,31 +494,27 @@ function getLongSearchMessage(mode: SearchMode) {
     return "Image search may take longer while the reference image is uploaded and compared visually.";
   }
 
-  if (mode === "ocr") {
-    return "OCR search can take a little longer when matching text extracted from images.";
-  }
-
-  return "Semantic search is comparing meaning, not just exact words, so the best matches may need a moment.";
+  return "Text search is choosing the best way to match your query, so the most relevant images may need a moment.";
 }
 
 function getEmptySuggestion(mode: SearchMode) {
   if (mode === "image") {
-    return "Try a clearer reference image, crop the main object, or switch to semantic search.";
+    return "Try a clearer reference image, crop the main object, or switch to description search.";
   }
 
-  if (mode === "ocr") {
-    return "Try shorter text, a keyword from the image, or switch to semantic search.";
-  }
-
-  return "Try a more specific description, fewer words, or search by OCR/image instead.";
+  return "Try a more specific description, a keyword from the image, or search with a reference image instead.";
 }
 
 function parseSearchMode(value: string | null): SearchMode {
-  if (value === "image" || value === "semantic" || value === "ocr") {
+  if (value === "image" || value === "text") {
     return value;
   }
 
-  return "semantic";
+  if (value === "semantic" || value === "ocr") {
+    return "text";
+  }
+
+  return "text";
 }
 
 function getResultTitle(
@@ -578,8 +573,20 @@ function runSearch({
 
   return searchByText({
     q: query,
-    mode,
+    mode: getAutoTextSearchMode(query),
     page,
     limit,
   });
+}
+
+function getAutoTextSearchMode(query: string) {
+  const normalizedQuery = query.trim();
+  const words = normalizedQuery.split(/\s+/).filter(Boolean);
+  const hasDigitsOrSymbols = /[\d%$€£¥#@&+=:/\\-]/.test(normalizedQuery);
+  const hasUppercaseLabel = /[A-Z]{2,}/.test(normalizedQuery);
+  const looksLikeShortPrintedText = normalizedQuery.length <= 32 && words.length <= 5;
+
+  return hasDigitsOrSymbols || (looksLikeShortPrintedText && hasUppercaseLabel)
+    ? "ocr"
+    : "semantic";
 }

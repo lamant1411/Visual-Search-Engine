@@ -11,8 +11,8 @@ interface HistoryFiltersProps {
 const filters = [
   { value: 'all', label: 'All', icon: Layers3 },
   { value: 'image', label: 'Image', icon: Image },
-  { value: 'semantic', label: 'Semantic', icon: FileText },
-  { value: 'ocr', label: 'OCR', icon: ScanText },
+  { value: 'semantic', label: 'Description', icon: FileText },
+  { value: 'ocr', label: 'Text in image', icon: ScanText },
 ] satisfies Array<{ value: FilterType; label: string; icon: typeof Image }>
 
 export function HistoryFilters({ activeFilter, onChange }: HistoryFiltersProps) {

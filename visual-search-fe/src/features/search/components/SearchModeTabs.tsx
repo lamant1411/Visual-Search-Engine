@@ -1,4 +1,4 @@
-import { FileText, Image, ScanText } from 'lucide-react'
+import { FileText, Image } from 'lucide-react'
 
 import type { SearchMode } from '../types'
 
@@ -9,19 +9,14 @@ type SearchModeTabsProps = {
 
 const searchModes = [
   {
-    value: 'image',
-    label: 'Image',
-    icon: Image,
-  },
-  {
-    value: 'semantic',
-    label: 'Semantic',
+    value: 'text',
+    label: 'Text',
     icon: FileText,
   },
   {
-    value: 'ocr',
-    label: 'OCR',
-    icon: ScanText,
+    value: 'image',
+    label: 'Image',
+    icon: Image,
   },
 ] satisfies Array<{
   value: SearchMode
@@ -31,7 +26,7 @@ const searchModes = [
 
 export function SearchModeTabs({ value, onChange }: SearchModeTabsProps) {
   return (
-    <div className="grid w-full grid-cols-3 gap-1 rounded-full border border-border bg-white/95 p-1.5 shadow-sm shadow-slate-200/70 backdrop-blur sm:w-fit">
+    <div className="grid w-full grid-cols-2 gap-1 rounded-full border border-border bg-white/95 p-1.5 shadow-sm shadow-slate-200/70 backdrop-blur sm:w-fit">
       {searchModes.map((mode) => {
         const Icon = mode.icon
         const isActive = value === mode.value

@@ -134,7 +134,7 @@ export function ResultCard({
             {result.metadata.ocrText && (
               <p className="mt-3 inline-flex max-w-full items-center gap-2 rounded-md bg-white/90 px-3 py-2 text-xs font-semibold text-slate-800">
                 <Info className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">OCR: {result.metadata.ocrText}</span>
+                <span className="truncate">Text: {result.metadata.ocrText}</span>
               </p>
             )}
           </div>

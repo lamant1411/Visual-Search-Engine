@@ -47,7 +47,7 @@ export function HistoryList({
         <p className="mt-1 max-w-sm text-xs leading-5 text-ink-secondary">
           {emptyForFilter
             ? 'Choose another search type to see the rest of your history.'
-            : 'Semantic, OCR, and image searches will appear here after they complete.'}
+            : 'Text and image searches will appear here after they complete.'}
         </p>
       </section>
     )

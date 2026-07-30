@@ -198,7 +198,7 @@ export function SearchResultDetailModal({
             <div className="mt-5 rounded-lg border border-border bg-white p-4 shadow-sm shadow-slate-200/70">
               <div className="flex items-center gap-2 text-sm font-semibold text-ink-primary">
                 <Info className="h-4 w-4 text-accent-600" />
-                OCR content
+                Text found in image
               </div>
               <p
                 className={[
@@ -214,7 +214,7 @@ export function SearchResultDetailModal({
                   className="mt-2 min-h-9 text-xs font-bold text-accent-700"
                   onClick={() => setIsOcrExpanded((current) => !current)}
                 >
-                  {isOcrExpanded ? "Show less" : "Show full OCR text"}
+                  {isOcrExpanded ? "Show less" : "Show full extracted text"}
                 </button>
               )}
             </div>

@@ -1,4 +1,4 @@
-export type SearchMode = 'image' | 'semantic' | 'ocr'
+export type SearchMode = 'image' | 'text'
 
 export type TextSearchMode = 'semantic' | 'ocr'
 

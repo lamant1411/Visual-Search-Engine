@@ -24,8 +24,8 @@ const typeConfig: Record<
   { label: string; icon: typeof ImageIcon; iconClass: string }
 > = {
   image: { label: 'Image Search', icon: ImageIcon, iconClass: 'text-sky-700' },
-  semantic: { label: 'Semantic Search', icon: FileText, iconClass: 'text-accent-700' },
-  ocr: { label: 'OCR Search', icon: ScanText, iconClass: 'text-amber-700' },
+  semantic: { label: 'Description Search', icon: FileText, iconClass: 'text-accent-700' },
+  ocr: { label: 'Text-in-image Search', icon: ScanText, iconClass: 'text-amber-700' },
 }
 
 function formatDate(value: string) {

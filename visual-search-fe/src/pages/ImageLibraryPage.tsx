@@ -309,7 +309,7 @@ export default function ImageLibraryPage() {
     ? `Review images from batch ${selectedBatch.batch_id}.`
     : isDeletedView
     ? 'Review soft-deleted images, restore them, or permanently remove them from the system.'
-    : 'Browse indexed images that are ready for semantic, OCR, and image-to-image search.'
+    : 'Browse indexed images that are ready for text and image-to-image search.'
 
   return (
     <>
