@@ -37,7 +37,6 @@ export default function ImageLibraryPage() {
   const { isBookmarked, toggleBookmark, isToggling } = useBookmarks()
   const [mutatingImageId, setMutatingImageId] = useState<number | null>(null)
   const [selectedImageIds, setSelectedImageIds] = useState<Set<number>>(() => new Set())
-  const [selectedResultsById, setSelectedResultsById] = useState<Map<number, SearchResult>>(() => new Map())
   const [isBulkMutating, setIsBulkMutating] = useState(false)
   const canManageImages = user?.role === 'admin'
   const isDeletedView = viewMode === 'deleted'
@@ -104,16 +103,7 @@ export default function ImageLibraryPage() {
     () => (listQuery.data?.pages ?? []).flatMap((page) => page.items),
     [listQuery.data],
   )
-  const results = useMemo(() => {
-    if (selectedImageIds.size === 0) return rawResults
-
-    const selectedResults = Array.from(selectedImageIds)
-      .map((imageId) => selectedResultsById.get(imageId))
-      .filter((result): result is SearchResult => Boolean(result))
-    const selectedIds = new Set(selectedResults.map((result) => result.id))
-    const unselectedResults = rawResults.filter((result) => !selectedIds.has(result.id))
-    return [...selectedResults, ...unselectedResults]
-  }, [rawResults, selectedImageIds, selectedResultsById])
+  const results = rawResults
   const total = listQuery.data?.pages[0]?.total ?? 0
   const selectedCount = selectedImageIds.size
 
@@ -150,14 +140,8 @@ export default function ImageLibraryPage() {
       const next = new Set(current)
       if (next.has(result.id)) {
         next.delete(result.id)
-        setSelectedResultsById((items) => {
-          const nextItems = new Map(items)
-          nextItems.delete(result.id)
-          return nextItems
-        })
       } else {
         next.add(result.id)
-        setSelectedResultsById((items) => new Map(items).set(result.id, result))
       }
       return next
     })
@@ -171,18 +155,10 @@ export default function ImageLibraryPage() {
       }
       return next
     })
-    setSelectedResultsById((current) => {
-      const next = new Map(current)
-      for (const result of rawResults) {
-        next.set(result.id, result)
-      }
-      return next
-    })
   }
 
   function handleClearSelectedImages() {
     setSelectedImageIds(new Set())
-    setSelectedResultsById(new Map())
   }
 
   async function handleSoftDeleteSelectedImages() {
@@ -251,13 +227,6 @@ export default function ImageLibraryPage() {
     const changedIds = new Set(imageIds)
     setSelectedImageIds((current) => {
       const next = new Set(current)
-      for (const imageId of changedIds) {
-        next.delete(imageId)
-      }
-      return next
-    })
-    setSelectedResultsById((current) => {
-      const next = new Map(current)
       for (const imageId of changedIds) {
         next.delete(imageId)
       }
