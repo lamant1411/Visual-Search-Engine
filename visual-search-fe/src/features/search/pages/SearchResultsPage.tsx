@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
-import { ImageUp, RotateCcw } from "lucide-react";
+import { CheckCircle2, ImageUp, Loader2, RotateCcw, Sparkles } from "lucide-react";
 
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/base/button";
@@ -43,21 +43,16 @@ export function SearchResultsPage() {
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(
     null,
   );
+  const [referenceObjectUrl, setReferenceObjectUrl] = useState<string | null>(null);
+  const [longSearchKey, setLongSearchKey] = useState<string | null>(null);
+  const [bookmarkToast, setBookmarkToast] = useState<BookmarkToast | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const { isBookmarked, toggleBookmark } = useBookmarks();
   const searchFile = state.file ?? restoredImageFile ?? undefined;
   const searchFileName = state.fileName ?? restoredImageFile?.name ?? query;
   const resultTitle = getResultTitle(mode, query, searchFileName, imageId);
-  const referenceImageUrl = useMemo(() => {
-    if (mode !== "image") {
-      return null;
-    }
-    if (searchFile) {
-      return URL.createObjectURL(searchFile);
-    }
-    return imageUrl ?? null;
-  }, [imageUrl, mode, searchFile]);
-  const shouldRevokeReferenceUrl = Boolean(searchFile && referenceImageUrl);
+  const referenceImageUrl =
+    mode === "image" ? referenceObjectUrl ?? imageUrl ?? null : null;
   const isMissingImageReference = mode === "image" && !searchFile && !imageId && !imageUrl;
   const queryEnabled =
     mode === "image" ? Boolean(searchFile || imageId || imageUrl) : query.trim().length > 0;
@@ -125,6 +120,31 @@ export function SearchResultsPage() {
   const searchError = getSearchErrorMessage(searchQuery.error);
   const total = searchQuery.data?.pages[0]?.total ?? 0;
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = searchQuery;
+  const searchStateKey = `${mode}-${query}-${imageId ?? "no-id"}-${imageUrl ?? "no-url"}-${historyKey ?? "no-history"}-${imageSearchKey}`;
+  const isSearchTakingLong =
+    searchQuery.isLoading && longSearchKey === searchStateKey;
+
+  useEffect(() => {
+    if (!searchQuery.isLoading) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setLongSearchKey(searchStateKey);
+    }, 2500);
+
+    return () => window.clearTimeout(timer);
+  }, [searchQuery.isLoading, searchStateKey]);
+
+  useEffect(() => {
+    if (!bookmarkToast) return;
+
+    const timer = window.setTimeout(() => {
+      setBookmarkToast(null);
+    }, 3200);
+
+    return () => window.clearTimeout(timer);
+  }, [bookmarkToast]);
 
   useEffect(() => {
     if (mode !== "image" || state.file || restoredImageFile || imageId || !historyKey) {
@@ -144,12 +164,28 @@ export function SearchResultsPage() {
   }, [historyKey, imageId, mode, restoredImageFile, state.file]);
 
   useEffect(() => {
+    let isActive = true;
+    let nextUrl: string | null = null;
+
+    window.queueMicrotask(() => {
+      if (!isActive) return;
+
+      if (!searchFile) {
+        setReferenceObjectUrl(null);
+        return;
+      }
+
+      nextUrl = URL.createObjectURL(searchFile);
+      setReferenceObjectUrl(nextUrl);
+    });
+
     return () => {
-      if (shouldRevokeReferenceUrl && referenceImageUrl) {
-        URL.revokeObjectURL(referenceImageUrl);
+      isActive = false;
+      if (nextUrl) {
+        URL.revokeObjectURL(nextUrl);
       }
     };
-  }, [referenceImageUrl, shouldRevokeReferenceUrl]);
+  }, [searchFile]);
 
   useEffect(() => {
     const target = loadMoreRef.current;
@@ -246,7 +282,10 @@ export function SearchResultsPage() {
         )}
 
         {queryEnabled && searchQuery.isLoading && (
-          <ResultGridSkeleton limit={pageLimit} />
+          <>
+            <SearchLoadingNotice mode={mode} isTakingLong={isSearchTakingLong} />
+            <ResultGridSkeleton limit={pageLimit} />
+          </>
         )}
 
         {queryEnabled && searchQuery.isError && results.length === 0 && (
@@ -283,8 +322,20 @@ export function SearchResultsPage() {
               No matching results
             </p>
             <p className="mt-2 text-sm text-ink-secondary">
-              Try another description or choose a different reference image.
+              {getEmptySuggestion(mode)}
             </p>
+            <div className="mt-5 flex flex-col justify-center gap-3 sm:flex-row">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void searchQuery.refetch()}
+              >
+                Search again
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => navigate("/search")}>
+                Try another mode
+              </Button>
+            </div>
           </section>
         )}
 
@@ -293,7 +344,7 @@ export function SearchResultsPage() {
             <ResultGrid
               results={results}
               isBookmarked={isBookmarked}
-              onBookmark={(result) => toggleBookmark(result.id)}
+              onBookmark={handleToggleBookmark}
               onSelectResult={setSelectedResult}
             />
 
@@ -333,12 +384,32 @@ export function SearchResultsPage() {
           result={selectedResult}
           isBookmarked={isBookmarked(selectedResult.id)}
           onClose={() => setSelectedResult(null)}
-          onBookmark={(result) => toggleBookmark(result.id)}
+          onBookmark={handleToggleBookmark}
           onFindSimilar={handleFindSimilarResult}
+        />
+      )}
+
+      {bookmarkToast && (
+        <BookmarkToastMessage
+          toast={bookmarkToast}
+          onDismiss={() => setBookmarkToast(null)}
+          onUndo={() => {
+            toggleBookmark(bookmarkToast.imageId);
+            setBookmarkToast(null);
+          }}
         />
       )}
     </div>
   );
+
+  function handleToggleBookmark(result: SearchResult) {
+    const wasBookmarked = isBookmarked(result.id);
+    toggleBookmark(result.id);
+    setBookmarkToast({
+      imageId: result.id,
+      message: wasBookmarked ? "Removed from bookmarks" : "Saved to bookmarks",
+    });
+  }
 
   function handleFindSimilarResult(result: SearchResult) {
     const nextParams = new URLSearchParams();
@@ -347,8 +418,100 @@ export function SearchResultsPage() {
     nextParams.set("limit", String(pageLimit));
 
     setSelectedResult(null);
+    setLongSearchKey(null);
     setSearchParams(nextParams, { state: null });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
+}
+
+type BookmarkToast = {
+  imageId: number;
+  message: string;
+};
+
+function SearchLoadingNotice({
+  mode,
+  isTakingLong,
+}: {
+  mode: SearchMode;
+  isTakingLong: boolean;
+}) {
+  return (
+    <section className="flex items-start gap-3 rounded-lg border border-border bg-white p-4 shadow-sm shadow-slate-200/70">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-50 text-accent-700">
+        {isTakingLong ? <Sparkles className="h-5 w-5" /> : <Loader2 className="h-5 w-5 animate-spin" />}
+      </div>
+      <div>
+        <p className="font-semibold text-ink-primary">
+          {isTakingLong ? "AI is still processing this search" : "Searching images..."}
+        </p>
+        <p className="mt-1 text-sm leading-6 text-ink-secondary">
+          {isTakingLong
+            ? getLongSearchMessage(mode)
+            : "Preparing the most relevant image results for this query."}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function BookmarkToastMessage({
+  toast,
+  onDismiss,
+  onUndo,
+}: {
+  toast: BookmarkToast;
+  onDismiss: () => void;
+  onUndo: () => void;
+}) {
+  return (
+    <div className="fixed inset-x-4 bottom-4 z-[60] mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-border bg-white p-3 shadow-2xl shadow-slate-900/15 sm:bottom-6">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
+        <CheckCircle2 className="h-5 w-5" />
+      </div>
+      <p className="min-w-0 flex-1 text-sm font-semibold text-ink-primary">
+        {toast.message}
+      </p>
+      <button
+        type="button"
+        className="min-h-11 rounded-lg px-3 text-sm font-bold text-accent-700 hover:bg-accent-50"
+        onClick={onUndo}
+      >
+        Undo
+      </button>
+      <button
+        type="button"
+        className="min-h-11 rounded-lg px-2 text-xs font-bold text-ink-muted hover:bg-surface-1"
+        onClick={onDismiss}
+      >
+        Close
+      </button>
+    </div>
+  );
+}
+
+function getLongSearchMessage(mode: SearchMode) {
+  if (mode === "image") {
+    return "Image search may take longer while the reference image is uploaded and compared visually.";
+  }
+
+  if (mode === "ocr") {
+    return "OCR search can take a little longer when matching text extracted from images.";
+  }
+
+  return "Semantic search is comparing meaning, not just exact words, so the best matches may need a moment.";
+}
+
+function getEmptySuggestion(mode: SearchMode) {
+  if (mode === "image") {
+    return "Try a clearer reference image, crop the main object, or switch to semantic search.";
+  }
+
+  if (mode === "ocr") {
+    return "Try shorter text, a keyword from the image, or switch to semantic search.";
+  }
+
+  return "Try a more specific description, fewer words, or search by OCR/image instead.";
 }
 
 function parseSearchMode(value: string | null): SearchMode {

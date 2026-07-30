@@ -1,23 +1,67 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { AlertCircle, Users } from 'lucide-react'
+import { useEffect, useMemo, useRef } from 'react'
+import { useInfiniteQuery } from '@tanstack/react-query'
+import { AlertCircle, Loader2, Users } from 'lucide-react'
 
-import { Pagination } from '@/components/feature/result/pagination'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { adminApi } from '@/lib/api/admin'
 
 export default function AdminUsersPage() {
-  const [page, setPage] = useState(1)
+  const loadMoreRef = useRef<HTMLDivElement | null>(null)
   const limit = 10
-  const usersQuery = useQuery({
-    queryKey: ['admin-users', page, limit],
-    queryFn: () => adminApi.listUsers({ page, limit }),
+  const usersQuery = useInfiniteQuery({
+    queryKey: ['admin-users-infinite', limit],
+    queryFn: ({ pageParam = 1 }) =>
+      adminApi.listUsers({ page: pageParam as number, limit }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const loadedCount = allPages.reduce((sum, page) => sum + page.items.length, 0)
+      if (lastPage.items.length < limit || loadedCount >= lastPage.total) {
+        return undefined
+      }
+
+      return allPages.length + 1
+    },
   })
-  const users = usersQuery.data?.items ?? []
-  const total = usersQuery.data?.total ?? 0
+
+  const users = useMemo(() => {
+    const seenIds = new Set<number>()
+    return (usersQuery.data?.pages ?? [])
+      .flatMap((page) => page.items)
+      .filter((user) => {
+        if (seenIds.has(user.id)) {
+          return false
+        }
+
+        seenIds.add(user.id)
+        return true
+      })
+  }, [usersQuery.data])
+
+  const total = usersQuery.data?.pages[0]?.total ?? 0
   const isLoading = usersQuery.isLoading
+  const isFetchingNextPage = usersQuery.isFetchingNextPage
+  const isFetchNextPageError = usersQuery.isFetchNextPageError
+  const hasNextPage = usersQuery.hasNextPage
+  const fetchNextPage = usersQuery.fetchNextPage
   const error = usersQuery.error ? 'Không thể tải danh sách người dùng.' : null
-  const totalPages = Math.ceil(total / limit)
+
+  useEffect(() => {
+    const target = loadMoreRef.current
+    if (!target || !hasNextPage || error) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !isFetchingNextPage) {
+          void fetchNextPage()
+        }
+      },
+      { rootMargin: '420px 0px' },
+    )
+
+    observer.observe(target)
+
+    return () => observer.disconnect()
+  }, [error, fetchNextPage, hasNextPage, isFetchingNextPage])
 
   return (
     <PageContainer size="wide" className="space-y-6 py-5 sm:py-8">
@@ -150,22 +194,44 @@ export default function AdminUsersPage() {
           )}
         </div>
 
-        {/* Pagination bar */}
-        {!isLoading && totalPages > 1 && (
+        {!isLoading && !error && users.length > 0 && (
           <div className="border-t border-border bg-surface-1/10 px-4 py-4 sm:px-6">
             <p className="mb-3 text-center text-xs text-ink-muted sm:text-left">
               Hiển thị <span className="font-semibold text-ink-secondary">{users.length}</span> trên{' '}
               <span className="font-semibold text-ink-secondary">{total}</span> người dùng
             </p>
-            <Pagination
-              ariaLabel="Các trang người dùng"
-              className="border-0 pt-0"
-              nextLabel="Sau"
-              page={page}
-              previousLabel="Trước"
-              totalPages={totalPages}
-              onChange={setPage}
-            />
+            <div className="flex flex-col items-center gap-3">
+              {isFetchingNextPage && (
+                <div className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border bg-white text-sm font-semibold text-ink-secondary shadow-sm shadow-slate-200/40">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Đang tải thêm người dùng...
+                </div>
+              )}
+
+              {isFetchNextPageError && (
+                <p className="w-full rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-semibold text-red-700">
+                  Không thể tải thêm người dùng.
+                </p>
+              )}
+
+              {hasNextPage ? (
+                <button
+                  type="button"
+                  onClick={() => void fetchNextPage()}
+                  disabled={isFetchingNextPage}
+                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink-secondary shadow-sm shadow-slate-200/50 transition-colors hover:bg-surface-1 hover:text-ink-primary disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                >
+                  {isFetchingNextPage && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Tải thêm người dùng
+                </button>
+              ) : (
+                <p className="text-xs font-medium text-ink-muted">
+                  Đã hiển thị toàn bộ danh sách người dùng.
+                </p>
+              )}
+
+              {hasNextPage && <div ref={loadMoreRef} className="h-4 w-full" />}
+            </div>
           </div>
         )}
       </div>

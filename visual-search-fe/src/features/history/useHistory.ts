@@ -1,12 +1,13 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMemo } from 'react'
+import { useInfiniteQuery } from '@tanstack/react-query'
 
 import { historyApi, type SearchQueryType } from '@/lib/api/history'
 
 export const HISTORY_PAGE_LIMIT = 20
 
 const historyQueryKeys = {
-  list: (page: number, limit: number, queryType?: SearchQueryType) =>
-    ['search-history', 'list', page, limit, queryType ?? 'all'] as const,
+  infiniteList: (limit: number, queryType?: SearchQueryType) =>
+    ['search-history', 'infinite-list', limit, queryType ?? 'all'] as const,
 }
 
 function getErrorMessage(error: unknown) {
@@ -15,20 +16,47 @@ function getErrorMessage(error: unknown) {
     : 'Something went wrong while loading your search history.'
 }
 
-export function useHistory(page = 1, queryType?: SearchQueryType, limit = HISTORY_PAGE_LIMIT) {
-  const historyQuery = useQuery({
-    queryKey: historyQueryKeys.list(page, limit, queryType),
-    queryFn: () => historyApi.list({ page, limit, query_type: queryType }),
+export function useHistory(queryType?: SearchQueryType, limit = HISTORY_PAGE_LIMIT) {
+  const historyQuery = useInfiniteQuery({
+    queryKey: historyQueryKeys.infiniteList(limit, queryType),
+    queryFn: ({ pageParam = 1 }) =>
+      historyApi.list({ page: pageParam as number, limit, query_type: queryType }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const loadedCount = allPages.reduce((sum, page) => sum + page.items.length, 0)
+      if (lastPage.items.length < limit || loadedCount >= lastPage.total) {
+        return undefined
+      }
+
+      return allPages.length + 1
+    },
   })
 
-  const total = historyQuery.data?.total ?? 0
+  const items = useMemo(() => {
+    const seenIds = new Set<number>()
+    return (historyQuery.data?.pages ?? [])
+      .flatMap((page) => page.items)
+      .filter((item) => {
+        if (seenIds.has(item.id)) {
+          return false
+        }
+
+        seenIds.add(item.id)
+        return true
+      })
+  }, [historyQuery.data])
+
+  const total = historyQuery.data?.pages[0]?.total ?? 0
 
   return {
-    items: historyQuery.data?.items ?? [],
+    items,
     total,
-    totalPages: Math.max(1, Math.ceil(total / limit)),
     isLoading: historyQuery.isLoading,
     isFetching: historyQuery.isFetching,
+    isFetchingNextPage: historyQuery.isFetchingNextPage,
+    isFetchNextPageError: historyQuery.isFetchNextPageError,
+    hasNextPage: historyQuery.hasNextPage,
+    fetchNextPage: historyQuery.fetchNextPage,
     error: historyQuery.error ? getErrorMessage(historyQuery.error) : null,
     refetch: historyQuery.refetch,
   }

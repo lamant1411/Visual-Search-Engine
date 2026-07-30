@@ -30,7 +30,7 @@ export function HistoryFilters({ activeFilter, onChange }: HistoryFiltersProps) 
             type="button"
             aria-pressed={isActive}
             onClick={() => onChange(value)}
-            className={`flex h-8 items-center justify-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-colors sm:justify-start ${
+            className={`flex min-h-11 items-center justify-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-colors sm:h-8 sm:min-h-0 sm:justify-start ${
               isActive
                 ? 'bg-white text-ink-primary shadow-sm shadow-slate-200/70'
                 : 'text-ink-secondary hover:bg-white/70 hover:text-ink-primary'

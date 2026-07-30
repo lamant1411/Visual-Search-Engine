@@ -67,6 +67,14 @@ export function useBookmark() {
     },
   })
 
+  const restoreMutation = useMutation({
+    mutationFn: bookmarkApi.save,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: infiniteQueryKey })
+      queryClient.invalidateQueries({ queryKey: bookmarkKeys.all })
+    },
+  })
+
   const items = useMemo(() => {
     const seenIds = new Set<number>()
     return (listQuery.data?.pages ?? [])
@@ -92,7 +100,9 @@ export function useBookmark() {
     fetchNextPage: listQuery.fetchNextPage,
     error: listQuery.error ?? removeMutation.error,
     removingImageId: removeMutation.isPending ? removeMutation.variables : null,
+    restoringImageId: restoreMutation.isPending ? restoreMutation.variables : null,
     removeItem: removeMutation.mutate,
+    restoreItem: restoreMutation.mutate,
     refetch: listQuery.refetch,
   }
 }

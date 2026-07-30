@@ -182,7 +182,7 @@ export function ImageCropModal({ file, imageUrl, onCancel, onConfirm, onUseOrigi
                 <button
                   key={direction}
                   aria-label={`Resize crop area from ${direction}`}
-                  className={`pointer-events-auto absolute h-4 w-4 touch-none rounded-sm border-2 border-slate-950 bg-white shadow ${className}`}
+                  className={`pointer-events-auto absolute h-7 w-7 touch-none rounded-sm border-2 border-slate-950 bg-white shadow sm:h-4 sm:w-4 ${className}`}
                   title={`Resize from ${direction}`}
                   type="button"
                   onPointerDown={(event) => startResize(event, direction)}
@@ -217,15 +217,15 @@ export function ImageCropModal({ file, imageUrl, onCancel, onConfirm, onUseOrigi
 
           {errorMessage && <p className="text-sm font-medium text-red-600">{errorMessage}</p>}
 
-          <div className="flex flex-wrap justify-end gap-3">
-            <Button disabled={isProcessing} type="button" variant="ghost" onClick={onCancel}>
+          <div className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:justify-end">
+            <Button className="min-h-11 sm:min-h-0" disabled={isProcessing} type="button" variant="ghost" onClick={onCancel}>
               Cancel
             </Button>
-            <Button disabled={isProcessing} type="button" variant="outline" onClick={onUseOriginal}>
+            <Button className="min-h-11 sm:min-h-0" disabled={isProcessing} type="button" variant="outline" onClick={onUseOriginal}>
               Use full image
             </Button>
             <Button
-              className="!bg-ink-primary hover:!bg-slate-800"
+              className="min-h-11 !bg-ink-primary hover:!bg-slate-800 sm:min-h-0"
               disabled={!cropArea}
               leftIcon={<Crop className="h-4 w-4" />}
               loading={isProcessing}

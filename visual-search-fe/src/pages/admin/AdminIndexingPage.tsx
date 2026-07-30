@@ -15,7 +15,6 @@ import {
   Info
 } from 'lucide-react'
 import { PageContainer } from '@/components/layout/PageContainer'
-import { Pagination } from '@/components/feature/result/pagination'
 import { adminApi, type IndexingBatch } from '@/lib/api/admin'
 
 const INDEXING_POLL_INTERVAL_MS = 2_000
@@ -23,7 +22,7 @@ const BATCH_HISTORY_PAGE_LIMIT = 10
 
 export default function AdminIndexingPage() {
   const [batches, setBatches] = useState<IndexingBatch[]>([])
-  const [batchHistoryPage, setBatchHistoryPage] = useState(1)
+  const [visibleBatchHistoryCount, setVisibleBatchHistoryCount] = useState(BATCH_HISTORY_PAGE_LIMIT)
   const [isLoading, setIsLoading] = useState(true)
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null)
 
@@ -62,6 +61,7 @@ export default function AdminIndexingPage() {
   const [isActionInProgress, setIsActionInProgress] = useState(false)
 
   const pollingRef = useRef<number | null>(null)
+  const batchHistoryLoadMoreRef = useRef<HTMLDivElement | null>(null)
   const uploadedFilesRef = useRef<{ name: string; url: string }[]>([])
   const operationStartedAtRef = useRef<number | null>(null)
   const lastProgressAtRef = useRef<number | null>(null)
@@ -641,12 +641,29 @@ export default function AdminIndexingPage() {
     }
   }, [])
 
-  const batchHistoryTotalPages = Math.max(1, Math.ceil(batches.length / BATCH_HISTORY_PAGE_LIMIT))
-  const displayedBatchHistoryPage = Math.min(batchHistoryPage, batchHistoryTotalPages)
   const displayedBatches = useMemo(() => {
-    const start = (displayedBatchHistoryPage - 1) * BATCH_HISTORY_PAGE_LIMIT
-    return batches.slice(start, start + BATCH_HISTORY_PAGE_LIMIT)
-  }, [batches, displayedBatchHistoryPage])
+    return batches.slice(0, visibleBatchHistoryCount)
+  }, [batches, visibleBatchHistoryCount])
+
+  const hasMoreBatchHistory = displayedBatches.length < batches.length
+
+  useEffect(() => {
+    const target = batchHistoryLoadMoreRef.current
+    if (!target || !hasMoreBatchHistory) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisibleBatchHistoryCount((current) => current + BATCH_HISTORY_PAGE_LIMIT)
+        }
+      },
+      { rootMargin: '420px 0px' },
+    )
+
+    observer.observe(target)
+
+    return () => observer.disconnect()
+  }, [hasMoreBatchHistory])
 
   const finishedIndexCount = indexedCount + failedIndexCount
   const remainingIndexCount = Math.max(totalIndexCount - finishedIndexCount, 0)
@@ -1245,17 +1262,29 @@ export default function AdminIndexingPage() {
           )}
         </div>
 
-        {!isLoading && batchHistoryTotalPages > 1 && (
-          <Pagination
-            ariaLabel="Các trang lịch sử tải ảnh"
-            className="pt-4"
-            nextLabel="Sau"
-            page={displayedBatchHistoryPage}
-            previousLabel="Trước"
-            scrollToTop={false}
-            totalPages={batchHistoryTotalPages}
-            onChange={setBatchHistoryPage}
-          />
+        {!isLoading && batches.length > 0 && (
+          <div className="border-t border-border pt-4 text-center">
+            <p className="mb-3 text-xs text-ink-muted">
+              Hiển thị <span className="font-semibold text-ink-secondary">{displayedBatches.length}</span> trên{' '}
+              <span className="font-semibold text-ink-secondary">{batches.length}</span> đợt tải ảnh
+            </p>
+
+            {hasMoreBatchHistory ? (
+              <button
+                type="button"
+                onClick={() => setVisibleBatchHistoryCount((current) => current + BATCH_HISTORY_PAGE_LIMIT)}
+                className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink-secondary shadow-sm shadow-slate-200/50 transition-colors hover:bg-surface-1 hover:text-ink-primary sm:w-auto"
+              >
+                Tải thêm lịch sử
+              </button>
+            ) : (
+              <p className="text-xs font-medium text-ink-muted">
+                Đã hiển thị toàn bộ lịch sử tải ảnh.
+              </p>
+            )}
+
+            {hasMoreBatchHistory && <div ref={batchHistoryLoadMoreRef} className="h-4 w-full" />}
+          </div>
         )}
       </div>
 

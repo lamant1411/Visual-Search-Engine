@@ -41,7 +41,7 @@ export function ResultCard({
   const similarityScore = formatSimilarityScore(result.similarityScore);
 
   return (
-    <article className="group relative mb-5 block w-full break-inside-avoid overflow-hidden rounded-lg bg-white text-left shadow-sm shadow-slate-200/70 ring-1 ring-white/70 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/90">
+    <article className="group relative mb-5 block w-full break-inside-avoid overflow-hidden rounded-lg bg-white text-left shadow-sm shadow-slate-200/70 ring-1 ring-white/70 transition duration-200 md:hover:-translate-y-0.5 md:hover:shadow-lg md:hover:shadow-slate-200/90">
       <button
         type="button"
         className="block w-full cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-600"
@@ -64,7 +64,7 @@ export function ResultCard({
             <img
               alt={`Search result ${result.id}`}
               className={[
-                "w-full object-cover transition duration-300 group-hover:scale-105",
+                "w-full object-cover transition duration-300 md:group-hover:scale-105",
                 aspectRatio ? "h-full" : "h-auto",
                 imageLoaded ? "opacity-100" : "opacity-0",
               ].join(" ")}
@@ -92,7 +92,7 @@ export function ResultCard({
             </span>
           )}
 
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent p-4 pt-14 text-white opacity-0 transition duration-200 group-hover:opacity-100 group-focus-visible:opacity-100">
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent p-4 pt-14 text-white opacity-100 transition duration-200 md:opacity-0 md:group-hover:opacity-100 md:group-focus-visible:opacity-100">
             <h2 className="text-sm font-semibold">
               {result.metadata.source ?? "Image result"}
             </h2>
@@ -120,7 +120,7 @@ export function ResultCard({
         }
         aria-pressed={isBookmarked}
         title={isBookmarked ? "Remove bookmark" : "Save to bookmarks"}
-        className="absolute right-3 top-3 z-10 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg border border-transparent bg-transparent text-white opacity-100 drop-shadow-[0_1px_2px_rgba(15,23,42,0.9)] transition duration-200 hover:-translate-y-0.5 hover:border-white/15 hover:bg-slate-950/55 hover:drop-shadow-none focus-visible:-translate-y-0.5 focus-visible:border-white/20 focus-visible:bg-slate-950/60 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90 md:translate-y-1 md:opacity-0 md:group-hover:translate-y-0 md:group-hover:opacity-100 md:group-focus-within:translate-y-0 md:group-focus-within:opacity-100"
+        className="absolute right-3 top-3 z-10 inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-lg border border-white/15 bg-slate-950/35 text-white opacity-100 drop-shadow-[0_1px_2px_rgba(15,23,42,0.9)] transition duration-200 hover:-translate-y-0.5 hover:border-white/15 hover:bg-slate-950/55 hover:drop-shadow-none focus-visible:-translate-y-0.5 focus-visible:border-white/20 focus-visible:bg-slate-950/60 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90 md:h-10 md:w-10 md:translate-y-1 md:border-transparent md:bg-transparent md:opacity-0 md:group-hover:translate-y-0 md:group-hover:opacity-100 md:group-focus-within:translate-y-0 md:group-focus-within:opacity-100"
         onClick={() => onBookmark?.(result)}
       >
         <Bookmark
