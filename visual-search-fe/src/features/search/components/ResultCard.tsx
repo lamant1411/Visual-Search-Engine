@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bookmark, ImageOff, Info, Zap } from "lucide-react";
+import { Bookmark, Check, ImageOff, Info, Zap } from "lucide-react";
 
 import type { SearchResult } from "../types";
 import { formatSimilarityScore } from "../utils/formatSimilarityScore";
@@ -11,6 +11,9 @@ type ResultCardProps = {
   showSimilarity?: boolean;
   onBookmark?: (result: SearchResult) => void;
   onSelect?: (result: SearchResult) => void;
+  selectable?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (result: SearchResult) => void;
 };
 
 export function ResultCard({
@@ -20,6 +23,9 @@ export function ResultCard({
   showSimilarity = true,
   onBookmark,
   onSelect,
+  selectable = false,
+  isSelected = false,
+  onToggleSelect,
 }: ResultCardProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
@@ -41,7 +47,33 @@ export function ResultCard({
   const similarityScore = formatSimilarityScore(result.similarityScore);
 
   return (
-    <article className="group relative mb-5 block w-full break-inside-avoid overflow-hidden rounded-lg bg-white text-left shadow-sm shadow-slate-200/70 ring-1 ring-white/70 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/90">
+    <article
+      className={[
+        "group relative mb-5 block w-full break-inside-avoid overflow-hidden rounded-lg bg-white text-left shadow-sm shadow-slate-200/70 ring-1 ring-white/70 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/90",
+        isSelected ? "ring-2 ring-accent-600" : "",
+      ].join(" ")}
+    >
+
+      {selectable && (
+        <button
+          type="button"
+          aria-label={isSelected ? `Unselect image ${result.id}` : `Select image ${result.id}`}
+          aria-pressed={isSelected}
+          className={[
+            "absolute left-3 top-3 z-20 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg border text-white shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90",
+            isSelected
+              ? "border-accent-500 bg-accent-600"
+              : "border-white/30 bg-slate-950/55 hover:bg-slate-950/75",
+          ].join(" ")}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleSelect?.(result);
+          }}
+        >
+          {isSelected ? <Check className="h-5 w-5" /> : <span className="h-4 w-4 rounded border-2 border-white" />}
+        </button>
+      )}
+
       <button
         type="button"
         className="block w-full cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-600"

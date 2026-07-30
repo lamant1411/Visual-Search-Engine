@@ -8,6 +8,9 @@ type ResultGridProps = {
   showSimilarity?: boolean
   onBookmark?: (result: SearchResult) => void
   onSelectResult?: (result: SearchResult) => void
+  selectable?: boolean
+  isSelected?: (imageId: number) => boolean
+  onToggleSelect?: (result: SearchResult) => void
 }
 
 export function ResultGrid({
@@ -16,6 +19,9 @@ export function ResultGrid({
   showSimilarity = true,
   onBookmark,
   onSelectResult,
+  selectable = false,
+  isSelected,
+  onToggleSelect,
 }: ResultGridProps) {
   return (
     <section>
@@ -29,6 +35,9 @@ export function ResultGrid({
             showSimilarity={showSimilarity}
             onBookmark={onBookmark}
             onSelect={onSelectResult}
+            selectable={selectable}
+            isSelected={isSelected?.(result.id)}
+            onToggleSelect={onToggleSelect}
           />
         ))}
       </div>
