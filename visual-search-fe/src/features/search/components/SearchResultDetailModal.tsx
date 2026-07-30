@@ -1,4 +1,4 @@
-import { type MouseEvent, useEffect, useState } from "react";
+import { type MouseEvent, type PointerEvent, useEffect, useState } from "react";
 import {
   Bookmark,
   Check,
@@ -40,6 +40,8 @@ export function SearchResultDetailModal({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [zoomOrigin, setZoomOrigin] = useState("50% 50%");
+  const [dragStartY, setDragStartY] = useState<number | null>(null);
+  const [isOcrExpanded, setIsOcrExpanded] = useState(false);
   const isZoomed = zoom > 1;
   const similarityScore = formatSimilarityScore(result.similarityScore);
   const sizeLabel =
@@ -69,13 +71,30 @@ export function SearchResultDetailModal({
         className="flex max-h-[96vh] w-[96vw] max-w-[1500px] flex-col overflow-y-auto rounded-lg bg-white shadow-2xl lg:grid lg:h-[92vh] lg:grid-cols-[minmax(0,1fr)_340px] lg:overflow-hidden"
         onClick={(event) => event.stopPropagation()}
       >
+        <button
+          aria-label="Swipe down to close image detail"
+          className="flex min-h-9 items-center justify-center bg-white lg:hidden"
+          type="button"
+          onPointerDown={(event) => setDragStartY(event.clientY)}
+          onPointerUp={(event) => {
+            if (dragStartY !== null && event.clientY - dragStartY > 70) {
+              onClose();
+            }
+            setDragStartY(null);
+          }}
+          onPointerCancel={() => setDragStartY(null)}
+        >
+          <span className="h-1.5 w-12 rounded-full bg-slate-300" />
+        </button>
+
         <div
           className={[
             "relative flex h-[45vh] min-h-[280px] shrink-0 items-center justify-center overflow-hidden bg-slate-950 sm:min-h-[360px] lg:h-auto lg:min-h-0",
             isZoomed ? "cursor-zoom-out" : "cursor-zoom-in",
+            isZoomed ? "touch-none" : "touch-pan-y",
           ].join(" ")}
           onClick={handleImageClick}
-          onMouseMove={handleImageMouseMove}
+          onPointerMove={handleImagePointerMove}
         >
           <div
             className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded-full bg-black/60 p-1 text-white shadow-sm backdrop-blur"
@@ -83,7 +102,7 @@ export function SearchResultDetailModal({
           >
             <button
               aria-label="Zoom out"
-              className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 disabled:cursor-not-allowed disabled:opacity-40 sm:h-9 sm:w-9"
               disabled={zoom <= 1}
               type="button"
               onClick={() =>
@@ -95,7 +114,7 @@ export function SearchResultDetailModal({
 
             <button
               aria-label="Reset zoom"
-              className="inline-flex h-9 cursor-pointer items-center justify-center gap-1 rounded-full px-3 text-xs font-bold transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+              className="inline-flex h-11 cursor-pointer items-center justify-center gap-1 rounded-full px-3 text-xs font-bold transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 sm:h-9"
               type="button"
               onClick={resetZoom}
             >
@@ -105,7 +124,7 @@ export function SearchResultDetailModal({
 
             <button
               aria-label="Zoom in"
-              className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 disabled:cursor-not-allowed disabled:opacity-40 sm:h-9 sm:w-9"
               disabled={zoom >= 2.5}
               type="button"
               onClick={() =>
@@ -181,13 +200,27 @@ export function SearchResultDetailModal({
                 <Info className="h-4 w-4 text-accent-600" />
                 OCR content
               </div>
-              <p className="mt-2 text-sm text-ink-secondary">
+              <p
+                className={[
+                  "mt-2 text-sm text-ink-secondary",
+                  isOcrExpanded ? "" : "line-clamp-4",
+                ].join(" ")}
+              >
                 {result.metadata.ocrText}
               </p>
+              {result.metadata.ocrText.length > 180 && (
+                <button
+                  type="button"
+                  className="mt-2 min-h-9 text-xs font-bold text-accent-700"
+                  onClick={() => setIsOcrExpanded((current) => !current)}
+                >
+                  {isOcrExpanded ? "Show less" : "Show full OCR text"}
+                </button>
+              )}
             </div>
           )}
 
-          <div className="mt-auto space-y-3 pt-6">
+          <div className="sticky bottom-0 -mx-5 mt-auto space-y-3 border-t border-border bg-white/95 px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 backdrop-blur lg:static lg:mx-0 lg:border-t-0 lg:bg-transparent lg:px-0 lg:pb-0 lg:pt-6 lg:backdrop-blur-none">
             <Button
               fullWidth
               className="focus-visible:ring-accent-600"
@@ -248,7 +281,7 @@ export function SearchResultDetailModal({
     setZoom((currentZoom) => (currentZoom > 1 ? 1 : 2));
   }
 
-  function handleImageMouseMove(event: MouseEvent<HTMLDivElement>) {
+  function handleImagePointerMove(event: PointerEvent<HTMLDivElement>) {
     if (isZoomed) {
       updateZoomOrigin(event);
     }
@@ -259,7 +292,7 @@ export function SearchResultDetailModal({
     setZoomOrigin("50% 50%");
   }
 
-  function updateZoomOrigin(event: MouseEvent<HTMLDivElement>) {
+  function updateZoomOrigin(event: MouseEvent<HTMLDivElement> | PointerEvent<HTMLDivElement>) {
     const bounds = event.currentTarget.getBoundingClientRect();
     const x = clamp(
       ((event.clientX - bounds.left) / bounds.width) * 100,

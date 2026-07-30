@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertCircle, Bookmark, RefreshCw, RotateCcw } from 'lucide-react'
+import { AlertCircle, Bookmark, CheckCircle2, RefreshCw, RotateCcw } from 'lucide-react'
 import { useNavigate } from 'react-router'
 
 import { Button } from '@/components/base/button'
@@ -13,6 +13,7 @@ export default function BookmarkPage() {
   const navigate = useNavigate()
   const loadMoreRef = useRef<HTMLDivElement | null>(null)
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null)
+  const [removedResult, setRemovedResult] = useState<SearchResult | null>(null)
   const {
     items,
     total,
@@ -23,7 +24,9 @@ export default function BookmarkPage() {
     fetchNextPage,
     error,
     removingImageId,
+    restoringImageId,
     removeItem,
+    restoreItem,
     refetch,
   } = useBookmark()
 
@@ -44,6 +47,16 @@ export default function BookmarkPage() {
     return () => observer.disconnect()
   }, [fetchNextPage, hasNextPage, isFetchingNextPage])
 
+  useEffect(() => {
+    if (!removedResult) return
+
+    const timer = window.setTimeout(() => {
+      setRemovedResult(null)
+    }, 4500)
+
+    return () => window.clearTimeout(timer)
+  }, [removedResult])
+
   const results = useMemo<SearchResult[]>(
     () =>
       items.map((item) => ({
@@ -58,6 +71,7 @@ export default function BookmarkPage() {
 
   function handleRemove(result: SearchResult) {
     if (removingImageId === result.id) return
+    setRemovedResult(result)
     removeItem(result.id)
     if (selectedResult?.id === result.id) {
       setSelectedResult(null)
@@ -109,6 +123,9 @@ export default function BookmarkPage() {
 
             {isFetchingNextPage && (
               <div className="mt-5">
+                <p className="mb-3 text-center text-sm font-semibold text-ink-secondary">
+                  Loading more saved images...
+                </p>
                 <ResultGridSkeleton limit={8} />
               </div>
             )}
@@ -128,6 +145,12 @@ export default function BookmarkPage() {
                 </Button>
               </div>
             )}
+
+            {!hasNextPage && !isFetchingNextPage && results.length > 0 && (
+              <p className="border-t border-border pt-6 text-center text-sm font-semibold text-ink-muted">
+                All saved images are loaded.
+              </p>
+            )}
           </>
         )}
 
@@ -143,6 +166,35 @@ export default function BookmarkPage() {
           onClose={() => setSelectedResult(null)}
           onFindSimilar={handleFindSimilar}
         />
+      )}
+
+      {removedResult && (
+        <div className="fixed inset-x-4 bottom-4 z-[60] mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-border bg-white p-3 shadow-2xl shadow-slate-900/15 sm:bottom-6">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
+            <CheckCircle2 className="h-5 w-5" />
+          </div>
+          <p className="min-w-0 flex-1 text-sm font-semibold text-ink-primary">
+            Removed from bookmarks
+          </p>
+          <button
+            type="button"
+            disabled={restoringImageId === removedResult.id}
+            className="min-h-11 rounded-lg px-3 text-sm font-bold text-accent-700 hover:bg-accent-50 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={() => {
+              restoreItem(removedResult.id)
+              setRemovedResult(null)
+            }}
+          >
+            Undo
+          </button>
+          <button
+            type="button"
+            className="min-h-11 rounded-lg px-2 text-xs font-bold text-ink-muted hover:bg-surface-1"
+            onClick={() => setRemovedResult(null)}
+          >
+            Close
+          </button>
+        </div>
       )}
     </>
   )

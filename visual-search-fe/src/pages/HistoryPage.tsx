@@ -1,11 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { AlertCircle, History, RefreshCw } from 'lucide-react'
+import { AlertCircle, History, Loader2, RefreshCw } from 'lucide-react'
 
 import { HistoryFilters } from '@/components/feature/history/HistoryFilters'
 import { HistoryImageModal } from '@/components/feature/history/HistoryImageModal'
 import { HistoryList } from '@/components/feature/history/HistoryList'
-import { Pagination } from '@/components/feature/result/pagination'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { useHistory } from '@/features/history/useHistory'
 import type { HistoryItem, SearchQueryType } from '@/lib/api/history'
@@ -14,14 +13,40 @@ type FilterType = 'all' | SearchQueryType
 
 export default function HistoryPage() {
   const navigate = useNavigate()
-  const [page, setPage] = useState(1)
+  const loadMoreRef = useRef<HTMLDivElement | null>(null)
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   const [previewImageItem, setPreviewImageItem] = useState<HistoryItem | null>(null)
   const queryType = activeFilter === 'all' ? undefined : activeFilter
-  const { items, total, totalPages, isLoading, isFetching, error, refetch } = useHistory(
-    page,
-    queryType,
-  )
+  const {
+    items,
+    total,
+    isLoading,
+    isFetching,
+    isFetchingNextPage,
+    isFetchNextPageError,
+    hasNextPage,
+    fetchNextPage,
+    error,
+    refetch,
+  } = useHistory(queryType)
+
+  useEffect(() => {
+    const target = loadMoreRef.current
+    if (!target || !hasNextPage || error) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !isFetchingNextPage) {
+          void fetchNextPage()
+        }
+      },
+      { rootMargin: '420px 0px' },
+    )
+
+    observer.observe(target)
+
+    return () => observer.disconnect()
+  }, [error, fetchNextPage, hasNextPage, isFetchingNextPage])
 
   function handleReSearch(item: HistoryItem) {
     if (item.query_type === 'image') {
@@ -43,7 +68,6 @@ export default function HistoryPage() {
 
   function handleFilterChange(filter: FilterType) {
     setActiveFilter(filter)
-    setPage(1)
   }
 
   return (
@@ -92,11 +116,14 @@ export default function HistoryPage() {
           </div>
         )}
 
-        <section aria-label="History controls" className="space-y-4">
+        <section
+          aria-label="History controls"
+          className="sticky top-16 z-20 -mx-4 space-y-4 border-y border-border bg-surface-0 px-4 py-3 sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0"
+        >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <HistoryFilters activeFilter={activeFilter} onChange={handleFilterChange} />
             <p className="text-xs font-medium text-ink-muted">
-              Showing {items.length} on this page · {total} matching searches
+              Showing {items.length} of {total} matching searches
             </p>
           </div>
         </section>
@@ -109,13 +136,39 @@ export default function HistoryPage() {
           onPreviewImage={setPreviewImageItem}
         />
 
-        {!isLoading && !error && totalPages > 1 && (
-          <Pagination
-            ariaLabel="Search history pages"
-            page={page}
-            totalPages={totalPages}
-            onChange={setPage}
-          />
+        {!isLoading && !error && items.length > 0 && (
+          <div className="space-y-3 border-t border-border pt-5 text-center">
+            {isFetchingNextPage && (
+              <div className="flex min-h-14 items-center justify-center gap-2 rounded-lg border border-border bg-white text-sm font-semibold text-ink-secondary shadow-sm shadow-slate-200/40">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading more searches...
+              </div>
+            )}
+
+            {isFetchNextPageError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                Unable to load more history. Please try again.
+              </div>
+            )}
+
+            {hasNextPage ? (
+              <button
+                type="button"
+                onClick={() => void fetchNextPage()}
+                disabled={isFetchingNextPage}
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink-secondary shadow-sm shadow-slate-200/50 transition-colors hover:bg-surface-1 hover:text-ink-primary disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+              >
+                {isFetchingNextPage && <Loader2 className="h-4 w-4 animate-spin" />}
+                Load more history
+              </button>
+            ) : (
+              <p className="text-xs font-medium text-ink-muted">
+                You have reached the end of your search history.
+              </p>
+            )}
+
+            {hasNextPage && <div ref={loadMoreRef} className="h-4 w-full" />}
+          </div>
         )}
       </PageContainer>
 

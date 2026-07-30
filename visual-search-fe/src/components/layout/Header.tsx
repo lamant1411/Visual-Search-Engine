@@ -46,6 +46,9 @@ export function Header() {
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isSearchLoginOpen, setIsSearchLoginOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
+  const mobileSearchInputRef = useRef<HTMLInputElement>(null);
+  const selectedFilePreviewUrlRef = useRef<string | null>(null);
+  const [selectedFilePreviewUrl, setSelectedFilePreviewUrl] = useState<string | null>(null);
   const userDisplayName =
     user?.full_name?.trim() || user?.username || user?.email || "Account";
   const userInitial = userDisplayName.charAt(0).toUpperCase();
@@ -79,6 +82,24 @@ export function Header() {
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isAccountMenuOpen]);
+
+  useEffect(() => {
+    if (!isMobileSearchOpen || searchMode === "image") return;
+
+    const timer = window.setTimeout(() => {
+      mobileSearchInputRef.current?.focus();
+    }, 80);
+
+    return () => window.clearTimeout(timer);
+  }, [isMobileSearchOpen, searchMode]);
+
+  useEffect(() => {
+    return () => {
+      if (selectedFilePreviewUrlRef.current) {
+        URL.revokeObjectURL(selectedFilePreviewUrlRef.current);
+      }
+    };
+  }, []);
 
   async function handleLogout() {
     setIsAccountMenuOpen(false);
@@ -127,7 +148,14 @@ export function Header() {
 
     const errorMessage = validateSearchImageFile(nextFile);
     if (!errorMessage) {
+      if (selectedFilePreviewUrlRef.current) {
+        URL.revokeObjectURL(selectedFilePreviewUrlRef.current);
+      }
+
+      const nextPreviewUrl = URL.createObjectURL(nextFile);
+      selectedFilePreviewUrlRef.current = nextPreviewUrl;
       setSelectedFile(nextFile);
+      setSelectedFilePreviewUrl(nextPreviewUrl);
     }
 
     event.target.value = "";
@@ -135,7 +163,17 @@ export function Header() {
 
   function handleModeChange(nextMode: HeaderSearchMode) {
     setSearchMode(nextMode);
+    clearSelectedImage();
+  }
+
+  function clearSelectedImage() {
+    if (selectedFilePreviewUrlRef.current) {
+      URL.revokeObjectURL(selectedFilePreviewUrlRef.current);
+      selectedFilePreviewUrlRef.current = null;
+    }
+
     setSelectedFile(null);
+    setSelectedFilePreviewUrl(null);
   }
 
   return (
@@ -206,7 +244,7 @@ export function Header() {
                 aria-label="Remove selected image"
                 className="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-ink-muted transition hover:bg-accent-50 hover:text-ink-primary"
                 type="button"
-                onClick={() => setSelectedFile(null)}
+                onClick={clearSelectedImage}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -228,7 +266,7 @@ export function Header() {
               aria-controls="mobile-header-search"
               aria-expanded={isMobileSearchOpen}
               aria-label={isMobileSearchOpen ? "Close search" : "Open search"}
-              className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-ink-secondary transition hover:bg-accent-50 hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 md:hidden"
+              className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-ink-secondary transition hover:bg-accent-50 hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 md:hidden"
               onClick={() => setIsMobileSearchOpen((isOpen) => !isOpen)}
             >
               {isMobileSearchOpen ? (
@@ -243,7 +281,7 @@ export function Header() {
                 type="button"
                 aria-label="Open admin dashboard"
                 title="Admin dashboard"
-                className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-ink-secondary transition hover:bg-accent-50 hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 lg:h-9 lg:w-auto lg:gap-2 lg:px-3"
+                className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-ink-secondary transition hover:bg-accent-50 hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 lg:h-9 lg:w-auto lg:gap-2 lg:px-3"
                 onClick={() => navigate("/admin")}
               >
                 <Shield className="h-5 w-5 lg:h-4 lg:w-4" />
@@ -274,7 +312,7 @@ export function Header() {
                   aria-expanded={isAccountMenuOpen}
                   aria-label={`Open account menu for ${userDisplayName}`}
                   title={userDisplayName}
-                  className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-border bg-white text-ink-primary shadow-sm shadow-slate-200/70 transition hover:border-accent-200 hover:bg-accent-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2"
+                  className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-border bg-white text-ink-primary shadow-sm shadow-slate-200/70 transition hover:border-accent-200 hover:bg-accent-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 md:h-10 md:w-10"
                   onClick={() => setIsAccountMenuOpen(true)}
                 >
                   <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-sm font-black text-ink-primary">
@@ -312,7 +350,7 @@ export function Header() {
                       <button
                         type="button"
                         role="menuitem"
-                        className="flex h-10 w-full cursor-pointer items-center gap-2 rounded-xl px-3 text-sm font-bold text-ink-secondary transition hover:bg-accent-50 hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600"
+                        className="flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-xl px-3 text-sm font-bold text-ink-secondary transition hover:bg-accent-50 hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600"
                         onClick={() => {
                           setIsAccountMenuOpen(false);
                           navigate("/history");
@@ -325,7 +363,7 @@ export function Header() {
                       <button
                         type="button"
                         role="menuitem"
-                        className="flex h-10 w-full cursor-pointer items-center gap-2 rounded-xl px-3 text-sm font-bold text-ink-secondary transition hover:bg-accent-50 hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600"
+                        className="flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-xl px-3 text-sm font-bold text-ink-secondary transition hover:bg-accent-50 hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600"
                         onClick={() => {
                           setIsAccountMenuOpen(false);
                           navigate("/bookmark");
@@ -339,7 +377,7 @@ export function Header() {
                     <button
                       type="button"
                       role="menuitem"
-                      className="mt-2 flex h-10 w-full cursor-pointer items-center gap-2 rounded-xl px-3 text-sm font-bold text-ink-secondary transition hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                      className="mt-2 flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-xl px-3 text-sm font-bold text-ink-secondary transition hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
                       disabled={isLoggingOut}
                       onClick={handleLogout}
                     >
@@ -353,7 +391,7 @@ export function Header() {
               <Button
                 variant="primary"
                 size="sm"
-                className="rounded-full !bg-ink-primary shadow-sm shadow-slate-300/70 hover:!bg-slate-800"
+                className="min-h-11 rounded-full !bg-ink-primary px-4 shadow-sm shadow-slate-300/70 hover:!bg-slate-800 sm:min-h-0 sm:px-3"
                 onClick={() => navigate("/login")}
               >
                 Sign in
@@ -398,12 +436,20 @@ export function Header() {
                     type="file"
                     onChange={handleFileChange}
                   />
+                  {selectedFilePreviewUrl && (
+                    <img
+                      alt=""
+                      className="mr-2 h-8 w-8 shrink-0 rounded-md object-cover"
+                      src={selectedFilePreviewUrl}
+                    />
+                  )}
                   <span className="truncate">
                     {selectedFile?.name ?? "Choose image"}
                   </span>
                 </label>
               ) : (
                 <input
+                  ref={mobileSearchInputRef}
                   aria-label={
                     searchMode === "semantic"
                       ? "Search by description"
@@ -420,9 +466,20 @@ export function Header() {
                 />
               )}
 
+              {searchMode === "image" && selectedFile && (
+                <button
+                  aria-label="Remove selected image"
+                  className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full text-ink-muted transition hover:bg-accent-50 hover:text-ink-primary"
+                  type="button"
+                  onClick={clearSelectedImage}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+
               <button
                 aria-label="Search"
-                className="mr-1 inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full bg-ink-primary text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                className="mr-1 inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full bg-ink-primary text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
                 disabled={!canSubmitSearch}
                 type="submit"
               >

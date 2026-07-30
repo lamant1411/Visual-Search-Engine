@@ -63,7 +63,7 @@ export function HistoryItem({
   return (
     <li
       onClick={() => onReSearch(item)}
-      className="group flex cursor-pointer flex-col gap-3 px-4 py-3.5 transition-colors duration-150 hover:bg-surface-1/70 sm:flex-row sm:items-center sm:gap-5 sm:px-5"
+      className="group flex cursor-pointer flex-col gap-3 px-4 py-4 transition-colors duration-150 hover:bg-surface-1/70 sm:flex-row sm:items-center sm:gap-5 sm:px-5"
     >
       <div className="flex min-w-0 flex-1 items-center gap-3.5">
         <div
@@ -87,7 +87,7 @@ export function HistoryItem({
                 className="h-full w-full object-cover transition-transform duration-200 group-hover/thumb:scale-105 motion-reduce:transform-none"
                 onError={() => setPreviewFailed(true)}
               />
-              <div className="absolute inset-0 flex items-center justify-center bg-black/35 opacity-0 transition-opacity duration-150 group-hover/thumb:opacity-100">
+              <div className="absolute inset-0 flex items-center justify-center bg-black/35 opacity-100 transition-opacity duration-150 sm:opacity-0 sm:group-hover/thumb:opacity-100">
                 <ZoomIn className="h-5 w-5 text-white drop-shadow-sm" />
               </div>
             </>
@@ -120,7 +120,7 @@ export function HistoryItem({
             e.stopPropagation()
             onReSearch(item)
           }}
-          className="inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-white px-3 text-xs font-semibold text-ink-secondary shadow-sm shadow-slate-200/40 transition-colors hover:border-accent-100 hover:bg-accent-50 hover:text-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2"
+          className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-white px-3 text-xs font-semibold text-ink-secondary shadow-sm shadow-slate-200/40 transition-colors hover:border-accent-100 hover:bg-accent-50 hover:text-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 sm:h-10 sm:min-h-0"
           title="Search again"
         >
           <RotateCcw className="h-3.5 w-3.5" />
