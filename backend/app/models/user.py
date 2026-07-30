@@ -1,4 +1,4 @@
-"""Bảng tài khoản người dùng phục vụ xác thực và phân quyền."""
+"""Bang tai khoan nguoi dung phuc vu xac thuc va phan quyen."""
 
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -10,7 +10,7 @@ from app.db.base import Base
 from app.schemas.common import UserRole
 
 if TYPE_CHECKING:
-    # TYPE_CHECKING giúp tránh import vòng lặp khi chạy runtime.
+    # TYPE_CHECKING giup tranh import vong lap khi chay runtime.
     from app.models.bookmark import Bookmark
     from app.models.image import Image
     from app.models.refresh_token import RefreshToken
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 
 class User(Base):
-    # Bảng lõi cho cả user thường lẫn admin.
+    # Bang loi cho ca user thuong lan admin.
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -40,8 +40,8 @@ class User(Base):
     )
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Một user có thể sở hữu nhiều ảnh upload.
-    images: Mapped[list["Image"]] = relationship(back_populates="owner")
+    # Mot user co the so huu nhieu anh upload.
+    images: Mapped[list["Image"]] = relationship(back_populates="owner", foreign_keys="Image.owner_user_id")
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(back_populates="user")
     search_history: Mapped[list["SearchHistory"]] = relationship(back_populates="user")
     bookmarks: Mapped[list["Bookmark"]] = relationship(back_populates="user")
