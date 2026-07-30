@@ -15,7 +15,8 @@ export async function searchByText(params: TextSearchParams): Promise<SearchResp
   }
 
   const endpoint = params.mode === 'ocr' ? '/search/ocr' : '/search/text'
-  const { mode, ...apiParams } = params
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { mode: _mode, ...apiParams } = params
 
   const response = await apiClient.get<unknown>(endpoint, {
     params: apiParams,

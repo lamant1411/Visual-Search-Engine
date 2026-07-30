@@ -12,6 +12,7 @@ class ImageStatus(str, Enum):
     pending = "pending"
     indexed = "indexed"
     failed = "failed"
+    deleted = "deleted"
 
 
 class BatchStatus(str, Enum):

@@ -11,6 +11,7 @@ const LoginPage = lazy(() => import("@/pages/LoginPage"));
 const RegisterPage = lazy(() => import("@/pages/RegisterPage"));
 const HistoryPage = lazy(() => import("@/pages/HistoryPage"));
 const BookmarkPage = lazy(() => import("@/pages/BookmarkPage"));
+const ImageLibraryPage = lazy(() => import("@/pages/ImageLibraryPage"));
 const AdminOverviewPage = lazy(() => import("@/pages/admin/AdminOverviewPage"));
 const AdminIndexingPage = lazy(() => import("@/pages/admin/AdminIndexingPage"));
 const AdminUsersPage = lazy(() => import("@/pages/admin/AdminUsersPage"));
@@ -55,6 +56,7 @@ const router = createBrowserRouter([
       {
         element: <AppShell />,
         children: [
+          { path: "/images", element: <ImageLibraryPage /> },
           { path: "/history", element: <HistoryPage /> },
           { path: "/bookmark", element: <BookmarkPage /> },
           { path: "/search/results", element: <SearchResultsPage /> },

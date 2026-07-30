@@ -1,4 +1,4 @@
-"""Schema Pydantic cho upload và phản hồi dữ liệu ảnh."""
+﻿"""Schema Pydantic cho upload và phản hồi dữ liệu ảnh."""
 
 from datetime import datetime
 
@@ -25,6 +25,9 @@ class ImageOut(ImageCreate):
     id: int
     owner_user_id: int | None = None
     status: ImageStatus
+    deleted_at: datetime | None = None
+    deleted_by_user_id: int | None = None
+    status_before_delete: str | None = None
     created_at: datetime
     updated_at: datetime | None = None
 
@@ -36,3 +39,40 @@ class ImageSearchParams(BaseModel):
     image_url: HttpUrl | None = Field(default=None, alias="imageUrl")
     page: int = 1
     limit: int = 20
+
+
+class ImageDeleteResponse(BaseModel):
+    image_id: int
+    deleted: bool
+    file_deleted: bool = False
+    qdrant_deleted: bool = False
+
+
+class ImageRestoreResponse(BaseModel):
+    image_id: int
+    restored: bool
+    status: ImageStatus
+
+
+class ImageBulkDeleteRequest(BaseModel):
+    image_ids: list[int] = Field(min_length=1)
+
+
+class ImageBulkDeleteFailedItem(BaseModel):
+    image_id: int
+    code: str
+    message: str
+
+
+class ImageBulkDeleteResponse(BaseModel):
+    deleted_items: list[ImageDeleteResponse]
+    failed_items: list[ImageBulkDeleteFailedItem]
+    deleted_count: int
+    failed_count: int
+
+
+class ImageBulkRestoreResponse(BaseModel):
+    restored_items: list[ImageRestoreResponse]
+    failed_items: list[ImageBulkDeleteFailedItem]
+    restored_count: int
+    failed_count: int

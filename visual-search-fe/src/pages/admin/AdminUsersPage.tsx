@@ -126,18 +126,16 @@ export default function AdminUsersPage() {
                     <td className="px-6 py-4 font-mono text-ink-muted text-3xs select-all">{u.id}</td>
                     <td className="px-6 py-4 font-medium text-ink-primary">{u.email}</td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-3xs font-semibold ${
-                        u.role === 'admin'
-                          ? 'bg-red-50 text-red-700 border border-red-100'
-                          : 'bg-blue-50 text-blue-700 border border-blue-100'
-                      }`}>
+                      <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-3xs font-semibold ${u.role === 'admin'
+                        ? 'bg-red-50 text-red-700 border border-red-100'
+                        : 'bg-blue-50 text-blue-700 border border-blue-100'
+                        }`}>
                         {u.role.toUpperCase()}
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-3xs font-medium ${
-                        u.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'
-                      }`}>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-3xs font-medium ${u.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'
+                        }`}>
                         <span className={`h-1 w-1 rounded-full ${u.is_active ? 'bg-emerald-500' : 'bg-gray-400'}`} />
                         {u.is_active ? 'Đang hoạt động' : 'Tạm khóa'}
                       </span>
