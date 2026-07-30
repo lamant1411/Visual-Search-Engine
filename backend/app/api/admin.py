@@ -1,4 +1,4 @@
-"""API quản trị cho dashboard và batch indexing."""
+"""Admin APIs for dashboard and batch indexing."""
 
 import hashlib
 import uuid
@@ -40,6 +40,7 @@ from app.schemas.admin import (
 )
 from app.schemas.common import BatchStatus, ImageSourceType, ImageStatus, IndexingItemStatus
 from app.services.admin_indexing import AIIndexingServiceError, AIIndexItemPayload, AIIndexItemsResponse, ai_indexing_client
+from app.services.image_deletion import delete_image_from_library
 from app.services.qdrant_service import QdrantSearchService
 from app.services.search import build_image_url
 
@@ -64,8 +65,11 @@ async def get_dashboard(
     _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> AdminDashboardResponse:
-    """Trả số liệu tổng quan cho dashboard admin."""
-    total_images = await _count_rows(db, select(func.count()).select_from(Image))
+    """Return admin dashboard summary metrics."""
+    total_images = await _count_rows(
+        db,
+        select(func.count()).select_from(Image).where(Image.status != ImageStatus.deleted),
+    )
     indexed_images = await _count_rows(
         db, select(func.count()).select_from(Image).where(Image.status == ImageStatus.indexed)
     )
@@ -178,10 +182,10 @@ async def list_images(
 @router.delete(
     "/images/{image_id}",
     response_model=AdminImageDeleteResponse,
-    summary="Delete stored image",
-    description="Delete an image from the image library, including its bookmarks, OCR text, embedding metadata, indexing items, local file, and Qdrant vector when available. Requires admin role.",
+    summary="Soft delete stored image",
+    description="Soft delete an image from the image library. The image is hidden from normal library/search results and can be restored or permanently deleted later. Requires admin role.",
     responses={
-        200: {"description": "Image deleted successfully."},
+        200: {"description": "Image soft-deleted successfully."},
         401: {"description": "Missing, invalid, or expired token."},
         403: {"description": "User does not have admin role."},
         404: {"description": "Image not found."},
@@ -190,58 +194,21 @@ async def list_images(
 )
 async def delete_image(
     image_id: int,
-    _: User = Depends(require_admin),
+    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> AdminImageDeleteResponse:
-    """Xoa anh khoi kho anh va don cac du lieu lien quan."""
-    image = await db.get(Image, image_id)
-    if image is None:
-        raise api_error(
-            status.HTTP_404_NOT_FOUND,
-            "IMAGE_NOT_FOUND",
-            "Image not found.",
-            {"image_id": image_id},
-        )
-
-    active_item_id = await db.scalar(
-        select(IndexingItem.id)
-        .where(
-            IndexingItem.image_id == image_id,
-            IndexingItem.status.in_([IndexingItemStatus.queued, IndexingItemStatus.running]),
-        )
-        .limit(1)
-    )
-    if active_item_id is not None:
-        raise api_error(
-            status.HTTP_409_CONFLICT,
-            "IMAGE_INDEXING_ACTIVE",
-            "Cannot delete an image while it is queued or running in an indexing batch.",
-            {"image_id": image_id, "item_id": active_item_id},
-        )
-
-    storage_path = image.storage_path
-    affected_batch_ids = list(
-        await db.scalars(
-            select(IndexingItem.batch_id).where(IndexingItem.image_id == image_id).distinct()
-        )
-    )
-    embedding = await db.get(ImageEmbedding, image_id)
-    qdrant_deleted = _delete_qdrant_vector(embedding.qdrant_point_id if embedding else None, image_id)
-
-    await db.execute(delete(Bookmark).where(Bookmark.image_id == image_id))
-    await db.execute(delete(OCRText).where(OCRText.image_id == image_id))
-    await db.execute(delete(ImageEmbedding).where(ImageEmbedding.image_id == image_id))
-    await db.execute(delete(IndexingItem).where(IndexingItem.image_id == image_id))
-    await db.delete(image)
-    await _refresh_batches_after_image_delete(db, affected_batch_ids)
-    await db.commit()
-
-    file_deleted = _delete_local_image_file(storage_path)
-    return AdminImageDeleteResponse(
+    """Soft delete an image so it can be restored later."""
+    result = await delete_image_from_library(
+        db,
         image_id=image_id,
-        deleted=True,
-        file_deleted=file_deleted,
-        qdrant_deleted=qdrant_deleted,
+        requester_id=current_user.id,
+        requester_role=current_user.role,
+    )
+    return AdminImageDeleteResponse(
+        image_id=result.image_id,
+        deleted=result.deleted,
+        file_deleted=result.file_deleted,
+        qdrant_deleted=result.qdrant_deleted,
     )
 
 
@@ -364,15 +331,14 @@ async def upload_images_to_batch(
                     image_url=retry_image_url,
                     file=file,
                     content=content,
+                    checksum=hashlib.sha256(content).hexdigest(),
                 )
                 queued_items.append(_build_ai_item_payload(item, image))
                 continue
 
             checksum = hashlib.sha256(content).hexdigest()
-            existing_indexed_image_id = await db.scalar(
-                select(Image.id).where(Image.checksum == checksum, Image.status == ImageStatus.indexed).limit(1)
-            )
-            if existing_indexed_image_id is not None:
+            should_skip_duplicate = await _should_skip_duplicate_upload(db, checksum)
+            if should_skip_duplicate:
                 skipped_files += 1
                 continue
 
@@ -732,7 +698,7 @@ async def upload_indexing_batch(
     _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> AdminIndexUploadResponse:
-    """Nhận nhiều ảnh từ FE và tạo batch queued, chưa gửi AI indexing."""
+    """Receive multiple images from FE and create a queued batch without starting AI indexing."""
     if not files:
         raise api_error(
             status.HTTP_400_BAD_REQUEST,
@@ -816,7 +782,7 @@ async def start_batch_indexing(
     _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> AdminIndexStartResponse:
-    """Kích hoạt AI indexing cho batch đã upload."""
+    """Start AI indexing for an uploaded batch."""
     batch = await db.scalar(select(IndexingBatch).where(IndexingBatch.batch_id == batch_id))
     if batch is None:
         raise api_error(
@@ -897,7 +863,7 @@ async def get_batch_status(
     _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> AdminIndexStatusResponse:
-    """Trả trạng thái indexing; ưu tiên đồng bộ trạng thái mới nhất từ AI."""
+    """Return indexing status for a batch."""
     batch = await db.scalar(select(IndexingBatch).where(IndexingBatch.batch_id == batch_id))
     if batch is None:
         raise api_error(
@@ -981,7 +947,7 @@ async def list_batches(
     _: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> AdminIndexBatchListResponse:
-    """Trả danh sách batch indexing gần nhất cho dashboard admin."""
+    """Return recent indexing batches for admin dashboard."""
     items = (
         await db.scalars(
             select(IndexingBatch).order_by(IndexingBatch.created_at.desc()).limit(20)
@@ -1117,6 +1083,7 @@ async def _prepare_failed_replacement_item(
     image_url: str,
     file: UploadFile,
     content: bytes,
+    checksum: str,
 ) -> tuple[Image, IndexingItem]:
     storage_path = _normalize_image_url_to_storage_path(image_url)
     image = await db.scalar(select(Image).where(Image.storage_path == storage_path))
@@ -1172,11 +1139,34 @@ async def _prepare_failed_replacement_item(
     image.file_size = len(content)
     image.width = None
     image.height = None
-    image.checksum = None
-    image.status = ImageStatus.failed
+    image.checksum = checksum
+    image.status = ImageStatus.pending
+    item.status = IndexingItemStatus.queued
     item.error_message = None
     return image, item
 
+async def _should_skip_duplicate_upload(db: AsyncSession, checksum: str) -> bool:
+    duplicate_status = await db.scalar(
+        select(Image.status)
+        .where(
+            Image.checksum == checksum,
+            Image.status.in_([ImageStatus.indexed, ImageStatus.pending, ImageStatus.deleted]),
+        )
+        .limit(1)
+    )
+    if duplicate_status is not None:
+        return True
+
+    active_item_id = await db.scalar(
+        select(IndexingItem.id)
+        .join(Image, Image.id == IndexingItem.image_id)
+        .where(
+            Image.checksum == checksum,
+            IndexingItem.status.in_([IndexingItemStatus.queued, IndexingItemStatus.running]),
+        )
+        .limit(1)
+    )
+    return active_item_id is not None
 
 def _normalize_image_url_to_storage_path(image_url: str) -> str:
     raw_value = image_url.strip()
