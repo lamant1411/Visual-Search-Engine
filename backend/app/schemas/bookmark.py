@@ -1,4 +1,4 @@
-"""Pydantic schemas for image bookmarks."""
+﻿"""Pydantic schemas for image bookmarks."""
 
 from datetime import datetime
 
@@ -59,6 +59,8 @@ class BookmarkListResponse(BaseModel):
 
 
 class BookmarkImageIdsResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     image_ids: list[int] = Field(alias="imageIds")
 
 

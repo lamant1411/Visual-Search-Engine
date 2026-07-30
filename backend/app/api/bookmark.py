@@ -1,4 +1,4 @@
-"""Bookmark API for the current user."""
+﻿"""Bookmark API for the current user."""
 
 from pathlib import Path
 
@@ -42,8 +42,16 @@ async def list_bookmarks(
     db: AsyncSession = Depends(get_db),
 ) -> BookmarkListResponse:
     """Return bookmarks of the current authenticated user."""
-    filters = [Bookmark.user_id == current_user.id]
-    total = int(await db.scalar(select(func.count()).select_from(Bookmark).where(*filters)) or 0)
+    filters = [Bookmark.user_id == current_user.id, Image.status != ImageStatus.deleted]
+    total = int(
+        await db.scalar(
+            select(func.count())
+            .select_from(Bookmark)
+            .join(Image, Image.id == Bookmark.image_id)
+            .where(*filters)
+        )
+        or 0
+    )
     offset = (page - 1) * limit
     rows = (
         await db.execute(
@@ -80,7 +88,8 @@ async def list_bookmarked_image_ids(
     image_ids = (
         await db.scalars(
             select(Bookmark.image_id)
-            .where(Bookmark.user_id == current_user.id)
+            .join(Image, Image.id == Bookmark.image_id)
+            .where(Bookmark.user_id == current_user.id, Image.status != ImageStatus.deleted)
             .order_by(Bookmark.created_at.desc(), Bookmark.id.desc())
         )
     ).all()
@@ -172,7 +181,7 @@ async def get_bookmark_detail(
             select(Bookmark, Image, OCRText)
             .join(Image, Image.id == Bookmark.image_id)
             .outerjoin(OCRText, OCRText.image_id == Image.id)
-            .where(Bookmark.id == bookmark_id, Bookmark.user_id == current_user.id)
+            .where(Bookmark.id == bookmark_id, Bookmark.user_id == current_user.id, Image.status != ImageStatus.deleted)
         )
     ).first()
     if row is None:
