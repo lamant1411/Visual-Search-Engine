@@ -79,6 +79,13 @@ def prepare_items_for_queue(batch_id: str, items: list[dict[str, Any]]) -> list[
                     SET status = 'queued',
                         retry_count = CASE WHEN status = 'failed' THEN 0 ELSE retry_count END,
                         error_message = NULL,
+                        ocr_status = 'queued',
+                        ocr_retry_count = 0,
+                        ocr_error_message = NULL,
+                        semantic_started_at = NULL,
+                        semantic_completed_at = NULL,
+                        ocr_started_at = NULL,
+                        ocr_completed_at = NULL,
                         updated_at = NOW()
                     WHERE id = %s;
                     """,
@@ -94,6 +101,8 @@ def prepare_items_for_queue(batch_id: str, items: list[dict[str, Any]]) -> list[
                         UPDATE indexing_batches
                         SET failed_images = GREATEST(failed_images - 1, 0),
                             status = 'running',
+                            semantic_completed_at = NULL,
+                            ocr_completed_at = NULL,
                             updated_at = NOW()
                         WHERE batch_id = %s;
                         """,
@@ -110,7 +119,7 @@ def prepare_items_for_queue(batch_id: str, items: list[dict[str, Any]]) -> list[
 
 
 def recover_pending_items() -> list[IndexQueueItem]:
-    """Requeue durable queued/running work after the AI service restarts."""
+    """Requeue durable semantic work after the AI service restarts."""
     conn = _open_pg_connection()
     try:
         with conn.cursor() as cursor:
@@ -154,6 +163,54 @@ def recover_pending_items() -> list[IndexQueueItem]:
     ]
 
 
+def recover_pending_ocr_items() -> list[IndexQueueItem]:
+    """Requeue durable OCR work whose semantic vector is already available."""
+    conn = _open_pg_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE indexing_items
+                SET ocr_status = 'queued',
+                    ocr_error_message = COALESCE(
+                        ocr_error_message,
+                        'Recovered OCR after AI service restart.'
+                    ),
+                    updated_at = NOW()
+                WHERE ocr_status = 'running';
+                """
+            )
+            cursor.execute(
+                """
+                SELECT item.id, item.batch_id, item.image_id,
+                       image.storage_path, image.original_filename
+                FROM indexing_items AS item
+                JOIN images AS image ON image.id = item.image_id
+                WHERE item.status = 'indexed' AND item.ocr_status = 'queued'
+                ORDER BY item.created_at, item.id;
+                """
+            )
+            rows = cursor.fetchall()
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    return [
+        IndexQueueItem(
+            item_id=row[0],
+            batch_id=row[1],
+            image_id=row[2],
+            image_path=_storage_path_to_local_path(row[3]),
+            storage_path=row[3],
+            original_filename=row[4],
+        )
+        for row in rows
+    ]
+
+
 def claim_indexing_item(queue_item: IndexQueueItem) -> Optional[dict[str, Any]]:
     """Atomically claim an item so duplicate queue entries cannot run twice."""
     conn = _open_pg_connection()
@@ -162,13 +219,26 @@ def claim_indexing_item(queue_item: IndexQueueItem) -> Optional[dict[str, Any]]:
             cursor.execute(
                 """
                 UPDATE indexing_items
-                SET status = 'running', error_message = NULL, updated_at = NOW()
+                SET status = 'running', error_message = NULL,
+                    semantic_started_at = COALESCE(semantic_started_at, NOW()),
+                    updated_at = NOW()
                 WHERE id = %s AND batch_id = %s AND image_id = %s AND status = 'queued'
                 RETURNING retry_count, max_retries;
                 """,
                 (queue_item.item_id, queue_item.batch_id, queue_item.image_id),
             )
             row = cursor.fetchone()
+            if row is not None:
+                cursor.execute(
+                    """
+                    UPDATE indexing_batches
+                    SET semantic_started_at = COALESCE(semantic_started_at, NOW()),
+                        status = CASE WHEN status = 'cancelled' THEN status ELSE 'running' END,
+                        updated_at = NOW()
+                    WHERE batch_id = %s;
+                    """,
+                    (queue_item.batch_id,),
+                )
         conn.commit()
     except Exception:
         conn.rollback()
@@ -190,11 +260,80 @@ def claim_indexing_item(queue_item: IndexQueueItem) -> Optional[dict[str, Any]]:
     }
 
 
-def index_single_image_item(item: dict[str, Any], clip_model, ocr_model) -> None:
-    """Read metadata, run CLIP/OCR, then persist exactly one uploaded image."""
+def claim_ocr_item(queue_item: IndexQueueItem) -> Optional[dict[str, Any]]:
+    """Atomically claim background OCR after semantic indexing succeeds."""
+    conn = _open_pg_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE indexing_items
+                SET ocr_status = 'running', ocr_error_message = NULL,
+                    ocr_started_at = COALESCE(ocr_started_at, NOW()),
+                    updated_at = NOW()
+                WHERE id = %s AND batch_id = %s AND image_id = %s
+                  AND status = 'indexed' AND ocr_status = 'queued'
+                RETURNING ocr_retry_count, max_retries;
+                """,
+                (queue_item.item_id, queue_item.batch_id, queue_item.image_id),
+            )
+            row = cursor.fetchone()
+            if row is not None:
+                cursor.execute(
+                    """
+                    UPDATE indexing_batches
+                    SET ocr_started_at = COALESCE(ocr_started_at, NOW()),
+                        status = CASE WHEN status = 'cancelled' THEN status ELSE 'running' END,
+                        updated_at = NOW()
+                    WHERE batch_id = %s;
+                    """,
+                    (queue_item.batch_id,),
+                )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    if row is None:
+        return None
+    return {
+        "item_id": queue_item.item_id,
+        "batch_id": queue_item.batch_id,
+        "image_id": queue_item.image_id,
+        "image_path": queue_item.image_path,
+        "storage_path": queue_item.storage_path,
+        "original_filename": queue_item.original_filename,
+        "retry_count": row[0],
+        "max_retries": row[1],
+    }
+
+
+def semantic_work_pending() -> bool:
+    """Tell secondary OCR workers when semantic work needs CPU priority."""
+    conn = _open_pg_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT EXISTS (
+                    SELECT 1 FROM indexing_batches WHERE is_uploading = TRUE
+                ) OR EXISTS (
+                    SELECT 1 FROM indexing_items WHERE status IN ('queued', 'running')
+                );
+                """
+            )
+            return bool(cursor.fetchone()[0])
+    finally:
+        conn.close()
+
+
+def index_semantic_image_item(item: dict[str, Any], clip_model) -> None:
+    """Persist CLIP/Qdrant first so this image becomes semantic-search ready."""
     item_label = f"item_id={item['item_id']} image_id={item['image_id']}"
     total_started_at = perf_counter()
-    print(f"[Item pipeline] {item_label} stage=read started", flush=True)
+    print(f"[Semantic pipeline] {item_label} stage=read started", flush=True)
     image_path = Path(item["image_path"])
     if not image_path.is_file():
         raise FileNotFoundError(f"Image file not found: {image_path}")
@@ -207,6 +346,7 @@ def index_single_image_item(item: dict[str, Any], clip_model, ocr_model) -> None
         image_format = (source_image.format or "").upper()
         width, height = source_image.size
         pil_image = source_image.convert("RGB")
+    read_elapsed = perf_counter() - total_started_at
 
     mime_type = (
         Image.MIME.get(image_format)
@@ -214,7 +354,7 @@ def index_single_image_item(item: dict[str, Any], clip_model, ocr_model) -> None
         or "application/octet-stream"
     )
     clip_started_at = perf_counter()
-    print(f"[Item pipeline] {item_label} stage=clip started", flush=True)
+    print(f"[Semantic pipeline] {item_label} stage=clip started", flush=True)
     vector = clip_model.embed_image(pil_image)
     if vector is None or len(vector) != EMBEDDING_DIM:
         actual_dim = 0 if vector is None else len(vector)
@@ -223,14 +363,6 @@ def index_single_image_item(item: dict[str, Any], clip_model, ocr_model) -> None
         )
 
     clip_elapsed = perf_counter() - clip_started_at
-    ocr_started_at = perf_counter()
-    print(
-        f"[Item pipeline] {item_label} stage=ocr started clip={clip_elapsed:.2f}s",
-        flush=True,
-    )
-    ocr_lines = ocr_model.extract_text(pil_image)
-    ocr_text = " ".join(ocr_lines) if ocr_lines else ""
-    ocr_elapsed = perf_counter() - ocr_started_at
     point_id = str(
         uuid.uuid5(uuid.NAMESPACE_URL, f"{COLLECTION_NAME}:image:{item['image_id']}")
     )
@@ -239,7 +371,7 @@ def index_single_image_item(item: dict[str, Any], clip_model, ocr_model) -> None
     try:
         persist_started_at = perf_counter()
         print(
-            f"[Item pipeline] {item_label} stage=persist started ocr={ocr_elapsed:.2f}s",
+            f"[Semantic pipeline] {item_label} stage=persist started clip={clip_elapsed:.2f}s",
             flush=True,
         )
         qdrant.upsert(
@@ -257,7 +389,7 @@ def index_single_image_item(item: dict[str, Any], clip_model, ocr_model) -> None
             ],
             wait=True,
         )
-        _persist_index_success(
+        _persist_semantic_success(
             item=item,
             point_id=point_id,
             mime_type=mime_type,
@@ -265,19 +397,49 @@ def index_single_image_item(item: dict[str, Any], clip_model, ocr_model) -> None
             width=width,
             height=height,
             checksum=checksum,
-            ocr_text=ocr_text,
         )
         persist_elapsed = perf_counter() - persist_started_at
         total_elapsed = perf_counter() - total_started_at
         print(
-            f"[Item pipeline] {item_label} stage=completed total={total_elapsed:.2f}s "
-            f"clip={clip_elapsed:.2f}s ocr={ocr_elapsed:.2f}s persist={persist_elapsed:.2f}s",
+            f"[Semantic pipeline] {item_label} stage=completed total={total_elapsed:.2f}s "
+            f"read={read_elapsed:.2f}s clip={clip_elapsed:.2f}s "
+            f"persist={persist_elapsed:.2f}s",
             flush=True,
         )
     except Exception:
         # Deterministic ID allows safe cleanup even when Qdrant response is ambiguous.
         _cleanup_qdrant_point(qdrant, point_id)
         raise
+
+
+def index_ocr_image_item(item: dict[str, Any], ocr_model) -> None:
+    """Run OCR independently; semantic search remains usable if OCR fails."""
+    item_label = f"item_id={item['item_id']} image_id={item['image_id']}"
+    total_started_at = perf_counter()
+    image_path = Path(item["image_path"])
+    if not image_path.is_file():
+        raise FileNotFoundError(f"Image file not found: {image_path}")
+    if image_path.suffix.lower() not in VALID_IMAGE_EXTENSIONS:
+        raise ValueError(f"Unsupported image extension: {image_path.suffix}")
+
+    with Image.open(image_path) as source_image:
+        pil_image = source_image.convert("RGB")
+    read_elapsed = perf_counter() - total_started_at
+    ocr_started_at = perf_counter()
+    print(f"[OCR pipeline] {item_label} stage=ocr started", flush=True)
+    ocr_lines = ocr_model.extract_text(pil_image)
+    ocr_text = " ".join(ocr_lines) if ocr_lines else ""
+    ocr_elapsed = perf_counter() - ocr_started_at
+    persist_started_at = perf_counter()
+    _persist_ocr_success(item=item, ocr_text=ocr_text)
+    persist_elapsed = perf_counter() - persist_started_at
+    total_elapsed = perf_counter() - total_started_at
+    print(
+        f"[OCR pipeline] {item_label} stage=completed total={total_elapsed:.2f}s "
+        f"read={read_elapsed:.2f}s ocr={ocr_elapsed:.2f}s "
+        f"persist={persist_elapsed:.2f}s",
+        flush=True,
+    )
 
 
 def handle_index_failure(item_id: int, error: Exception) -> Optional[int]:
@@ -334,6 +496,18 @@ def handle_index_failure(item_id: int, error: Exception) -> Optional[int]:
             if cursor.rowcount != 1:
                 raise RuntimeError(f"Indexing item is no longer running: {item_id}")
             cursor.execute(
+                """
+                UPDATE indexing_items
+                SET semantic_completed_at = NOW(),
+                    ocr_status = 'cancelled',
+                    ocr_error_message = 'Semantic indexing failed.',
+                    ocr_completed_at = NOW(),
+                    updated_at = NOW()
+                WHERE id = %s;
+                """,
+                (item_id,),
+            )
+            cursor.execute(
                 "UPDATE images SET status = 'failed', updated_at = NOW() WHERE id = %s;",
                 (image_id,),
             )
@@ -376,7 +550,90 @@ def recover_running_item(item_id: int, error_message: str) -> bool:
         conn.close()
 
 
-def _persist_index_success(
+def handle_ocr_failure(item_id: int, error: Exception) -> Optional[int]:
+    """Retry OCR independently without invalidating the semantic vector."""
+    error_message = str(error)[:4000]
+    conn = _open_pg_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT ocr_retry_count, max_retries, batch_id, ocr_status
+                FROM indexing_items
+                WHERE id = %s
+                FOR UPDATE;
+                """,
+                (item_id,),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                conn.rollback()
+                return None
+            retry_count, max_retries, batch_id, ocr_status = row
+            if ocr_status != "running":
+                conn.rollback()
+                return None
+
+            if retry_count < max_retries:
+                next_retry = retry_count + 1
+                cursor.execute(
+                    """
+                    UPDATE indexing_items
+                    SET ocr_status = 'queued', ocr_retry_count = %s,
+                        ocr_error_message = %s, updated_at = NOW()
+                    WHERE id = %s;
+                    """,
+                    (next_retry, error_message, item_id),
+                )
+                conn.commit()
+                return next_retry
+
+            cursor.execute(
+                """
+                UPDATE indexing_items
+                SET ocr_status = 'failed', ocr_error_message = %s,
+                    ocr_completed_at = NOW(), updated_at = NOW()
+                WHERE id = %s AND ocr_status = 'running';
+                """,
+                (error_message, item_id),
+            )
+            if cursor.rowcount != 1:
+                raise RuntimeError(f"OCR item is no longer running: {item_id}")
+            _update_ocr_batch_progress(cursor, batch_id, failed_increment=1)
+        conn.commit()
+        return None
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def recover_running_ocr_item(item_id: int, error_message: str) -> bool:
+    """Requeue OCR if recording the previous failure hit a DB outage."""
+    conn = _open_pg_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE indexing_items
+                SET ocr_status = 'queued', ocr_error_message = %s, updated_at = NOW()
+                WHERE id = %s AND ocr_status = 'running'
+                RETURNING id;
+                """,
+                (error_message[:4000], item_id),
+            )
+            row = cursor.fetchone()
+        conn.commit()
+        return row is not None
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _persist_semantic_success(
     *,
     item: dict[str, Any],
     point_id: str,
@@ -385,7 +642,6 @@ def _persist_index_success(
     width: int,
     height: int,
     checksum: str,
-    ocr_text: str,
 ) -> None:
     conn = _open_pg_connection()
     try:
@@ -420,6 +676,32 @@ def _persist_index_success(
             )
             cursor.execute(
                 """
+                UPDATE indexing_items
+                SET status = 'indexed', error_message = NULL,
+                    semantic_completed_at = NOW(),
+                    ocr_status = 'queued', ocr_error_message = NULL,
+                    updated_at = NOW()
+                WHERE id = %s AND status = 'running';
+                """,
+                (item["item_id"],),
+            )
+            if cursor.rowcount != 1:
+                raise RuntimeError(f"Indexing item is no longer running: {item['item_id']}")
+            _update_batch_progress(cursor, item["batch_id"], processed_increment=1)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _persist_ocr_success(*, item: dict[str, Any], ocr_text: str) -> None:
+    conn = _open_pg_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
                 INSERT INTO ocr_texts (image_id, raw_text, language, tsv)
                 VALUES (%s, %s, 'en,vi', to_tsvector('simple', COALESCE(%s, '')))
                 ON CONFLICT (image_id) DO UPDATE
@@ -433,14 +715,15 @@ def _persist_index_success(
             cursor.execute(
                 """
                 UPDATE indexing_items
-                SET status = 'indexed', error_message = NULL, updated_at = NOW()
-                WHERE id = %s AND status = 'running';
+                SET ocr_status = 'indexed', ocr_error_message = NULL,
+                    ocr_completed_at = NOW(), updated_at = NOW()
+                WHERE id = %s AND status = 'indexed' AND ocr_status = 'running';
                 """,
                 (item["item_id"],),
             )
             if cursor.rowcount != 1:
-                raise RuntimeError(f"Indexing item is no longer running: {item['item_id']}")
-            _update_batch_progress(cursor, item["batch_id"], processed_increment=1)
+                raise RuntimeError(f"OCR item is no longer running: {item['item_id']}")
+            _update_ocr_batch_progress(cursor, item["batch_id"], processed_increment=1)
         conn.commit()
     except Exception:
         conn.rollback()
@@ -462,10 +745,26 @@ def _update_batch_progress(
         UPDATE indexing_batches
         SET processed_images = LEAST(total_images, processed_images + %s),
             failed_images = LEAST(total_images, failed_images + %s),
+            semantic_completed_at = CASE
+                WHEN NOT is_uploading
+                     AND processed_images + %s + failed_images + %s >= total_images
+                THEN COALESCE(semantic_completed_at, NOW())
+                ELSE semantic_completed_at
+            END,
+            ocr_completed_at = CASE
+                WHEN NOT is_uploading
+                     AND processed_images + %s + failed_images + %s >= total_images
+                     AND ocr_processed_images + ocr_failed_images
+                         + failed_images + %s >= total_images
+                THEN COALESCE(ocr_completed_at, NOW())
+                ELSE ocr_completed_at
+            END,
             status = CASE
                 WHEN status = 'cancelled' THEN 'cancelled'
                 WHEN NOT is_uploading
                      AND processed_images + %s + failed_images + %s >= total_images
+                     AND ocr_processed_images + ocr_failed_images
+                         + failed_images + %s >= total_images
                 THEN 'completed'
                 ELSE 'running'
             END,
@@ -473,6 +772,56 @@ def _update_batch_progress(
         WHERE batch_id = %s;
         """,
         (
+            processed_increment,
+            failed_increment,
+            processed_increment,
+            failed_increment,
+            processed_increment,
+            failed_increment,
+            failed_increment,
+            processed_increment,
+            failed_increment,
+            failed_increment,
+            batch_id,
+        ),
+    )
+    if cursor.rowcount != 1:
+        raise RuntimeError(f"Indexing batch not found: {batch_id}")
+
+
+def _update_ocr_batch_progress(
+    cursor,
+    batch_id: str,
+    *,
+    processed_increment: int = 0,
+    failed_increment: int = 0,
+) -> None:
+    cursor.execute(
+        """
+        UPDATE indexing_batches
+        SET ocr_processed_images = LEAST(total_images, ocr_processed_images + %s),
+            ocr_failed_images = LEAST(total_images, ocr_failed_images + %s),
+            ocr_completed_at = CASE
+                WHEN semantic_completed_at IS NOT NULL
+                     AND ocr_processed_images + %s + ocr_failed_images + %s
+                         + failed_images >= total_images
+                THEN COALESCE(ocr_completed_at, NOW())
+                ELSE ocr_completed_at
+            END,
+            status = CASE
+                WHEN status = 'cancelled' THEN 'cancelled'
+                WHEN semantic_completed_at IS NOT NULL
+                     AND ocr_processed_images + %s + ocr_failed_images + %s
+                         + failed_images >= total_images
+                THEN 'completed'
+                ELSE 'running'
+            END,
+            updated_at = NOW()
+        WHERE batch_id = %s;
+        """,
+        (
+            processed_increment,
+            failed_increment,
             processed_increment,
             failed_increment,
             processed_increment,

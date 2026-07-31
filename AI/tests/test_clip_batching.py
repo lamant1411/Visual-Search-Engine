@@ -156,32 +156,20 @@ class ClipTextPromptTests(unittest.TestCase):
 
         with patch("builtins.print"):
             embedder = clip_module.CLIPEmbedder("fake-clip")
-        embedder.translator.translate = MagicMock()
-        embedder.translator.translate_batch = MagicMock(
-            return_value=[
-                "black cat",
-                "a photo with a black cat",
-                "a photo focused on a black cat",
-            ]
-        )
+        embedder.translator.translate = MagicMock(return_value="black cat")
+        embedder.translator.translate_batch = MagicMock()
 
         with patch("builtins.print"):
             vector = embedder.embed_text("mèo đen")
         embedder._image_batcher.close()
 
-        embedder.translator.translate_batch.assert_called_once_with(
-            [
-                "mèo đen",
-                "một bức ảnh có mèo đen",
-                "một bức ảnh tập trung vào mèo đen",
-            ]
-        )
-        embedder.translator.translate.assert_not_called()
+        embedder.translator.translate.assert_called_once_with("mèo đen")
+        embedder.translator.translate_batch.assert_not_called()
         processor.assert_called_once_with(
             text=[
                 "black cat",
-                "a photo with a black cat",
-                "a photo focused on a black cat",
+                "a photo of a black cat",
+                "an image featuring a black cat",
             ],
             return_tensors="pt",
             padding=True,
@@ -195,6 +183,40 @@ class ClipTextPromptTests(unittest.TestCase):
             1.0,
             places=6,
         )
+
+    @patch.object(clip_module.CLIPProcessor, "from_pretrained")
+    @patch.object(clip_module.CLIPModel, "from_pretrained")
+    def test_repeated_text_query_reuses_translation_and_embedding(
+        self,
+        load_model,
+        load_processor,
+    ):
+        model = MagicMock()
+        load_model.return_value.to.return_value = model
+
+        processor = MagicMock()
+        processor.return_value = _FakeInputs(
+            input_ids=torch.tensor([[0], [1], [2]])
+        )
+        load_processor.return_value = processor
+        model.get_text_features.return_value = torch.ones(
+            (3, 512),
+            dtype=torch.float32,
+        )
+
+        with patch("builtins.print"):
+            embedder = clip_module.CLIPEmbedder("fake-clip")
+        embedder.translator.translate = MagicMock(return_value="black cat")
+
+        with patch("builtins.print"):
+            first_vector = embedder.embed_text("  MÈO   ĐEN ")
+            second_vector = embedder.embed_text("mèo đen")
+        embedder._image_batcher.close()
+
+        self.assertEqual(first_vector, second_vector)
+        embedder.translator.translate.assert_called_once_with("mèo đen")
+        self.assertEqual(processor.call_count, 1)
+        self.assertEqual(model.get_text_features.call_count, 1)
 
     @patch.object(clip_module.CLIPProcessor, "from_pretrained")
     @patch.object(clip_module.CLIPModel, "from_pretrained")

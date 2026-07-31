@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
+import { AdminIndexingIndicator } from './AdminIndexingIndicator';
 
 /**
  * Layout riêng cho khu vực Admin (/admin/*).
@@ -20,6 +21,7 @@ export function AdminShell() {
           <Outlet />
         </main>
       </div>
+      <AdminIndexingIndicator />
     </div>
   );
 }

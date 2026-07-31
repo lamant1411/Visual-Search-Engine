@@ -1,5 +1,6 @@
 import os
 from threading import BoundedSemaphore, Lock
+from time import perf_counter
 
 import cpu_runtime
 
@@ -7,7 +8,7 @@ cpu_runtime.apply_thread_environment(cpu_runtime.CPU_SETTINGS)
 
 import easyocr
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 
 class OCRExtractor:
@@ -75,6 +76,19 @@ class OCRExtractor:
         except Exception as e:
             print(f"Lỗi khi trích xuất OCR: {e}")
             return []
+
+    def warm_up(self) -> float:
+        """Warm EasyOCR before accepting uploads; results are intentionally discarded."""
+        started_at = perf_counter()
+        image = Image.new("RGB", (896, 512), color="white")
+        draw = ImageDraw.Draw(image)
+        try:
+            font = ImageFont.truetype("DejaVuSans.ttf", 48)
+        except OSError:
+            font = ImageFont.load_default()
+        draw.text((40, 180), "WARMUP 123 VISUAL SEARCH", fill="black", font=font)
+        self.extract_text(image)
+        return perf_counter() - started_at
 
     def _readtext(self, image_input):
         with self._state_lock:
