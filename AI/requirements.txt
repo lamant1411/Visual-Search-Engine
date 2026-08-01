@@ -15,6 +15,9 @@ Pillow>=9.0.0
 # OCR MODULE (Trích xuất văn bản)
 # ==========================================
 easyocr>=1.7.0
+# Fast CPU-first OCR path. EasyOCR remains installed as the quality fallback.
+rapidocr==3.9.1
+onnxruntime==1.19.2
 
 # ==========================================
 # FIX CONFLICT (Bản vá lỗi xung đột phiên bản)

@@ -22,6 +22,7 @@ class FakeClip:
 
 class FakeOCR:
     max_input_dimension = 1600
+    cache_signature = "fake-ocr-v1"
 
     def __init__(self):
         self.received_size = None
@@ -52,8 +53,9 @@ class ItemIndexingTests(unittest.TestCase):
         self.assertEqual(saved["height"], 80)
         self.assertEqual(clip.received_size, (100, 80))
 
+    @patch("item_indexing._load_cached_ocr_text", return_value=(False, ""))
     @patch("item_indexing._persist_ocr_success")
-    def test_ocr_stage_persists_text_independently(self, persist_success):
+    def test_ocr_stage_persists_text_independently(self, persist_success, load_cached):
         ocr = FakeOCR()
         with tempfile.TemporaryDirectory() as temp_dir:
             image_path = Path(temp_dir) / "test.jpg"
@@ -62,7 +64,29 @@ class ItemIndexingTests(unittest.TestCase):
 
         persist_success.assert_called_once()
         self.assertEqual(persist_success.call_args.kwargs["ocr_text"], "Sale 50% Nike")
+        self.assertEqual(persist_success.call_args.kwargs["source_checksum"], "checksum-1")
+        self.assertEqual(persist_success.call_args.kwargs["engine_signature"], "fake-ocr-v1")
+        load_cached.assert_called_once_with(
+            source_checksum="checksum-1",
+            engine_signature="fake-ocr-v1",
+        )
         self.assertEqual(ocr.received_size, (100, 80))
+
+    @patch("item_indexing._load_cached_ocr_text", return_value=(True, "Cached text"))
+    @patch("item_indexing._persist_ocr_success")
+    def test_ocr_stage_reuses_matching_cached_text(self, persist_success, load_cached):
+        ocr = FakeOCR()
+        item = self._item(Path("missing-but-cached.jpg"))
+
+        item_indexing.index_ocr_image_item(item, ocr)
+
+        load_cached.assert_called_once_with(
+            source_checksum="checksum-1",
+            engine_signature="fake-ocr-v1",
+        )
+        persist_success.assert_called_once()
+        self.assertEqual(persist_success.call_args.kwargs["ocr_text"], "Cached text")
+        self.assertIsNone(ocr.received_size)
 
     def test_missing_image_fails_semantic_stage(self):
         with self.assertRaises(FileNotFoundError):
@@ -77,6 +101,7 @@ class ItemIndexingTests(unittest.TestCase):
             "image_path": str(image_path),
             "storage_path": "/static/images/test.jpg",
             "original_filename": "test.jpg",
+            "checksum": "checksum-1",
         }
 
 

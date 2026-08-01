@@ -33,13 +33,13 @@ from src.item_indexing import (
     recover_running_item,
     semantic_work_pending,
 )
-from src.ocr_module import OCRExtractor
+from src.ocr_module import create_ocr_extractor
 
 print("Dang tai cac mo hinh AI cho API Service...")
 clip_model = CLIPEmbedder()
-ocr_model = OCRExtractor()
+ocr_model = create_ocr_extractor()
 if os.getenv("AI_WARMUP_MODELS", "true").lower() == "true":
-    print("Dang warm-up CLIP va EasyOCR...")
+    print(f"Dang warm-up CLIP va OCR engine={ocr_model.engine_name}...")
     clip_warmup_seconds = clip_model.warm_up()
     ocr_warmup_seconds = ocr_model.warm_up()
     print(
@@ -95,7 +95,7 @@ app = FastAPI(title="Visual Search - AI Service", lifespan=lifespan)
 @app.get("/health")
 def healthcheck() -> dict[str, str]:
     """Readiness probe; this route exists only after both AI models are loaded."""
-    return {"status": "ready"}
+    return {"status": "ready", "ocr_engine": ocr_model.engine_name}
 
 
 class LocalIndexRequest(BaseModel):

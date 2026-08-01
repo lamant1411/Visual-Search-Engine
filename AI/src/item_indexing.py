@@ -278,7 +278,16 @@ def claim_ocr_item(queue_item: IndexQueueItem) -> Optional[dict[str, Any]]:
                 (queue_item.item_id, queue_item.batch_id, queue_item.image_id),
             )
             row = cursor.fetchone()
+            checksum = None
             if row is not None:
+                cursor.execute(
+                    "SELECT checksum FROM images WHERE id = %s;",
+                    (queue_item.image_id,),
+                )
+                checksum_row = cursor.fetchone()
+                if checksum_row is None:
+                    raise ValueError(f"Image record not found: {queue_item.image_id}")
+                checksum = checksum_row[0]
                 cursor.execute(
                     """
                     UPDATE indexing_batches
@@ -307,6 +316,7 @@ def claim_ocr_item(queue_item: IndexQueueItem) -> Optional[dict[str, Any]]:
         "original_filename": queue_item.original_filename,
         "retry_count": row[0],
         "max_retries": row[1],
+        "checksum": checksum,
     }
 
 
@@ -416,6 +426,29 @@ def index_ocr_image_item(item: dict[str, Any], ocr_model) -> None:
     """Run OCR independently; semantic search remains usable if OCR fails."""
     item_label = f"item_id={item['item_id']} image_id={item['image_id']}"
     total_started_at = perf_counter()
+    source_checksum = item.get("checksum")
+    engine_signature = getattr(ocr_model, "cache_signature", None)
+    cache_hit, cached_ocr_text = _load_cached_ocr_text(
+        source_checksum=source_checksum,
+        engine_signature=engine_signature,
+    )
+    if cache_hit:
+        persist_started_at = perf_counter()
+        _persist_ocr_success(
+            item=item,
+            ocr_text=cached_ocr_text,
+            source_checksum=source_checksum,
+            engine_signature=engine_signature,
+        )
+        persist_elapsed = perf_counter() - persist_started_at
+        total_elapsed = perf_counter() - total_started_at
+        print(
+            f"[OCR pipeline] {item_label} stage=completed source=cache "
+            f"total={total_elapsed:.2f}s persist={persist_elapsed:.2f}s",
+            flush=True,
+        )
+        return
+
     image_path = Path(item["image_path"])
     if not image_path.is_file():
         raise FileNotFoundError(f"Image file not found: {image_path}")
@@ -431,7 +464,12 @@ def index_ocr_image_item(item: dict[str, Any], ocr_model) -> None:
     ocr_text = " ".join(ocr_lines) if ocr_lines else ""
     ocr_elapsed = perf_counter() - ocr_started_at
     persist_started_at = perf_counter()
-    _persist_ocr_success(item=item, ocr_text=ocr_text)
+    _persist_ocr_success(
+        item=item,
+        ocr_text=ocr_text,
+        source_checksum=source_checksum,
+        engine_signature=engine_signature,
+    )
     persist_elapsed = perf_counter() - persist_started_at
     total_elapsed = perf_counter() - total_started_at
     print(
@@ -696,21 +734,66 @@ def _persist_semantic_success(
         conn.close()
 
 
-def _persist_ocr_success(*, item: dict[str, Any], ocr_text: str) -> None:
+def _load_cached_ocr_text(
+    *,
+    source_checksum: Optional[str],
+    engine_signature: Optional[str],
+) -> tuple[bool, str]:
+    if not source_checksum or not engine_signature:
+        return False, ""
+
     conn = _open_pg_connection()
     try:
         with conn.cursor() as cursor:
             cursor.execute(
                 """
-                INSERT INTO ocr_texts (image_id, raw_text, language, tsv)
-                VALUES (%s, %s, 'en,vi', to_tsvector('simple', COALESCE(%s, '')))
+                SELECT raw_text
+                FROM ocr_texts
+                WHERE source_checksum = %s AND engine_signature = %s
+                ORDER BY updated_at DESC
+                LIMIT 1;
+                """,
+                (source_checksum, engine_signature),
+            )
+            row = cursor.fetchone()
+            return (row is not None, str(row[0] or "") if row is not None else "")
+    finally:
+        conn.close()
+
+
+def _persist_ocr_success(
+    *,
+    item: dict[str, Any],
+    ocr_text: str,
+    source_checksum: Optional[str],
+    engine_signature: Optional[str],
+) -> None:
+    conn = _open_pg_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO ocr_texts (
+                    image_id, raw_text, language, tsv, source_checksum, engine_signature
+                )
+                VALUES (
+                    %s, %s, 'en,vi', to_tsvector('simple', COALESCE(%s, '')), %s, %s
+                )
                 ON CONFLICT (image_id) DO UPDATE
                 SET raw_text = EXCLUDED.raw_text,
                     language = EXCLUDED.language,
                     tsv = EXCLUDED.tsv,
+                    source_checksum = EXCLUDED.source_checksum,
+                    engine_signature = EXCLUDED.engine_signature,
                     updated_at = NOW();
                 """,
-                (item["image_id"], ocr_text, ocr_text),
+                (
+                    item["image_id"],
+                    ocr_text,
+                    ocr_text,
+                    source_checksum,
+                    engine_signature,
+                ),
             )
             cursor.execute(
                 """
