@@ -1,6 +1,7 @@
 import os
 import io
 import re
+from functools import lru_cache
 from threading import Lock
 from time import perf_counter
 
@@ -146,6 +147,16 @@ class CLIPEmbedder:
             print(f"Lỗi khi xử lý ảnh trong mô hình CLIP: {e}")
             return None
 
+    def warm_up(self) -> float:
+        """Warm both single-image and normal two-image inference shapes."""
+        started_at = perf_counter()
+        image = Image.new("RGB", (640, 480), color="white")
+        single_vectors = self._embed_image_batch([image])
+        batched_vectors = self._embed_image_batch([image, image])
+        if len(single_vectors) != 1 or len(batched_vectors) != 2:
+            raise RuntimeError("CLIP warm-up failed.")
+        return perf_counter() - started_at
+
     def _embed_image_batch(self, images) -> list[list[float]]:
         started_at = perf_counter()
         used_fallback = False
@@ -186,6 +197,18 @@ class CLIPEmbedder:
             raise ValueError("Query tìm kiếm không được để trống.")
 
         try:
+            # CLIP's tokenizer is case-insensitive. A canonical key lets repeated
+            # searches skip both online translation and model inference.
+            normalized_query = " ".join(query.strip().split()).casefold()
+            return list(self._embed_text_cached(normalized_query))
+        except Exception as e:
+            print(f"Lỗi khi xử lý text trong mô hình CLIP: {e}")
+            return None
+
+    @lru_cache(maxsize=1024)
+    def _embed_text_cached(self, query: str) -> tuple[float, ...]:
+        """Embed a canonical query and retain hot query vectors in memory."""
+        try:
             # Query Việt ngắn được thêm ngữ cảnh trước khi dịch; query Anh
             # ngắn dùng prompt tiếng Anh trực tiếp để tránh câu trộn hai ngôn ngữ.
             source_prompts, weights = self._build_source_text_prompts(query)
@@ -195,8 +218,14 @@ class CLIPEmbedder:
             if is_english_short_query:
                 prompts = self._build_english_text_prompts(source_prompts[0])
                 print(f"[AI Service] English query: '{query}' -> Prompts: {prompts}")
+            elif is_short_query:
+                # Translate only the noun phrase once. Building the contextual
+                # English prompts locally avoids three sequential network calls.
+                translated_query = self._translate_query(source_prompts[0])
+                prompts = self._build_english_text_prompts(translated_query)
+                print(f"[AI Service] Query gốc: '{query}' -> Đã dịch: {prompts}")
             else:
-                prompts = self._translate_text_prompts(source_prompts)
+                prompts = [self._translate_query(source_prompts[0])]
                 print(f"[AI Service] Query gốc: '{query}' -> Đã dịch: {prompts}")
 
             if len(prompts) > 1:
@@ -225,11 +254,11 @@ class CLIPEmbedder:
             )
             query_features = F.normalize(query_features, p=2, dim=0)
 
-            return query_features.detach().cpu().tolist()
-        
-        except Exception as e:
-            print(f"Lỗi khi xử lý text trong mô hình CLIP: {e}")
-            return None
+            return tuple(query_features.detach().cpu().tolist())
+        except Exception:
+            # lru_cache only stores successful calls; transient translation or
+            # inference failures remain retryable on the next request.
+            raise
 
     def _build_source_text_prompts(self, query: str) -> tuple[list[str], list[float]]:
         cleaned_query = " ".join(query.strip().split())
@@ -288,17 +317,9 @@ class CLIPEmbedder:
         article = "an" if first_word[0] in "aeiou" else "a"
         return f"{article} {query}"
 
-    def _translate_text_prompts(self, source_prompts: list[str]) -> list[str]:
-        if len(source_prompts) == 1:
-            translated_prompts = [self.translator.translate(source_prompts[0])]
-        else:
-            translated_prompts = self.translator.translate_batch(source_prompts)
-
-        if (
-            not isinstance(translated_prompts, list)
-            or len(translated_prompts) != len(source_prompts)
-            or any(not isinstance(prompt, str) or not prompt.strip() for prompt in translated_prompts)
-        ):
-            raise ValueError("Bộ dịch trả về danh sách prompt không hợp lệ.")
-
-        return [" ".join(prompt.strip().split()) for prompt in translated_prompts]
+    @lru_cache(maxsize=1024)
+    def _translate_query(self, query: str) -> str:
+        translated_query = self.translator.translate(query)
+        if not isinstance(translated_query, str) or not translated_query.strip():
+            raise ValueError("Bộ dịch trả về query không hợp lệ.")
+        return " ".join(translated_query.strip().split())

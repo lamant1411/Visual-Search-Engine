@@ -36,8 +36,8 @@ services:
     environment:
       - POSTGRES_HOST=postgres
       - QDRANT_URL=http://qdrant:6333
-      # Four queue workers keep the stages fed. CLIP uses one four-thread slot
-      # while EasyOCR can use two four-thread slots, filling 12 logical CPUs.
+      # Four queue workers keep the stages fed. While CLIP is busy only one OCR
+      # worker runs; a second worker catches up after semantic work finishes.
       - AI_CPU_THREADS=12
       - AI_INFERENCE_THREADS=4
       - MAX_INDEX_WORKERS=4
@@ -47,6 +47,15 @@ services:
       - OCR_RECOGNITION_BATCH_SIZE=4
       - OCR_MAX_CONCURRENT_INFERENCE=2
       - OCR_MAX_INPUT_DIMENSION=1600
+      # RapidOCR handles new images first; EasyOCR remains the low-confidence
+      # fallback. Existing OCR rows are not rewritten by this setting.
+      - OCR_ENGINE=hybrid
+      - RAPID_OCR_MAX_CONCURRENT_INFERENCE=1
+      - RAPID_OCR_CONFIDENCE_THRESHOLD=0.45
+      - RAPID_OCR_MAX_INPUT_DIMENSION=1600
+      - RAPID_OCR_USE_CLS=true
+      - OCR_FALLBACK_CONFIDENCE_THRESHOLD=0.45
+      - AI_WARMUP_MODELS=true
     command: uvicorn ai_service:app --host 0.0.0.0 --port 8001
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=2)"]

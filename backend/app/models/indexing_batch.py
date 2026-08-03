@@ -27,8 +27,16 @@ class IndexingBatch(Base):
     total_images: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     processed_images: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     failed_images: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    ocr_processed_images: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    ocr_failed_images: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_uploading: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    upload_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    upload_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    semantic_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    semantic_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ocr_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ocr_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

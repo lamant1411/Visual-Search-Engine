@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 import io
+import os
 import queue
 import sys
 import uuid
@@ -19,24 +20,43 @@ from src.clip_module import CLIPEmbedder
 from src.batch_indexing import LOCAL_STORAGE_PREFIX, VALID_IMAGE_EXTENSIONS, run_indexing_pipeline
 from src.item_indexing import (
     IndexQueueItem,
+    claim_ocr_item,
     claim_indexing_item,
+    handle_ocr_failure,
     handle_index_failure,
-    index_single_image_item,
+    index_ocr_image_item,
+    index_semantic_image_item,
     prepare_items_for_queue,
+    recover_pending_ocr_items,
     recover_pending_items,
+    recover_running_ocr_item,
     recover_running_item,
+    semantic_work_pending,
 )
-from src.ocr_module import OCRExtractor
+from src.ocr_module import create_ocr_extractor
 
 print("Dang tai cac mo hinh AI cho API Service...")
 clip_model = CLIPEmbedder()
-ocr_model = OCRExtractor()
+ocr_model = create_ocr_extractor()
+if os.getenv("AI_WARMUP_MODELS", "true").lower() == "true":
+    print(f"Dang warm-up CLIP va OCR engine={ocr_model.engine_name}...")
+    clip_warmup_seconds = clip_model.warm_up()
+    ocr_warmup_seconds = ocr_model.warm_up()
+    print(
+        "Model warm-up hoan tat: "
+        f"CLIP={clip_warmup_seconds:.2f}s OCR={ocr_warmup_seconds:.2f}s"
+    )
 print("Cac mo hinh da san sang!")
 
 MAX_INDEX_WORKERS = CPU_SETTINGS.item_workers
 INDEX_ITEM_QUEUE: queue.Queue[Optional[IndexQueueItem]] = queue.Queue()
 INDEX_WORKER_STOP = Event()
 INDEX_WORKER_THREADS: list[Thread] = []
+MAX_OCR_WORKERS = ocr_model.max_concurrent_inference
+MIN_PARALLEL_OCR_WORKERS = min(1, MAX_OCR_WORKERS)
+OCR_ITEM_QUEUE: queue.Queue[Optional[IndexQueueItem]] = queue.Queue()
+OCR_WORKER_STOP = Event()
+OCR_WORKER_THREADS: list[Thread] = []
 
 INDEXING_JOBS: dict[str, dict] = {}
 INDEXING_LOCK = Lock()
@@ -45,6 +65,7 @@ INDEXING_LOCK = Lock()
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     _start_index_workers()
+    _start_ocr_workers()
     try:
         recovered_items = recover_pending_items()
         for item in recovered_items:
@@ -54,9 +75,18 @@ async def lifespan(_: FastAPI):
     except Exception as exc:
         print(f"Khong the phuc hoi indexing_items khi startup: {exc}")
     try:
+        recovered_ocr_items = recover_pending_ocr_items()
+        for item in recovered_ocr_items:
+            OCR_ITEM_QUEUE.put(item)
+        if recovered_ocr_items:
+            print(f"Da phuc hoi {len(recovered_ocr_items)} OCR items tu PostgreSQL.")
+    except Exception as exc:
+        print(f"Khong the phuc hoi OCR items khi startup: {exc}")
+    try:
         yield
     finally:
         _stop_index_workers()
+        _stop_ocr_workers()
 
 
 app = FastAPI(title="Visual Search - AI Service", lifespan=lifespan)
@@ -65,7 +95,7 @@ app = FastAPI(title="Visual Search - AI Service", lifespan=lifespan)
 @app.get("/health")
 def healthcheck() -> dict[str, str]:
     """Readiness probe; this route exists only after both AI models are loaded."""
-    return {"status": "ready"}
+    return {"status": "ready", "ocr_engine": ocr_model.engine_name}
 
 
 class LocalIndexRequest(BaseModel):
@@ -209,9 +239,10 @@ def _index_worker_loop(worker_number: int) -> None:
                 continue
 
             try:
-                index_single_image_item(item, clip_model, ocr_model)
+                index_semantic_image_item(item, clip_model)
+                OCR_ITEM_QUEUE.put(queue_item)
                 print(
-                    f"[Item worker {worker_number}] Indexed image_id={item['image_id']} "
+                    f"[Item worker {worker_number}] Semantic-ready image_id={item['image_id']} "
                     f"(item_id={item['item_id']})."
                 )
             except Exception as exc:
@@ -230,12 +261,114 @@ def _index_worker_loop(worker_number: int) -> None:
             INDEX_ITEM_QUEUE.task_done()
 
 
+def _start_ocr_workers() -> None:
+    if OCR_WORKER_THREADS:
+        return
+    OCR_WORKER_STOP.clear()
+    for worker_number in range(1, MAX_OCR_WORKERS + 1):
+        worker = Thread(
+            target=_ocr_worker_loop,
+            args=(worker_number,),
+            name=f"ocr-background-worker-{worker_number}",
+            daemon=True,
+        )
+        worker.start()
+        OCR_WORKER_THREADS.append(worker)
+    print(
+        f"Da khoi dong {MAX_OCR_WORKERS} OCR workers "
+        f"({MIN_PARALLEL_OCR_WORKERS} worker luon chay song song voi CLIP)."
+    )
+
+
+def _stop_ocr_workers() -> None:
+    OCR_WORKER_STOP.set()
+    for _ in OCR_WORKER_THREADS:
+        OCR_ITEM_QUEUE.put(None)
+    for worker in OCR_WORKER_THREADS:
+        worker.join(timeout=5)
+    OCR_WORKER_THREADS.clear()
+
+
+def _ocr_worker_loop(worker_number: int) -> None:
+    while not OCR_WORKER_STOP.is_set():
+        # One OCR worker always overlaps CLIP. Extra OCR workers wait while
+        # upload/semantic work is backlogged, then accelerate OCR catch-up.
+        if worker_number > MIN_PARALLEL_OCR_WORKERS:
+            while not OCR_WORKER_STOP.is_set():
+                try:
+                    if not semantic_work_pending():
+                        break
+                except Exception as exc:
+                    print(f"[OCR worker {worker_number}] Khong the kiem tra semantic queue: {exc}")
+                OCR_WORKER_STOP.wait(0.5)
+            if OCR_WORKER_STOP.is_set():
+                return
+
+        try:
+            queue_item = OCR_ITEM_QUEUE.get(timeout=1)
+        except queue.Empty:
+            continue
+
+        try:
+            if queue_item is None:
+                return
+            if worker_number > MIN_PARALLEL_OCR_WORKERS:
+                try:
+                    if semantic_work_pending():
+                        OCR_ITEM_QUEUE.put(queue_item)
+                        continue
+                except Exception as exc:
+                    print(f"[OCR worker {worker_number}] Khong the kiem tra semantic queue: {exc}")
+
+            try:
+                item = claim_ocr_item(queue_item)
+            except Exception as exc:
+                print(f"[OCR worker {worker_number}] Khong the claim item_id={queue_item.item_id}: {exc}")
+                _schedule_ocr_retry(queue_item, 1)
+                continue
+            if item is None:
+                continue
+
+            try:
+                index_ocr_image_item(item, ocr_model)
+                print(
+                    f"[OCR worker {worker_number}] OCR-ready image_id={item['image_id']} "
+                    f"(item_id={item['item_id']})."
+                )
+            except Exception as exc:
+                print(f"[OCR worker {worker_number}] Loi item_id={queue_item.item_id}: {exc}")
+                try:
+                    retry_count = handle_ocr_failure(queue_item.item_id, exc)
+                    if retry_count is not None:
+                        _schedule_ocr_retry(queue_item, retry_count)
+                except Exception as status_exc:
+                    print(
+                        f"[OCR worker {worker_number}] Khong the ghi failure "
+                        f"item_id={queue_item.item_id}: {status_exc}"
+                    )
+                    _schedule_running_ocr_recovery(queue_item, str(exc))
+        finally:
+            OCR_ITEM_QUEUE.task_done()
+
+
 def _schedule_retry(item: IndexQueueItem, retry_count: int) -> None:
     delay_seconds = min(2 ** max(retry_count - 1, 0), 30)
 
     def requeue() -> None:
         if not INDEX_WORKER_STOP.is_set():
             INDEX_ITEM_QUEUE.put(item)
+
+    timer = Timer(delay_seconds, requeue)
+    timer.daemon = True
+    timer.start()
+
+
+def _schedule_ocr_retry(item: IndexQueueItem, retry_count: int) -> None:
+    delay_seconds = min(2 ** max(retry_count - 1, 0), 30)
+
+    def requeue() -> None:
+        if not OCR_WORKER_STOP.is_set():
+            OCR_ITEM_QUEUE.put(item)
 
     timer = Timer(delay_seconds, requeue)
     timer.daemon = True
@@ -254,6 +387,24 @@ def _schedule_running_recovery(item: IndexQueueItem, error_message: str) -> None
             return
         if should_requeue and not INDEX_WORKER_STOP.is_set():
             INDEX_ITEM_QUEUE.put(item)
+
+    timer = Timer(5, recover)
+    timer.daemon = True
+    timer.start()
+
+
+def _schedule_running_ocr_recovery(item: IndexQueueItem, error_message: str) -> None:
+    def recover() -> None:
+        if OCR_WORKER_STOP.is_set():
+            return
+        try:
+            should_requeue = recover_running_ocr_item(item.item_id, error_message)
+        except Exception as exc:
+            print(f"Khong the recovery running OCR item_id={item.item_id}: {exc}")
+            _schedule_running_ocr_recovery(item, error_message)
+            return
+        if should_requeue and not OCR_WORKER_STOP.is_set():
+            OCR_ITEM_QUEUE.put(item)
 
     timer = Timer(5, recover)
     timer.daemon = True

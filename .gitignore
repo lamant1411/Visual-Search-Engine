@@ -9,6 +9,7 @@ __pycache__/
 .venv
 # Ignore AI Datasets and images
 AI/data/
+AI/output/
 # Ignore local static image files
 backend/static/images/indexing/
 backend/static/images/*.jpg

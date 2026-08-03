@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Float, ForeignKey, String, Text, func
+from sqlalchemy import Computed, DateTime, Float, ForeignKey, Index, String, Text, func
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -16,11 +16,22 @@ if TYPE_CHECKING:
 class OCRText(Base):
     # Bảng này chỉ phục vụ tìm kiếm text, không liên quan đến vector.
     __tablename__ = "ocr_texts"
+    __table_args__ = (
+        Index("ix_ocr_texts_cache_fingerprint", "source_checksum", "engine_signature"),
+    )
 
     image_id: Mapped[int] = mapped_column(ForeignKey("images.id"), primary_key=True)
     raw_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     language: Mapped[str | None] = mapped_column(String(20), nullable=True)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source_checksum: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    engine_signature: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Search-only derivative. raw_text remains untouched for display/auditing.
+    normalized_text: Mapped[str | None] = mapped_column(
+        Text,
+        Computed("normalize_ocr_text(raw_text)", persisted=True),
+        nullable=True,
+    )
     # Cột này sẽ được PostgreSQL dùng cho full-text search.
     tsv: Mapped[str | None] = mapped_column(TSVECTOR, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

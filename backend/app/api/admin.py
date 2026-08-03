@@ -2,6 +2,7 @@
 
 import hashlib
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -235,7 +236,10 @@ async def create_indexing_batch(
         total_images=0,
         processed_images=0,
         failed_images=0,
+        ocr_processed_images=0,
+        ocr_failed_images=0,
         is_uploading=True,
+        upload_started_at=datetime.now(timezone.utc),
     )
     db.add(batch)
     await db.commit()
@@ -246,7 +250,10 @@ async def create_indexing_batch(
         total_images=batch.total_images,
         processed_images=batch.processed_images,
         failed_images=batch.failed_images,
+        ocr_processed_images=batch.ocr_processed_images,
+        ocr_failed_images=batch.ocr_failed_images,
         is_uploading=batch.is_uploading,
+        upload_started_at=batch.upload_started_at,
     )
 
 
@@ -456,6 +463,7 @@ async def complete_batch_upload(
             {"batch_id": batch_id},
         )
     batch.is_uploading = False
+    batch.upload_completed_at = batch.upload_completed_at or datetime.now(timezone.utc)
     await db.commit()
     await _sync_batch_counts(db, batch)
     return AdminBatchCompleteUploadResponse(
@@ -507,10 +515,32 @@ async def cancel_indexing_batch(
         for item in active_items:
             item.status = IndexingItemStatus.cancelled
             item.error_message = "Cancelled by admin."
+            item.ocr_status = IndexingItemStatus.cancelled
+            item.ocr_error_message = "Cancelled by admin."
+            item.ocr_completed_at = datetime.now(timezone.utc)
+
+        active_ocr_items = (
+            await db.scalars(
+                select(IndexingItem).where(
+                    IndexingItem.batch_id == batch_id,
+                    IndexingItem.status == IndexingItemStatus.indexed,
+                    IndexingItem.ocr_status.in_(
+                        [IndexingItemStatus.queued, IndexingItemStatus.running]
+                    ),
+                )
+            )
+        ).all()
+        for item in active_ocr_items:
+            item.ocr_status = IndexingItemStatus.cancelled
+            item.ocr_error_message = "Cancelled by admin."
+            item.ocr_completed_at = datetime.now(timezone.utc)
 
         batch.status = BatchStatus.cancelled
         batch.is_uploading = False
         batch.error_message = "Cancelled by admin."
+        batch.upload_completed_at = batch.upload_completed_at or datetime.now(timezone.utc)
+        batch.semantic_completed_at = batch.semantic_completed_at or datetime.now(timezone.utc)
+        batch.ocr_completed_at = batch.ocr_completed_at or datetime.now(timezone.utc)
         await db.commit()
 
     return AdminIndexStatusResponse(
@@ -521,8 +551,19 @@ async def cancel_indexing_batch(
         failed_images=batch.failed_images,
         queued_images=0,
         running_images=0,
+        ocr_processed_images=batch.ocr_processed_images,
+        ocr_failed_images=batch.ocr_failed_images,
+        ocr_queued_images=0,
+        ocr_running_images=0,
         is_uploading=batch.is_uploading,
         error_message=batch.error_message,
+        created_at=batch.created_at,
+        upload_started_at=batch.upload_started_at,
+        upload_completed_at=batch.upload_completed_at,
+        semantic_started_at=batch.semantic_started_at,
+        semantic_completed_at=batch.semantic_completed_at,
+        ocr_started_at=batch.ocr_started_at,
+        ocr_completed_at=batch.ocr_completed_at,
     )
 
 
@@ -639,6 +680,13 @@ async def retry_failed_indexing_items(
 
         item.status = IndexingItemStatus.queued
         item.error_message = None
+        item.ocr_status = IndexingItemStatus.queued
+        item.ocr_retry_count = 0
+        item.ocr_error_message = None
+        item.semantic_started_at = None
+        item.semantic_completed_at = None
+        item.ocr_started_at = None
+        item.ocr_completed_at = None
         image.status = ImageStatus.pending
         queued_items.append(_build_ai_item_payload(item, image))
         retried_item_ids.append(item.id)
@@ -655,6 +703,8 @@ async def retry_failed_indexing_items(
     batch.status = BatchStatus.running
     batch.error_message = None
     batch.is_uploading = False
+    batch.semantic_completed_at = None
+    batch.ocr_completed_at = None
     await db.commit()
 
     try:
@@ -898,6 +948,7 @@ async def get_batch_status(
             pass
 
     queued_images, running_images = await _get_active_item_counts(db, batch.batch_id)
+    ocr_queued_images, ocr_running_images = await _get_active_ocr_counts(db, batch.batch_id)
     return AdminIndexStatusResponse(
         batch_id=batch.batch_id,
         status=batch.status,
@@ -906,8 +957,19 @@ async def get_batch_status(
         failed_images=batch.failed_images,
         queued_images=queued_images,
         running_images=running_images,
+        ocr_processed_images=batch.ocr_processed_images,
+        ocr_failed_images=batch.ocr_failed_images,
+        ocr_queued_images=ocr_queued_images,
+        ocr_running_images=ocr_running_images,
         is_uploading=batch.is_uploading,
         error_message=batch.error_message,
+        created_at=batch.created_at,
+        upload_started_at=batch.upload_started_at,
+        upload_completed_at=batch.upload_completed_at,
+        semantic_started_at=batch.semantic_started_at,
+        semantic_completed_at=batch.semantic_completed_at,
+        ocr_started_at=batch.ocr_started_at,
+        ocr_completed_at=batch.ocr_completed_at,
     )
 
 
@@ -1054,6 +1116,13 @@ def _to_admin_indexing_item(item: IndexingItem, image: Image) -> AdminIndexingIt
         retry_count=item.retry_count,
         max_retries=item.max_retries,
         error_message=item.error_message,
+        ocr_status=item.ocr_status,
+        ocr_retry_count=item.ocr_retry_count,
+        ocr_error_message=item.ocr_error_message,
+        semantic_started_at=item.semantic_started_at,
+        semantic_completed_at=item.semantic_completed_at,
+        ocr_started_at=item.ocr_started_at,
+        ocr_completed_at=item.ocr_completed_at,
         created_at=item.created_at,
         updated_at=item.updated_at,
     )
@@ -1310,6 +1379,22 @@ async def _get_active_item_counts(db: AsyncSession, batch_id: str) -> tuple[int,
     return queued_images, running_images
 
 
+async def _get_active_ocr_counts(db: AsyncSession, batch_id: str) -> tuple[int, int]:
+    queued_images = await _count_rows(
+        db,
+        select(func.count())
+        .select_from(IndexingItem)
+        .where(IndexingItem.batch_id == batch_id, IndexingItem.ocr_status == IndexingItemStatus.queued),
+    )
+    running_images = await _count_rows(
+        db,
+        select(func.count())
+        .select_from(IndexingItem)
+        .where(IndexingItem.batch_id == batch_id, IndexingItem.ocr_status == IndexingItemStatus.running),
+    )
+    return queued_images, running_images
+
+
 async def _sync_batch_counts(db: AsyncSession, batch: IndexingBatch) -> None:
     await _sync_batch_counts_for_batches(db, [batch])
 
@@ -1332,6 +1417,14 @@ async def _sync_batch_counts_for_batches(
                 func.sum(case((IndexingItem.status == IndexingItemStatus.queued, 1), else_=0)).label("queued"),
                 func.sum(case((IndexingItem.status == IndexingItemStatus.running, 1), else_=0)).label("running"),
                 func.sum(case((IndexingItem.status == IndexingItemStatus.cancelled, 1), else_=0)).label("cancelled"),
+                func.sum(case((IndexingItem.ocr_status == IndexingItemStatus.indexed, 1), else_=0)).label("ocr_indexed"),
+                func.sum(case((IndexingItem.ocr_status == IndexingItemStatus.failed, 1), else_=0)).label("ocr_failed"),
+                func.sum(case((IndexingItem.ocr_status == IndexingItemStatus.queued, 1), else_=0)).label("ocr_queued"),
+                func.sum(case((IndexingItem.ocr_status == IndexingItemStatus.running, 1), else_=0)).label("ocr_running"),
+                func.min(IndexingItem.semantic_started_at).label("semantic_started_at"),
+                func.max(IndexingItem.semantic_completed_at).label("semantic_completed_at"),
+                func.min(IndexingItem.ocr_started_at).label("ocr_started_at"),
+                func.max(IndexingItem.ocr_completed_at).label("ocr_completed_at"),
             )
             .where(IndexingItem.batch_id.in_(batch_ids))
             .group_by(IndexingItem.batch_id)
@@ -1348,7 +1441,12 @@ async def _sync_batch_counts_for_batches(
                 batch.status = BatchStatus.completed
                 batch.processed_images = 0
                 batch.failed_images = 0
+                batch.ocr_processed_images = 0
+                batch.ocr_failed_images = 0
                 batch.error_message = None
+                completed_at = batch.upload_completed_at or datetime.now(timezone.utc)
+                batch.semantic_completed_at = batch.semantic_completed_at or completed_at
+                batch.ocr_completed_at = batch.ocr_completed_at or completed_at
                 has_item_batches = True
             elif batch.status in {BatchStatus.queued, BatchStatus.running}:
                 legacy_active_batches.append(batch)
@@ -1361,19 +1459,35 @@ async def _sync_batch_counts_for_batches(
         queued = int(counts.queued or 0)
         running = int(counts.running or 0)
         cancelled = int(counts.cancelled or 0)
+        ocr_indexed = int(counts.ocr_indexed or 0)
+        ocr_failed = int(counts.ocr_failed or 0)
+        ocr_queued = int(counts.ocr_queued or 0)
+        ocr_running = int(counts.ocr_running or 0)
 
         batch.total_images = total
         batch.processed_images = indexed
         batch.failed_images = failed
+        batch.ocr_processed_images = ocr_indexed
+        batch.ocr_failed_images = ocr_failed
+        batch.semantic_started_at = batch.semantic_started_at or counts.semantic_started_at
+        batch.ocr_started_at = batch.ocr_started_at or counts.ocr_started_at
+        semantic_done = not batch.is_uploading and indexed + failed >= total
+        ocr_done = semantic_done and ocr_indexed + ocr_failed + failed >= total
+        if semantic_done:
+            batch.semantic_completed_at = batch.semantic_completed_at or counts.semantic_completed_at or datetime.now(timezone.utc)
+        if ocr_done:
+            batch.ocr_completed_at = batch.ocr_completed_at or counts.ocr_completed_at or datetime.now(timezone.utc)
         if batch.status == BatchStatus.cancelled or cancelled > 0:
             batch.status = BatchStatus.cancelled
             batch.is_uploading = False
         elif total == 0:
             batch.status = BatchStatus.running if batch.is_uploading else BatchStatus.queued
-        elif batch.is_uploading or queued > 0 or running > 0:
+        elif batch.is_uploading or queued > 0 or running > 0 or ocr_queued > 0 or ocr_running > 0:
             batch.status = BatchStatus.running
-        else:
+        elif semantic_done and ocr_done:
             batch.status = BatchStatus.completed
+        else:
+            batch.status = BatchStatus.running
 
     if has_item_batches:
         await db.commit()
@@ -1409,6 +1523,10 @@ async def _mark_uploaded_items_failed(db: AsyncSession, item_ids: list[int], err
     for item in items:
         item.status = IndexingItemStatus.failed
         item.error_message = error_message
+        item.semantic_completed_at = datetime.now(timezone.utc)
+        item.ocr_status = IndexingItemStatus.cancelled
+        item.ocr_error_message = "Semantic indexing could not be enqueued."
+        item.ocr_completed_at = datetime.now(timezone.utc)
         image_ids.append(item.image_id)
 
     images = (

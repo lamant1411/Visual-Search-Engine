@@ -45,7 +45,15 @@ export default function AdminIndexingPage() {
   const [totalIndexCount, setTotalIndexCount] = useState(0)
   const [queuedIndexCount, setQueuedIndexCount] = useState(0)
   const [runningIndexCount, setRunningIndexCount] = useState(0)
+  const [ocrProcessedCount, setOcrProcessedCount] = useState(0)
+  const [ocrFailedCount, setOcrFailedCount] = useState(0)
+  const [ocrQueuedCount, setOcrQueuedCount] = useState(0)
+  const [ocrRunningCount, setOcrRunningCount] = useState(0)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [uploadElapsedSeconds, setUploadElapsedSeconds] = useState(0)
+  const [semanticElapsedSeconds, setSemanticElapsedSeconds] = useState(0)
+  const [ocrElapsedSeconds, setOcrElapsedSeconds] = useState(0)
+  const [semanticCompletedAt, setSemanticCompletedAt] = useState<number | null>(null)
   const [stalledSeconds, setStalledSeconds] = useState(0)
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null)
   const [activeBatchStatus, setActiveBatchStatus] = useState<IndexingBatch['status'] | null>(null)
@@ -61,11 +69,29 @@ export default function AdminIndexingPage() {
   const [isActionInProgress, setIsActionInProgress] = useState(false)
 
   const pollingRef = useRef<number | null>(null)
+  const activeBatchIdRef = useRef<string | null>(null)
   const batchHistoryLoadMoreRef = useRef<HTMLDivElement | null>(null)
   const uploadedFilesRef = useRef<{ name: string; url: string }[]>([])
   const operationStartedAtRef = useRef<number | null>(null)
   const lastProgressAtRef = useRef<number | null>(null)
   const lastFinishedCountRef = useRef(0)
+  const stageTimesRef = useRef<{
+    totalStartedAt: number | null
+    uploadStartedAt: number | null
+    uploadCompletedAt: number | null
+    semanticStartedAt: number | null
+    semanticCompletedAt: number | null
+    ocrStartedAt: number | null
+    ocrCompletedAt: number | null
+  }>({
+    totalStartedAt: null,
+    uploadStartedAt: null,
+    uploadCompletedAt: null,
+    semanticStartedAt: null,
+    semanticCompletedAt: null,
+    ocrStartedAt: null,
+    ocrCompletedAt: null,
+  })
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes'
@@ -86,21 +112,57 @@ export default function AdminIndexingPage() {
         : `${remainingSeconds}s`
   }
 
+  const toTimestamp = (value?: string | null) => value ? new Date(value).getTime() : null
+
+  const applyServerTiming = (status: {
+    created_at?: string | null
+    upload_started_at?: string | null
+    upload_completed_at?: string | null
+    semantic_started_at?: string | null
+    semantic_completed_at?: string | null
+    ocr_started_at?: string | null
+    ocr_completed_at?: string | null
+  }) => {
+    const uploadStartedAt = toTimestamp(status.upload_started_at)
+    const semanticCompletedAtValue = toTimestamp(status.semantic_completed_at)
+    stageTimesRef.current = {
+      totalStartedAt: uploadStartedAt ?? toTimestamp(status.created_at),
+      uploadStartedAt,
+      uploadCompletedAt: toTimestamp(status.upload_completed_at),
+      semanticStartedAt: toTimestamp(status.semantic_started_at),
+      semanticCompletedAt: semanticCompletedAtValue,
+      ocrStartedAt: toTimestamp(status.ocr_started_at),
+      ocrCompletedAt: toTimestamp(status.ocr_completed_at),
+    }
+    setSemanticCompletedAt(semanticCompletedAtValue)
+    operationStartedAtRef.current = stageTimesRef.current.totalStartedAt
+  }
+
   useEffect(() => {
-    if (!isUploading && !isBackgroundIndexing) return
+    activeBatchIdRef.current = activeBatchId
+  }, [activeBatchId])
+
+  useEffect(() => {
+    if (!activeBatchId && !isUploading && !isBackgroundIndexing) return
 
     const updateRuntimeMetrics = () => {
-      if (operationStartedAtRef.current) {
-        setElapsedSeconds(Math.floor((Date.now() - operationStartedAtRef.current) / 1000))
-      }
+      const now = Date.now()
+      const elapsed = (start: number | null, end: number | null) => start
+        ? Math.max(0, Math.floor(((end ?? now) - start) / 1000))
+        : 0
+      const times = stageTimesRef.current
+      setElapsedSeconds(elapsed(times.totalStartedAt, times.ocrCompletedAt))
+      setUploadElapsedSeconds(elapsed(times.uploadStartedAt, times.uploadCompletedAt))
+      setSemanticElapsedSeconds(elapsed(times.semanticStartedAt, times.semanticCompletedAt))
+      setOcrElapsedSeconds(elapsed(times.ocrStartedAt, times.ocrCompletedAt))
       if (isBackgroundIndexing && lastProgressAtRef.current) {
-        setStalledSeconds(Math.floor((Date.now() - lastProgressAtRef.current) / 1000))
+        setStalledSeconds(Math.floor((now - lastProgressAtRef.current) / 1000))
       }
     }
     updateRuntimeMetrics()
     const timer = window.setInterval(updateRuntimeMetrics, 1_000)
     return () => window.clearInterval(timer)
-  }, [isUploading, isBackgroundIndexing])
+  }, [activeBatchId, isUploading, isBackgroundIndexing])
 
   // --- Drag & Drop Handlers ---
   const handleDragOver = (e: React.DragEvent) => {
@@ -152,7 +214,23 @@ export default function AdminIndexingPage() {
       setFailedIndexCount(statusRes.failed_images)
       setQueuedIndexCount(statusRes.queued_images)
       setRunningIndexCount(statusRes.running_images)
+      setOcrProcessedCount(statusRes.ocr_processed_images)
+      setOcrFailedCount(statusRes.ocr_failed_images)
+      setOcrQueuedCount(statusRes.ocr_queued_images)
+      setOcrRunningCount(statusRes.ocr_running_images)
       setActiveBatchStatus(statusRes.status)
+      setIsUploading(statusRes.is_uploading)
+      setIsBackgroundIndexing(statusRes.status === 'queued' || statusRes.status === 'running')
+      setUploadSuccess(!statusRes.is_uploading)
+      if (!statusRes.is_uploading) {
+        setUploadProgress(100)
+        setUploadedCount(statusRes.total_images)
+        setTotalUploadCount(statusRes.total_images)
+      }
+      applyServerTiming(statusRes)
+      if (['completed', 'failed', 'cancelled'].includes(statusRes.status)) {
+        activeBatchIdRef.current = null
+      }
 
       const total = statusRes.total_images
       const finished = statusRes.processed_images + statusRes.failed_images
@@ -178,7 +256,6 @@ export default function AdminIndexingPage() {
         setFailedImages([])
       }
 
-      await fetchStatus(false)
     } catch (err) {
       console.error('Lỗi khi kiểm tra tiến độ batch:', err)
     }
@@ -216,7 +293,15 @@ export default function AdminIndexingPage() {
     setTotalIndexCount(filesToUpload.length)
     setQueuedIndexCount(0)
     setRunningIndexCount(0)
+    setOcrProcessedCount(0)
+    setOcrFailedCount(0)
+    setOcrQueuedCount(0)
+    setOcrRunningCount(0)
     setElapsedSeconds(0)
+    setUploadElapsedSeconds(0)
+    setSemanticElapsedSeconds(0)
+    setOcrElapsedSeconds(0)
+    setSemanticCompletedAt(null)
     setStalledSeconds(0)
     setActiveBatchId(null)
     setActiveBatchStatus('queued')
@@ -235,7 +320,9 @@ export default function AdminIndexingPage() {
       const createdBatchId = batch.batch_id
       batchId = createdBatchId
       setActiveBatchId(createdBatchId)
+      activeBatchIdRef.current = createdBatchId
       setActiveBatchStatus(batch.status)
+      applyServerTiming(batch)
       const chunkSize = 10
 
       const pollStatus = async () => {
@@ -247,12 +334,18 @@ export default function AdminIndexingPage() {
           setFailedIndexCount(statusRes.failed_images)
           setQueuedIndexCount(statusRes.queued_images)
           setRunningIndexCount(statusRes.running_images)
+          setOcrProcessedCount(statusRes.ocr_processed_images)
+          setOcrFailedCount(statusRes.ocr_failed_images)
+          setOcrQueuedCount(statusRes.ocr_queued_images)
+          setOcrRunningCount(statusRes.ocr_running_images)
           setActiveBatchStatus(statusRes.status)
+          applyServerTiming(statusRes)
 
           const total = statusRes.total_images
           const finished = statusRes.processed_images + statusRes.failed_images
-          if (finished > lastFinishedCountRef.current) {
-            lastFinishedCountRef.current = finished
+          const allStageFinished = finished + statusRes.ocr_processed_images + statusRes.ocr_failed_images
+          if (allStageFinished > lastFinishedCountRef.current) {
+            lastFinishedCountRef.current = allStageFinished
             lastProgressAtRef.current = Date.now()
             setStalledSeconds(0)
           }
@@ -285,6 +378,7 @@ export default function AdminIndexingPage() {
               setElapsedSeconds(Math.floor((Date.now() - operationStartedAtRef.current) / 1000))
             }
             setIsBackgroundIndexing(false)
+            activeBatchIdRef.current = null
             setStalledSeconds(0)
             if (statusRes.status === 'failed') {
               const errorMessage = statusRes.error_message || 'Đợt tối ưu hóa tìm kiếm bị thất bại trên server.'
@@ -605,7 +699,15 @@ export default function AdminIndexingPage() {
     setTotalIndexCount(0)
     setQueuedIndexCount(0)
     setRunningIndexCount(0)
+    setOcrProcessedCount(0)
+    setOcrFailedCount(0)
+    setOcrQueuedCount(0)
+    setOcrRunningCount(0)
     setElapsedSeconds(0)
+    setUploadElapsedSeconds(0)
+    setSemanticElapsedSeconds(0)
+    setOcrElapsedSeconds(0)
+    setSemanticCompletedAt(null)
     setStalledSeconds(0)
     setActiveBatchId(null)
     setActiveBatchStatus(null)
@@ -613,6 +715,15 @@ export default function AdminIndexingPage() {
     setIndexError(null)
     setMessage(null)
     operationStartedAtRef.current = null
+    stageTimesRef.current = {
+      totalStartedAt: null,
+      uploadStartedAt: null,
+      uploadCompletedAt: null,
+      semanticStartedAt: null,
+      semanticCompletedAt: null,
+      ocrStartedAt: null,
+      ocrCompletedAt: null,
+    }
     lastProgressAtRef.current = null
     lastFinishedCountRef.current = 0
   }
@@ -623,6 +734,27 @@ export default function AdminIndexingPage() {
     try {
       const batchesData = await adminApi.getIndexingBatches()
       setBatches(batchesData)
+      const currentBatchId = activeBatchIdRef.current
+      if (currentBatchId) {
+        await pollBatchStatus(currentBatchId)
+      } else if (!activeBatchId) {
+        const resumableBatch = batchesData.find((batch) =>
+          batch.is_uploading || batch.status === 'queued' || batch.status === 'running'
+        )
+        if (resumableBatch) {
+          setActiveBatchId(resumableBatch.batch_id)
+          activeBatchIdRef.current = resumableBatch.batch_id
+          setActiveBatchStatus(resumableBatch.status)
+          setIsUploading(resumableBatch.is_uploading)
+          setIsBackgroundIndexing(true)
+          setUploadSuccess(!resumableBatch.is_uploading)
+          setTotalUploadCount(resumableBatch.total_images)
+          setUploadedCount(resumableBatch.total_images)
+          setUploadProgress(resumableBatch.is_uploading ? 0 : 100)
+          applyServerTiming(resumableBatch)
+          await pollBatchStatus(resumableBatch.batch_id)
+        }
+      }
     } catch (err) {
       console.error('Lỗi khi fetch indexing batches:', err)
     } finally {
@@ -644,6 +776,8 @@ export default function AdminIndexingPage() {
         clearInterval(pollingRef.current)
       }
     }
+  // The polling callback reads activeBatchIdRef, so it intentionally stays stable.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const displayedBatches = useMemo(() => {
@@ -672,18 +806,34 @@ export default function AdminIndexingPage() {
 
   const finishedIndexCount = indexedCount + failedIndexCount
   const remainingIndexCount = Math.max(totalIndexCount - finishedIndexCount, 0)
-  const indexRatePerMinute = elapsedSeconds > 0
-    ? (finishedIndexCount / elapsedSeconds) * 60
+  const indexRatePerMinute = semanticElapsedSeconds > 0
+    ? (finishedIndexCount / semanticElapsedSeconds) * 60
     : 0
   const estimatedRemainingSeconds = finishedIndexCount > 0 && remainingIndexCount > 0
-    ? Math.ceil(remainingIndexCount / (finishedIndexCount / Math.max(elapsedSeconds, 1)))
+    ? Math.ceil(remainingIndexCount / (finishedIndexCount / Math.max(semanticElapsedSeconds, 1)))
     : remainingIndexCount === 0 ? 0 : null
+  const ocrFinishedCount = ocrProcessedCount + ocrFailedCount
+  const ocrTargetCount = Math.max(indexedCount, totalIndexCount - failedIndexCount)
+  const ocrRemainingCount = Math.max(ocrTargetCount - ocrFinishedCount, 0)
+  const ocrRatePerMinute = ocrElapsedSeconds > 0
+    ? (ocrFinishedCount / ocrElapsedSeconds) * 60
+    : 0
+  const estimatedOcrRemainingSeconds = ocrFinishedCount > 0 && ocrRemainingCount > 0
+    ? Math.ceil(ocrRemainingCount / (ocrFinishedCount / Math.max(ocrElapsedSeconds, 1)))
+    : ocrRemainingCount === 0 ? 0 : null
+  const ocrProgress = ocrTargetCount > 0
+    ? Math.min(100, Math.round((ocrFinishedCount / ocrTargetCount) * 100))
+    : 0
 
   const showUploader = !isUploading && !isBackgroundIndexing && !uploadSuccess
   const isStalled = isBackgroundIndexing && stalledSeconds >= 60
   const didIndexingComplete = activeBatchStatus === 'completed'
   const didIndexingFail = activeBatchStatus === 'failed'
   const wasIndexingCancelled = activeBatchStatus === 'cancelled'
+  const isSemanticComplete = Boolean(semanticCompletedAt)
+    || (!isUploading && totalIndexCount > 0 && finishedIndexCount >= totalIndexCount)
+  const isOcrComplete = didIndexingComplete
+    || (isSemanticComplete && ocrRemainingCount === 0)
   const displayedRemainingSeconds = isBackgroundIndexing
     ? estimatedRemainingSeconds
     : didIndexingComplete ? 0 : null
@@ -691,11 +841,12 @@ export default function AdminIndexingPage() {
   const currentStage = (() => {
     if (wasIndexingCancelled) return 'Đợt xử lý đã được dừng'
     if (didIndexingFail) return 'Đợt xử lý kết thúc do lỗi'
-    if (didIndexingComplete) return 'Đã hoàn tất upload và indexing'
+    if (didIndexingComplete) return 'Đã hoàn tất CLIP và OCR'
+    if (isSemanticComplete && !isOcrComplete) return 'Tìm kiếm ngữ nghĩa đã sẵn sàng; OCR đang chạy nền'
     if (isUploading && runningIndexCount > 0) return 'Đang tải ảnh và xử lý AI song song'
     if (isUploading) return 'Đang tải ảnh lên server'
     if (isBackgroundIndexing && runningIndexCount > 0) {
-      return 'AI đang tạo vector CLIP, đọc OCR và lưu dữ liệu'
+      return 'CLIP và OCR đang chạy song song theo từng ảnh'
     }
     if (isBackgroundIndexing && queuedIndexCount > 0) return 'Đang chờ AI worker nhận ảnh'
     if (isBackgroundIndexing) return 'Đang đồng bộ trạng thái xử lý'
@@ -884,15 +1035,15 @@ export default function AdminIndexingPage() {
                         <XCircle className="h-4 w-4 text-red-500 shrink-0" />
                         <span className="text-red-700">Tối ưu hóa thất bại: {indexError}</span>
                       </>
-                    ) : isBackgroundIndexing ? (
+                    ) : isBackgroundIndexing && !isSemanticComplete ? (
                       <>
                         <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600" />
-                        Đang tối ưu hóa tìm kiếm: {indexedCount + failedIndexCount} / {totalIndexCount} ảnh
+                        Đang tạo vector CLIP: {indexedCount + failedIndexCount} / {totalIndexCount} ảnh
                       </>
-                    ) : didIndexingComplete ? (
+                    ) : isSemanticComplete ? (
                       <>
                         <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                        <span className="text-emerald-700">Tối ưu hóa tìm kiếm hoàn tất!</span>
+                        <span className="text-emerald-700">Tìm kiếm ngữ nghĩa đã sẵn sàng!</span>
                       </>
                     ) : wasIndexingCancelled ? (
                       <>
@@ -912,9 +1063,9 @@ export default function AdminIndexingPage() {
                   <div
                     className={`h-full rounded-full transition-all duration-300 ease-out ${indexError
                       ? 'bg-red-500'
-                      : isBackgroundIndexing
+                      : isBackgroundIndexing && !isSemanticComplete
                         ? 'bg-amber-500 animate-pulse'
-                        : didIndexingComplete
+                        : isSemanticComplete
                           ? 'bg-emerald-600'
                           : wasIndexingCancelled
                             ? 'bg-amber-600'
@@ -943,6 +1094,44 @@ export default function AdminIndexingPage() {
                       Xem chi tiết lỗi ({failedIndexCount})
                     </button>
                   )}
+                </div>
+              </div>
+
+              {/* 3. OCR PROGRESS */}
+              <div className="space-y-1.5 pt-3 border-t border-border/60">
+                <div className="flex flex-col gap-2 text-xs font-semibold sm:flex-row sm:items-center sm:justify-between">
+                  <span className="flex min-w-0 items-center gap-1.5 text-ink-secondary">
+                    {!isOcrComplete && !wasIndexingCancelled ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
+                    ) : ocrFailedCount > 0 ? (
+                      <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                    ) : (
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                    )}
+                    <span>
+                      {!isOcrComplete && !wasIndexingCancelled
+                        ? `OCR đang chạy song song: ${ocrFinishedCount} / ${ocrTargetCount} ảnh`
+                        : `OCR đã kết thúc: ${ocrProcessedCount} thành công, ${ocrFailedCount} thất bại`}
+                    </span>
+                  </span>
+                  <span className="text-ink-muted">{ocrProgress}%</span>
+                </div>
+                <div className="w-full bg-surface-0 rounded-full h-2 border border-border overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${!isOcrComplete && !wasIndexingCancelled
+                      ? 'bg-blue-500 animate-pulse'
+                      : ocrFailedCount > 0
+                        ? 'bg-amber-500'
+                        : 'bg-emerald-600'
+                      }`}
+                    style={{ width: `${ocrProgress}%` }}
+                  />
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-3xs text-ink-muted">
+                  <span>Đang chờ: {ocrQueuedCount} ảnh</span>
+                  <span>Đang xử lý: {ocrRunningCount} ảnh</span>
+                  <span>Tốc độ: {ocrFinishedCount > 0 ? `${ocrRatePerMinute.toFixed(1)} ảnh/phút` : '--'}</span>
+                  <span>ETA: {estimatedOcrRemainingSeconds === null ? '--' : formatElapsedTime(estimatedOcrRemainingSeconds)}</span>
                 </div>
               </div>
 
@@ -978,12 +1167,29 @@ export default function AdminIndexingPage() {
                   </div>
                 </div>
 
+                <dl className="grid grid-cols-2 overflow-hidden rounded-lg border border-border/60 sm:grid-cols-4">
+                  {[
+                    ['Tổng thời gian', elapsedSeconds],
+                    ['Upload', uploadElapsedSeconds],
+                    ['CLIP / Qdrant', semanticElapsedSeconds],
+                    ['OCR', ocrElapsedSeconds],
+                  ].map(([label, seconds], index) => (
+                    <div key={String(label)} className={`${index % 2 ? 'border-l' : ''} ${index >= 2 ? 'border-t sm:border-t-0' : ''} px-3 py-3 sm:border-l sm:first:border-l-0 border-border/60`}>
+                      <dt className="text-3xs font-semibold uppercase text-ink-muted">{label}</dt>
+                      <dd className="mt-1 flex items-center gap-1.5 text-sm font-bold text-ink-primary">
+                        <Clock className="h-3.5 w-3.5 text-ink-muted" />
+                        {formatElapsedTime(Number(seconds))}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+
                 <dl className="grid grid-cols-2 border-y border-border/60 sm:grid-cols-5">
                   <div className="py-3 pr-3 sm:border-r sm:border-border/60">
-                    <dt className="text-3xs font-semibold uppercase text-ink-muted">Đã chạy</dt>
+                    <dt className="text-3xs font-semibold uppercase text-ink-muted">CLIP đã chạy</dt>
                     <dd className="mt-1 flex items-center gap-1.5 text-sm font-bold text-ink-primary">
                       <Clock className="h-3.5 w-3.5 text-ink-muted" />
-                      {formatElapsedTime(elapsedSeconds)}
+                      {formatElapsedTime(semanticElapsedSeconds)}
                     </dd>
                   </div>
                   <div className="border-l border-border/60 py-3 pl-3 sm:border-l-0 sm:border-r sm:px-3">

@@ -60,7 +60,16 @@ export interface IndexingBatch {
   total_images: number
   processed_images: number
   failed_images: number
+  ocr_processed_images: number
+  ocr_failed_images: number
   error_message?: string | null
+  is_uploading: boolean
+  upload_started_at?: string | null
+  upload_completed_at?: string | null
+  semantic_started_at?: string | null
+  semantic_completed_at?: string | null
+  ocr_started_at?: string | null
+  ocr_completed_at?: string | null
   created_at: string
   updated_at?: string | null
 }
@@ -91,8 +100,19 @@ export interface AdminIndexStatusResponse {
   failed_images: number
   queued_images: number
   running_images: number
+  ocr_processed_images: number
+  ocr_failed_images: number
+  ocr_queued_images: number
+  ocr_running_images: number
   is_uploading: boolean
   error_message?: string | null
+  created_at?: string | null
+  upload_started_at?: string | null
+  upload_completed_at?: string | null
+  semantic_started_at?: string | null
+  semantic_completed_at?: string | null
+  ocr_started_at?: string | null
+  ocr_completed_at?: string | null
 }
 
 export interface AdminBatchCreateResponse {
@@ -101,7 +121,10 @@ export interface AdminBatchCreateResponse {
   total_images: number
   processed_images: number
   failed_images: number
+  ocr_processed_images: number
+  ocr_failed_images: number
   is_uploading: boolean
+  upload_started_at?: string | null
 }
 
 export interface AdminBatchImageUploadResponse {
@@ -130,6 +153,13 @@ export interface AdminIndexingItem {
   retry_count: number
   max_retries: number
   error_message?: string | null
+  ocr_status: 'queued' | 'running' | 'indexed' | 'failed' | 'cancelled'
+  ocr_retry_count: number
+  ocr_error_message?: string | null
+  semantic_started_at?: string | null
+  semantic_completed_at?: string | null
+  ocr_started_at?: string | null
+  ocr_completed_at?: string | null
   created_at: string
   updated_at?: string | null
 }

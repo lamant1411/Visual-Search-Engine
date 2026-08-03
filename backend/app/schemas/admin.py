@@ -17,7 +17,16 @@ class IndexingBatchOut(BaseModel):
     total_images: int
     processed_images: int
     failed_images: int
+    ocr_processed_images: int = 0
+    ocr_failed_images: int = 0
     error_message: str | None = None
+    is_uploading: bool = False
+    upload_started_at: datetime | None = None
+    upload_completed_at: datetime | None = None
+    semantic_started_at: datetime | None = None
+    semantic_completed_at: datetime | None = None
+    ocr_started_at: datetime | None = None
+    ocr_completed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime | None = None
 
@@ -102,8 +111,19 @@ class AdminIndexStatusResponse(BaseModel):
     failed_images: int = 0
     queued_images: int = 0
     running_images: int = 0
+    ocr_processed_images: int = 0
+    ocr_failed_images: int = 0
+    ocr_queued_images: int = 0
+    ocr_running_images: int = 0
     is_uploading: bool = False
     error_message: str | None = None
+    created_at: datetime | None = None
+    upload_started_at: datetime | None = None
+    upload_completed_at: datetime | None = None
+    semantic_started_at: datetime | None = None
+    semantic_completed_at: datetime | None = None
+    ocr_started_at: datetime | None = None
+    ocr_completed_at: datetime | None = None
 
 
 class AdminBatchCreateResponse(BaseModel):
@@ -112,7 +132,10 @@ class AdminBatchCreateResponse(BaseModel):
     total_images: int = 0
     processed_images: int = 0
     failed_images: int = 0
+    ocr_processed_images: int = 0
+    ocr_failed_images: int = 0
     is_uploading: bool = True
+    upload_started_at: datetime | None = None
 
 
 class AdminBatchImageUploadResponse(BaseModel):
@@ -141,6 +164,13 @@ class AdminIndexingItemOut(BaseModel):
     retry_count: int
     max_retries: int
     error_message: str | None = None
+    ocr_status: IndexingItemStatus
+    ocr_retry_count: int
+    ocr_error_message: str | None = None
+    semantic_started_at: datetime | None = None
+    semantic_completed_at: datetime | None = None
+    ocr_started_at: datetime | None = None
+    ocr_completed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime | None = None
 
