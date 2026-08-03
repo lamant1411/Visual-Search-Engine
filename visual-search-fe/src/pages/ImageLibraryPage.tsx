@@ -10,6 +10,10 @@ import { ResultGrid, ResultGridSkeleton } from '@/features/search/components/Res
 import { SearchResultDetailModal } from '@/features/search/components/SearchResultDetailModal'
 import { useBookmarks } from '@/features/search/hooks/useBookmarks'
 import type { SearchResult } from '@/features/search/types'
+import {
+  createImageSearchHistoryKey,
+  saveImageSearchFile,
+} from '@/features/search/utils/imageSearchSession'
 import { adminApi, type AdminIndexingItem } from '@/lib/api/admin'
 import { imageLibraryApi } from '@/lib/api/images'
 
@@ -292,8 +296,19 @@ export default function ImageLibraryPage() {
     }
   }
 
-  function handleFindSimilar(result: SearchResult) {
+  async function handleFindSimilar(result: SearchResult, file?: File) {
     setSelectedResult(null)
+
+    if (file) {
+      const historyKey = createImageSearchHistoryKey()
+      await saveImageSearchFile(historyKey, file)
+      navigate(
+        `/search/results?mode=image&page=1&limit=20&historyKey=${encodeURIComponent(historyKey)}`,
+        { state: { file, fileName: file.name, historyKey } },
+      )
+      return
+    }
+
     navigate(`/search/results?mode=image&imageId=${result.id}&page=1&limit=20`)
   }
 
@@ -309,7 +324,7 @@ export default function ImageLibraryPage() {
     ? `Review images from batch ${selectedBatch.batch_id}.`
     : isDeletedView
     ? 'Review soft-deleted images, restore them, or permanently remove them from the system.'
-    : 'Browse indexed images that are ready for semantic, OCR, and image-to-image search.'
+    : 'Browse indexed images that are ready for text and image-to-image search.'
 
   return (
     <>

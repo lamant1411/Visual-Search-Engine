@@ -19,8 +19,7 @@ type SearchPanelProps = {
 }
 
 const placeholderByMode: Record<Exclude<SearchMode, 'image'>, string> = {
-  semantic: 'Describe an image...',
-  ocr: 'Search text in images...',
+  text: 'Describe an image or enter words from it...',
 }
 
 export function SearchPanel({

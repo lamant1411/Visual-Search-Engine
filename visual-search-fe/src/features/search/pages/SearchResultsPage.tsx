@@ -12,7 +12,11 @@ import { searchByImage, searchByText } from "../services/search.api";
 import { useBookmarks } from "../hooks/useBookmarks";
 import type { SearchMode, SearchResponse, SearchResult } from "../types";
 import { getSearchErrorMessage } from "../utils/getSearchErrorMessage";
-import { loadImageSearchFile } from "../utils/imageSearchSession";
+import {
+  createImageSearchHistoryKey,
+  loadImageSearchFile,
+  saveImageSearchFile,
+} from "../utils/imageSearchSession";
 
 type SearchLocationState = {
   file?: File;
@@ -24,8 +28,7 @@ const pageLimit = 20;
 
 const modeLabel: Record<SearchMode, string> = {
   image: "IMAGE SEARCH",
-  semantic: "SEMANTIC SEARCH",
-  ocr: "OCR SEARCH",
+  text: "TEXT SEARCH",
 };
 
 export function SearchResultsPage() {
@@ -276,7 +279,7 @@ export function SearchResultsPage() {
               Start a search to view results
             </p>
             <p className="mt-2 text-sm text-ink-secondary">
-              Enter a description, OCR text, or choose a reference image above.
+              Enter a description, words from an image, or choose a reference image.
             </p>
           </section>
         )}
@@ -411,15 +414,30 @@ export function SearchResultsPage() {
     });
   }
 
-  function handleFindSimilarResult(result: SearchResult) {
+  async function handleFindSimilarResult(result: SearchResult, file?: File) {
     const nextParams = new URLSearchParams();
     nextParams.set("mode", "image");
-    nextParams.set("imageId", String(result.id));
     nextParams.set("limit", String(pageLimit));
 
     setSelectedResult(null);
     setLongSearchKey(null);
-    setSearchParams(nextParams, { state: null });
+
+    if (file) {
+      const nextHistoryKey = createImageSearchHistoryKey();
+      await saveImageSearchFile(nextHistoryKey, file);
+      nextParams.set("historyKey", nextHistoryKey);
+      setSearchParams(nextParams, {
+        state: {
+          file,
+          fileName: file.name,
+          historyKey: nextHistoryKey,
+        } satisfies SearchLocationState,
+      });
+    } else {
+      nextParams.set("imageId", String(result.id));
+      setSearchParams(nextParams, { state: null });
+    }
+
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 }
@@ -437,7 +455,11 @@ function SearchLoadingNotice({
   isTakingLong: boolean;
 }) {
   return (
-    <section className="flex items-start gap-3 rounded-lg border border-border bg-white p-4 shadow-sm shadow-slate-200/70">
+    <section
+      aria-live="polite"
+      className="flex items-start gap-3 rounded-lg border border-border bg-white p-4 shadow-sm shadow-slate-200/70"
+      role="status"
+    >
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-50 text-accent-700">
         {isTakingLong ? <Sparkles className="h-5 w-5" /> : <Loader2 className="h-5 w-5 animate-spin" />}
       </div>
@@ -465,7 +487,12 @@ function BookmarkToastMessage({
   onUndo: () => void;
 }) {
   return (
-    <div className="fixed inset-x-4 bottom-4 z-[60] mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-border bg-white p-3 shadow-2xl shadow-slate-900/15 sm:bottom-6">
+    <div
+      aria-atomic="true"
+      aria-live="polite"
+      className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[60] mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-border bg-white p-3 shadow-2xl shadow-slate-900/15 sm:bottom-6"
+      role="status"
+    >
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
         <CheckCircle2 className="h-5 w-5" />
       </div>
@@ -473,6 +500,7 @@ function BookmarkToastMessage({
         {toast.message}
       </p>
       <button
+        aria-label="Undo bookmark change"
         type="button"
         className="min-h-11 rounded-lg px-3 text-sm font-bold text-accent-700 hover:bg-accent-50"
         onClick={onUndo}
@@ -480,6 +508,7 @@ function BookmarkToastMessage({
         Undo
       </button>
       <button
+        aria-label="Dismiss bookmark notification"
         type="button"
         className="min-h-11 rounded-lg px-2 text-xs font-bold text-ink-muted hover:bg-surface-1"
         onClick={onDismiss}
@@ -495,31 +524,27 @@ function getLongSearchMessage(mode: SearchMode) {
     return "Image search may take longer while the reference image is uploaded and compared visually.";
   }
 
-  if (mode === "ocr") {
-    return "OCR search can take a little longer when matching text extracted from images.";
-  }
-
-  return "Semantic search is comparing meaning, not just exact words, so the best matches may need a moment.";
+  return "Text search is choosing the best matching method, so the most relevant images may need a moment.";
 }
 
 function getEmptySuggestion(mode: SearchMode) {
   if (mode === "image") {
-    return "Try a clearer reference image, crop the main object, or switch to semantic search.";
+    return "Try a clearer reference image, crop the main object, or switch to text search.";
   }
 
-  if (mode === "ocr") {
-    return "Try shorter text, a keyword from the image, or switch to semantic search.";
-  }
-
-  return "Try a more specific description, fewer words, or search by OCR/image instead.";
+  return "Try a more specific description, a shorter phrase from the image, or use a reference image.";
 }
 
 function parseSearchMode(value: string | null): SearchMode {
-  if (value === "image" || value === "semantic" || value === "ocr") {
+  if (value === "image" || value === "text") {
     return value;
   }
 
-  return "semantic";
+  if (value === "semantic" || value === "ocr") {
+    return "text";
+  }
+
+  return "text";
 }
 
 function getResultTitle(
@@ -578,8 +603,20 @@ function runSearch({
 
   return searchByText({
     q: query,
-    mode,
+    mode: getAutoTextSearchMode(query),
     page,
     limit,
   });
+}
+
+function getAutoTextSearchMode(query: string) {
+  const normalizedQuery = query.trim();
+  const words = normalizedQuery.split(/\s+/).filter(Boolean);
+  const hasDigitsOrSymbols = /[\d%$€£¥#@&+=:/\\-]/.test(normalizedQuery);
+  const hasUppercaseLabel = /[A-Z]{2,}/.test(normalizedQuery);
+  const looksLikeShortPrintedText = normalizedQuery.length <= 32 && words.length <= 5;
+
+  return hasDigitsOrSymbols || (looksLikeShortPrintedText && hasUppercaseLabel)
+    ? "ocr"
+    : "semantic";
 }

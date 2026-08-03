@@ -46,6 +46,17 @@ textarea {
   font: inherit;
 }
 
+button,
+a,
+select,
+label {
+  touch-action: manipulation;
+}
+
+main:focus {
+  outline: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

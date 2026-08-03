@@ -27,14 +27,14 @@ const featuredImageHeights = [
 type PendingAction =
   | { type: "search" }
   | { type: "bookmark"; result: SearchResult }
-  | { type: "find-similar"; result: SearchResult };
+  | { type: "find-similar"; result: SearchResult; file?: File };
 
 export function SearchPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const locationState = (location.state ?? {}) as { mode?: SearchMode };
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
-  const [mode, setMode] = useState<SearchMode>(locationState.mode ?? "semantic");
+  const [mode, setMode] = useState<SearchMode>(locationState.mode ?? "text");
   const [query, setQuery] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [cropSourceFile, setCropSourceFile] = useState<File | null>(null);
@@ -150,21 +150,36 @@ export function SearchPage() {
     }
 
     navigate(
-      `/search/results?mode=${mode}&q=${encodeURIComponent(query.trim())}&page=1&limit=20`,
+      `/search/results?mode=text&q=${encodeURIComponent(query.trim())}&page=1&limit=20`,
     );
   }
 
-  function handleFindSimilarResult(result: SearchResult) {
+  function handleFindSimilarResult(result: SearchResult, file?: File) {
+    setSelectedResult(null);
+
     if (!isAuthenticated) {
-      setPendingAction({ type: "find-similar", result });
+      setPendingAction({ type: "find-similar", result, file });
       return;
     }
 
-    executeFindSimilar(result);
+    void executeFindSimilar(result, file);
   }
 
-  function executeFindSimilar(result: SearchResult) {
+  async function executeFindSimilar(result: SearchResult, file?: File) {
     setSelectedResult(null);
+
+    if (file) {
+      const historyKey = createImageSearchHistoryKey();
+      await saveImageSearchFile(historyKey, file);
+      navigate(
+        `/search/results?mode=image&page=1&limit=20&historyKey=${encodeURIComponent(historyKey)}`,
+        {
+          state: { file, fileName: file.name, historyKey },
+        },
+      );
+      return;
+    }
+
     navigate(`/search/results?mode=image&imageId=${result.id}&page=1&limit=20`);
   }
 
@@ -190,7 +205,7 @@ export function SearchPage() {
     } else if (action.type === "bookmark") {
       toggleBookmark(action.result.id);
     } else {
-      executeFindSimilar(action.result);
+      void executeFindSimilar(action.result, action.file);
     }
   }
 
@@ -215,14 +230,14 @@ export function SearchPage() {
 
         <div className="relative z-10 m-auto max-w-5xl text-white">
           <p className="text-xs font-bold uppercase text-white/70">
-            Semantic, OCR, and image-to-image search
+            Text and image-to-image search
           </p>
           <h1 className="font-display mx-auto mt-4 max-w-4xl text-4xl font-bold leading-[1.04] tracking-normal sm:text-5xl lg:text-[64px]">
             Search images by meaning, text, or visual similarity.
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-base font-medium leading-7 text-white/80 sm:text-lg">
-            Describe an idea, find words inside images, or upload a reference to
-            discover visually related results.
+            Describe what you need, enter words seen in an image, or upload a
+            reference to discover visually related results.
           </p>
         </div>
       </section>
@@ -267,7 +282,7 @@ export function SearchPage() {
               type="button"
               className="h-10 cursor-pointer rounded-full border border-border bg-white px-4 font-semibold shadow-sm shadow-slate-200/70 transition duration-200 hover:border-accent-600 hover:text-accent-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0"
               onClick={() => {
-                setMode(suggestion.includes("%") ? "ocr" : "semantic");
+                setMode("text");
                 setQuery(suggestion);
               }}
             >

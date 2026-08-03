@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import Cropper, { type Area, type MediaSize, type Size } from 'react-easy-crop'
 import { Crop, Minus, Plus, X } from 'lucide-react'
 
 import { Button } from '@/components/base/button'
+import { useDialogAccessibility } from '@/lib/ui/useDialogAccessibility'
 
 import { cropImageFile } from '../utils/cropImage'
 
@@ -37,23 +38,9 @@ export function ImageCropModal({ file, imageUrl, onCancel, onConfirm, onUseOrigi
   const [errorMessage, setErrorMessage] = useState<string>()
   const [isProcessing, setIsProcessing] = useState(false)
   const maxCropSize = useRef<Size | undefined>(undefined)
-
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !isProcessing) {
-        onCancel()
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown)
-      document.body.style.overflow = previousOverflow
-    }
-  }, [isProcessing, onCancel])
+  const dialogRef = useDialogAccessibility<HTMLElement>(onCancel, {
+    closeOnEscape: !isProcessing,
+  })
 
   async function handleApplyCrop() {
     if (!cropArea) {
@@ -129,13 +116,18 @@ export function ImageCropModal({ file, imageUrl, onCancel, onConfirm, onUseOrigi
       aria-modal="true"
       className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
       role="dialog"
-      onMouseDown={(event) => {
+      onPointerDown={(event) => {
         if (event.target === event.currentTarget && !isProcessing) {
           onCancel()
         }
       }}
     >
-      <section className="w-full max-w-2xl overflow-hidden rounded-lg bg-white shadow-2xl">
+      <section
+        ref={dialogRef}
+        aria-busy={isProcessing}
+        className="w-full max-w-2xl overflow-hidden rounded-lg bg-white shadow-2xl"
+        tabIndex={-1}
+      >
         <header className="flex items-center justify-between gap-4 border-b border-border px-5 py-4">
           <div>
             <p className="text-xs font-bold uppercase text-accent-600">Image search</p>
@@ -215,7 +207,7 @@ export function ImageCropModal({ file, imageUrl, onCancel, onConfirm, onUseOrigi
             </span>
           </div>
 
-          {errorMessage && <p className="text-sm font-medium text-red-600">{errorMessage}</p>}
+          {errorMessage && <p className="text-sm font-medium text-red-600" role="alert">{errorMessage}</p>}
 
           <div className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:justify-end">
             <Button className="min-h-11 sm:min-h-0" disabled={isProcessing} type="button" variant="ghost" onClick={onCancel}>

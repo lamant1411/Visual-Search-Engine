@@ -14,7 +14,6 @@ import {
   ImagePlus,
   Images,
   LogOut,
-  ScanText,
   Search,
   Shield,
   X,
@@ -24,11 +23,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { SearchLoginModal } from "@/features/search/components/SearchLoginModal";
 import { validateSearchImageFile } from "@/features/search/utils/imageValidation";
 
-type HeaderSearchMode = "image" | "semantic" | "ocr";
+type HeaderSearchMode = "image" | "text";
 
 const searchModeOptions = [
-  { value: "semantic", label: "Semantic", icon: FileText },
-  { value: "ocr", label: "OCR", icon: ScanText },
+  { value: "text", label: "Text", icon: FileText },
   { value: "image", label: "Image", icon: ImagePlus },
 ] satisfies Array<{
   value: HeaderSearchMode;
@@ -40,12 +38,13 @@ export function Header() {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading: isAuthLoading, logout, user } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [searchMode, setSearchMode] = useState<HeaderSearchMode>("semantic");
+  const [searchMode, setSearchMode] = useState<HeaderSearchMode>("text");
   const [query, setQuery] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isSearchLoginOpen, setIsSearchLoginOpen] = useState(false);
+  const [searchError, setSearchError] = useState<string>();
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const mobileSearchInputRef = useRef<HTMLInputElement>(null);
   const selectedFilePreviewUrlRef = useRef<string | null>(null);
@@ -127,6 +126,7 @@ export function Header() {
 
   function executeSearch() {
     setIsMobileSearchOpen(false);
+    setSearchError(undefined);
 
     if (searchMode === "image") {
       navigate("/search/results?mode=image&page=1&limit=20", {
@@ -139,7 +139,7 @@ export function Header() {
     }
 
     navigate(
-      `/search/results?mode=${searchMode}&q=${encodeURIComponent(query.trim())}&page=1&limit=20`,
+      `/search/results?mode=text&q=${encodeURIComponent(query.trim())}&page=1&limit=20`,
     );
   }
 
@@ -148,16 +148,22 @@ export function Header() {
     if (!nextFile) return;
 
     const errorMessage = validateSearchImageFile(nextFile);
-    if (!errorMessage) {
-      if (selectedFilePreviewUrlRef.current) {
-        URL.revokeObjectURL(selectedFilePreviewUrlRef.current);
-      }
-
-      const nextPreviewUrl = URL.createObjectURL(nextFile);
-      selectedFilePreviewUrlRef.current = nextPreviewUrl;
-      setSelectedFile(nextFile);
-      setSelectedFilePreviewUrl(nextPreviewUrl);
+    if (errorMessage) {
+      clearSelectedImage();
+      setSearchError(errorMessage);
+      event.target.value = "";
+      return;
     }
+
+    if (selectedFilePreviewUrlRef.current) {
+      URL.revokeObjectURL(selectedFilePreviewUrlRef.current);
+    }
+
+    const nextPreviewUrl = URL.createObjectURL(nextFile);
+    selectedFilePreviewUrlRef.current = nextPreviewUrl;
+    setSelectedFile(nextFile);
+    setSelectedFilePreviewUrl(nextPreviewUrl);
+    setSearchError(undefined);
 
     event.target.value = "";
   }
@@ -165,6 +171,7 @@ export function Header() {
   function handleModeChange(nextMode: HeaderSearchMode) {
     setSearchMode(nextMode);
     clearSelectedImage();
+    setSearchError(undefined);
   }
 
   function clearSelectedImage() {
@@ -175,6 +182,7 @@ export function Header() {
 
     setSelectedFile(null);
     setSelectedFilePreviewUrl(null);
+    setSearchError(undefined);
   }
 
   return (
@@ -229,14 +237,14 @@ export function Header() {
               </label>
             ) : (
               <input
-                className="h-full min-w-0 flex-1 bg-transparent px-4 text-sm font-semibold text-ink-primary outline-none placeholder:text-slate-400"
+                aria-label="Search by text"
+                className="h-full min-w-0 flex-1 bg-transparent px-4 text-base font-semibold text-ink-primary outline-none placeholder:text-slate-400 md:text-sm"
                 value={query}
-                placeholder={
-                  searchMode === "semantic"
-                    ? "Search by description..."
-                    : "Search text in images..."
-                }
-                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Describe an image or enter words from it..."
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setSearchError(undefined);
+                }}
               />
             )}
 
@@ -268,7 +276,10 @@ export function Header() {
               aria-expanded={isMobileSearchOpen}
               aria-label={isMobileSearchOpen ? "Close search" : "Open search"}
               className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-ink-secondary transition hover:bg-accent-50 hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 md:hidden"
-              onClick={() => setIsMobileSearchOpen((isOpen) => !isOpen)}
+              onClick={() => {
+                setIsAccountMenuOpen(false);
+                setIsMobileSearchOpen((isOpen) => !isOpen);
+              }}
             >
               {isMobileSearchOpen ? (
                 <X className="h-5 w-5" />
@@ -314,7 +325,10 @@ export function Header() {
                   aria-label={`Open account menu for ${userDisplayName}`}
                   title={userDisplayName}
                   className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-border bg-white text-ink-primary shadow-sm shadow-slate-200/70 transition hover:border-accent-200 hover:bg-accent-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 md:h-10 md:w-10"
-                  onClick={() => setIsAccountMenuOpen(true)}
+                  onClick={() => {
+                    setIsMobileSearchOpen(false);
+                    setIsAccountMenuOpen((isOpen) => !isOpen);
+                  }}
                 >
                   <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-sm font-black text-ink-primary">
                     {userInitial}
@@ -465,19 +479,15 @@ export function Header() {
               ) : (
                 <input
                   ref={mobileSearchInputRef}
-                  aria-label={
-                    searchMode === "semantic"
-                      ? "Search by description"
-                      : "Search text in images"
-                  }
-                  className="h-full min-w-0 flex-1 bg-transparent px-3 text-sm font-semibold text-ink-primary outline-none placeholder:text-slate-400"
+                  aria-label="Search by text"
+                  aria-describedby={searchError ? "header-search-error" : undefined}
+                  className="h-full min-w-0 flex-1 bg-transparent px-3 text-base font-semibold text-ink-primary outline-none placeholder:text-slate-400"
                   value={query}
-                  placeholder={
-                    searchMode === "semantic"
-                      ? "Describe an image..."
-                      : "Text in images..."
-                  }
-                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Describe or enter words..."
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    setSearchError(undefined);
+                  }}
                 />
               )}
 
@@ -501,7 +511,22 @@ export function Header() {
                 <Search className="h-[18px] w-[18px]" />
               </button>
             </form>
+            {searchError && (
+              <p
+                id="header-search-error"
+                className="mx-auto mt-2 max-w-xl text-sm font-semibold text-red-700"
+                role="alert"
+              >
+                {searchError}
+              </p>
+            )}
           </div>
+        )}
+
+        {searchError && !isMobileSearchOpen && (
+          <p className="border-t border-red-100 bg-red-50 px-4 py-2 text-center text-sm font-semibold text-red-700" role="alert">
+            {searchError}
+          </p>
         )}
       </header>
 

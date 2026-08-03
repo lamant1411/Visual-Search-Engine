@@ -92,7 +92,7 @@ export function ResultCard({
             </div>
           ) : (
             <img
-              alt={`Search result ${result.id}`}
+              alt={`${result.metadata.source ?? "Image"} result ${result.id}`}
               className={[
                 "w-full object-cover transition duration-300 md:group-hover:scale-105",
                 aspectRatio ? "h-full" : "h-auto",
@@ -100,8 +100,11 @@ export function ResultCard({
               ].join(" ")}
               decoding="async"
               fetchPriority={priority ? "high" : "auto"}
+              height={effectiveHeight}
               loading={priority ? "eager" : "lazy"}
+              sizes="(max-width: 639px) 100vw, (max-width: 1023px) 50vw, (max-width: 1279px) 33vw, 25vw"
               src={result.thumbnailUrl}
+              width={effectiveWidth}
               onLoad={(e) => {
                 setImageLoaded(true);
                 const { naturalWidth, naturalHeight } = e.currentTarget;
@@ -134,7 +137,7 @@ export function ResultCard({
             {result.metadata.ocrText && (
               <p className="mt-3 inline-flex max-w-full items-center gap-2 rounded-md bg-white/90 px-3 py-2 text-xs font-semibold text-slate-800">
                 <Info className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">OCR: {result.metadata.ocrText}</span>
+                <span className="truncate">Text: {result.metadata.ocrText}</span>
               </p>
             )}
           </div>

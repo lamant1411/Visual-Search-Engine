@@ -1,28 +1,37 @@
-import { type MouseEvent, type PointerEvent, useEffect, useState } from "react";
+import {
+  type MouseEvent,
+  type PointerEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Bookmark,
   Check,
   Copy,
+  Crop,
   Info,
   Minus,
   Plus,
   RotateCcw,
-  Search,
   X,
   Zap,
 } from "lucide-react";
 
 import { Button } from "@/components/base/button";
+import { useDialogAccessibility } from "@/lib/ui/useDialogAccessibility";
 
 import type { SearchResult } from "../types";
 import { formatSimilarityScore } from "../utils/formatSimilarityScore";
+import { ImageCropModal } from "./ImageCropModal";
 
 type SearchResultDetailModalProps = {
   result: SearchResult;
   isBookmarked?: boolean;
   onBookmark?: (result: SearchResult) => void;
   onClose: () => void;
-  onFindSimilar?: (result: SearchResult) => void;
+  onFindSimilar?: (result: SearchResult, croppedFile?: File) => void | Promise<void>;
   showSimilarity?: boolean;
 };
 
@@ -42,33 +51,62 @@ export function SearchResultDetailModal({
   const [zoomOrigin, setZoomOrigin] = useState("50% 50%");
   const [dragStartY, setDragStartY] = useState<number | null>(null);
   const [isOcrExpanded, setIsOcrExpanded] = useState(false);
+  const [cropSourceFile, setCropSourceFile] = useState<File | null>(null);
+  const [cropError, setCropError] = useState<string>();
+  const [isPreparingCrop, setIsPreparingCrop] = useState(false);
+  const prepareCropRequestRef = useRef<AbortController | null>(null);
   const isZoomed = zoom > 1;
   const similarityScore = formatSimilarityScore(result.similarityScore);
   const sizeLabel =
     result.metadata.width && result.metadata.height
       ? `${result.metadata.width} x ${result.metadata.height}`
       : "Unknown size";
+  const cropSourceUrl = useMemo(
+    () => (cropSourceFile ? URL.createObjectURL(cropSourceFile) : null),
+    [cropSourceFile],
+  );
+  const dialogRef = useDialogAccessibility<HTMLElement>(onClose, {
+    enabled: !cropSourceFile,
+  });
 
   useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    }
+    return () => {
+      prepareCropRequestRef.current?.abort();
+    };
+  }, []);
 
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  useEffect(() => {
+    return () => {
+      if (cropSourceUrl) {
+        URL.revokeObjectURL(cropSourceUrl);
+      }
+    };
+  }, [cropSourceUrl]);
+
+  if (cropSourceFile && cropSourceUrl && onFindSimilar) {
+    return (
+      <ImageCropModal
+        file={cropSourceFile}
+        imageUrl={cropSourceUrl}
+        onCancel={() => setCropSourceFile(null)}
+        onConfirm={(croppedFile) => onFindSimilar(result, croppedFile)}
+        onUseOriginal={() => onFindSimilar(result)}
+      />
+    );
+  }
 
   return (
     <div
+      aria-labelledby="search-result-detail-title"
       aria-modal="true"
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"
       role="dialog"
       onClick={onClose}
     >
       <section
+        ref={dialogRef}
         className="flex max-h-[96vh] w-[96vw] max-w-[1500px] flex-col overflow-y-auto rounded-lg bg-white shadow-2xl lg:grid lg:h-[92vh] lg:grid-cols-[minmax(0,1fr)_340px] lg:overflow-hidden"
+        tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
       >
         <button
@@ -159,7 +197,7 @@ export function SearchResultDetailModal({
               <p className="text-xs font-semibold uppercase text-accent-600">
                 Image details
               </p>
-              <h2 className="font-display mt-1 text-2xl font-bold text-ink-primary">
+              <h2 id="search-result-detail-title" className="font-display mt-1 text-2xl font-bold text-ink-primary">
                 Image #{result.id}
               </h2>
             </div>
@@ -198,7 +236,7 @@ export function SearchResultDetailModal({
             <div className="mt-5 rounded-lg border border-border bg-white p-4 shadow-sm shadow-slate-200/70">
               <div className="flex items-center gap-2 text-sm font-semibold text-ink-primary">
                 <Info className="h-4 w-4 text-accent-600" />
-                OCR content
+                Text found in image
               </div>
               <p
                 className={[
@@ -214,7 +252,7 @@ export function SearchResultDetailModal({
                   className="mt-2 min-h-9 text-xs font-bold text-accent-700"
                   onClick={() => setIsOcrExpanded((current) => !current)}
                 >
-                  {isOcrExpanded ? "Show less" : "Show full OCR text"}
+                  {isOcrExpanded ? "Show less" : "Show all detected text"}
                 </button>
               )}
             </div>
@@ -237,15 +275,31 @@ export function SearchResultDetailModal({
             </Button>
 
             {onFindSimilar && (
-              <Button
-                fullWidth
-                className="!bg-ink-primary shadow-sm shadow-slate-300/70 hover:!bg-slate-800 active:!bg-slate-900 focus-visible:ring-accent-600"
-                leftIcon={<Search className="h-4 w-4" />}
-                type="button"
-                onClick={() => onFindSimilar(result)}
-              >
-                Find similar images
-              </Button>
+              <>
+                <Button
+                  fullWidth
+                  className="!bg-ink-primary shadow-sm shadow-slate-300/70 hover:!bg-slate-800 active:!bg-slate-900 focus-visible:ring-accent-600"
+                  leftIcon={<Crop className="h-4 w-4" />}
+                  loading={isPreparingCrop}
+                  type="button"
+                  onClick={handlePrepareCrop}
+                >
+                  {isPreparingCrop ? "Preparing image..." : "Choose area and find similar"}
+                </Button>
+
+                {cropError && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3" role="alert">
+                    <p className="text-xs font-semibold text-amber-900">{cropError}</p>
+                    <button
+                      className="mt-2 min-h-9 text-xs font-bold text-amber-950 underline underline-offset-4"
+                      type="button"
+                      onClick={() => onFindSimilar(result)}
+                    >
+                      Search using the full image instead
+                    </button>
+                  </div>
+                )}
+              </>
             )}
 
             <Button
@@ -316,6 +370,73 @@ export function SearchResultDetailModal({
       setCopyStatus("error");
     }
   }
+
+  async function handlePrepareCrop() {
+    if (!onFindSimilar || isPreparingCrop) {
+      return;
+    }
+
+    prepareCropRequestRef.current?.abort();
+    const controller = new AbortController();
+    prepareCropRequestRef.current = controller;
+    setCropError(undefined);
+    setIsPreparingCrop(true);
+
+    try {
+      const file = await loadResultImageFile(result, controller.signal);
+      setCropSourceFile(file);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
+
+      setCropError(
+        "This image cannot be opened in the crop tool. You can still search with the full image.",
+      );
+    } finally {
+      if (prepareCropRequestRef.current === controller) {
+        prepareCropRequestRef.current = null;
+        setIsPreparingCrop(false);
+      }
+    }
+  }
+}
+
+async function loadResultImageFile(result: SearchResult, signal: AbortSignal) {
+  const response = await fetch(getCropFetchUrl(result.imageUrl), { signal });
+  if (!response.ok) {
+    throw new Error(`Unable to load image (${response.status}).`);
+  }
+
+  const blob = await response.blob();
+  if (!blob.type.startsWith("image/")) {
+    throw new Error("The selected resource is not an image.");
+  }
+
+  const extension = getImageExtension(blob.type);
+  return new File([blob], `image-${result.id}.${extension}`, {
+    type: blob.type,
+    lastModified: Date.now(),
+  });
+}
+
+function getCropFetchUrl(imageUrl: string) {
+  try {
+    const parsedUrl = new URL(imageUrl, window.location.origin);
+    if (parsedUrl.pathname.startsWith("/static/")) {
+      return `${parsedUrl.pathname}${parsedUrl.search}`;
+    }
+  } catch {
+    return imageUrl;
+  }
+
+  return imageUrl;
+}
+
+function getImageExtension(mimeType: string) {
+  if (mimeType === "image/png") return "png";
+  if (mimeType === "image/webp") return "webp";
+  return "jpg";
 }
 
 function clamp(value: number, min: number, max: number) {

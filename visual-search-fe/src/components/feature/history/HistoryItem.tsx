@@ -19,13 +19,13 @@ const typeConfig: Record<
     surfaceClass: 'border-sky-100 bg-sky-50',
   },
   semantic: {
-    label: 'Semantic',
+    label: 'Description',
     icon: FileText,
     iconClass: 'text-accent-700',
     surfaceClass: 'border-accent-100 bg-accent-50',
   },
   ocr: {
-    label: 'OCR',
+    label: 'Text in image',
     icon: ScanText,
     iconClass: 'text-amber-700',
     surfaceClass: 'border-amber-100 bg-amber-50',

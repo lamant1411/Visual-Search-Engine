@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { type FormEvent, useRef, useState } from 'react'
 import axios from 'axios'
 import { Eye, EyeOff, LockKeyhole, Mail, Search, UserRound, X } from 'lucide-react'
 
@@ -7,6 +7,7 @@ import { Input } from '@/components/base/input'
 import { useAuth } from '@/contexts/AuthContext'
 import { authApi } from '@/lib/api/auth'
 import { saveTokens } from '@/lib/auth/tokenStorage'
+import { useDialogAccessibility } from '@/lib/ui/useDialogAccessibility'
 
 type SearchLoginModalProps = {
   onClose: () => void
@@ -24,24 +25,10 @@ export function SearchLoginModal({ onClose, onSuccess }: SearchLoginModalProps) 
   const [showPassword, setShowPassword] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string>()
   const [isSubmitting, setIsSubmitting] = useState(false)
-
-  useEffect(() => {
-    emailInputRef.current?.focus()
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !isSubmitting) {
-        onClose()
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown)
-      document.body.style.overflow = previousOverflow
-    }
-  }, [isSubmitting, onClose])
+  const dialogRef = useDialogAccessibility<HTMLElement>(onClose, {
+    closeOnEscape: !isSubmitting,
+    initialFocusRef: emailInputRef,
+  })
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -98,13 +85,17 @@ export function SearchLoginModal({ onClose, onSuccess }: SearchLoginModalProps) 
       aria-modal="true"
       className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm"
       role="dialog"
-      onMouseDown={(event) => {
+      onPointerDown={(event) => {
         if (event.target === event.currentTarget && !isSubmitting) {
           onClose()
         }
       }}
     >
-      <section className="relative max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-lg bg-white px-6 py-7 shadow-2xl sm:px-8">
+      <section
+        ref={dialogRef}
+        className="relative max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-lg bg-white px-6 py-7 shadow-2xl sm:px-8"
+        tabIndex={-1}
+      >
         <Button
           aria-label="Close sign in dialog"
           className="absolute right-4 top-4"
@@ -131,9 +122,9 @@ export function SearchLoginModal({ onClose, onSuccess }: SearchLoginModalProps) 
           </p>
         </div>
 
-        <form className="mt-6 space-y-4" noValidate onSubmit={handleSubmit}>
+        <form aria-busy={isSubmitting} className="mt-6 space-y-4" noValidate onSubmit={handleSubmit}>
           {errorMessage && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700" role="alert">
               {errorMessage}
             </div>
           )}

@@ -1,4 +1,4 @@
-import { type MouseEvent, type PointerEvent, useEffect, useState } from 'react'
+import { type MouseEvent, type PointerEvent, useState } from 'react'
 import {
   Check,
   Copy,
@@ -11,6 +11,7 @@ import {
   X,
 } from 'lucide-react'
 import { Button } from '@/components/base/button'
+import { useDialogAccessibility } from '@/lib/ui/useDialogAccessibility'
 import type { HistoryItem, SearchQueryType } from '@/lib/api/history'
 
 type HistoryImageModalProps = {
@@ -24,8 +25,8 @@ const typeConfig: Record<
   { label: string; icon: typeof ImageIcon; iconClass: string }
 > = {
   image: { label: 'Image Search', icon: ImageIcon, iconClass: 'text-sky-700' },
-  semantic: { label: 'Semantic Search', icon: FileText, iconClass: 'text-accent-700' },
-  ocr: { label: 'OCR Search', icon: ScanText, iconClass: 'text-amber-700' },
+  semantic: { label: 'Description Search', icon: FileText, iconClass: 'text-accent-700' },
+  ocr: { label: 'Text-in-image Search', icon: ScanText, iconClass: 'text-amber-700' },
 }
 
 function formatDate(value: string) {
@@ -52,17 +53,7 @@ export function HistoryImageModal({ item, onClose, onReSearch }: HistoryImageMod
   const config = typeConfig[item.query_type]
   const Icon = config.icon
   const isZoomed = zoom > 1
-
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        onClose()
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
+  const dialogRef = useDialogAccessibility<HTMLElement>(onClose)
 
   function handleImageClick(event: MouseEvent<HTMLDivElement>) {
     updateZoomOrigin(event)
@@ -99,13 +90,16 @@ export function HistoryImageModal({ item, onClose, onReSearch }: HistoryImageMod
 
   return (
     <div
+      aria-labelledby="history-image-detail-title"
       aria-modal="true"
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"
       role="dialog"
       onClick={onClose}
     >
       <section
+        ref={dialogRef}
         className="flex max-h-[96vh] w-[96vw] max-w-[1300px] flex-col overflow-y-auto rounded-lg bg-white shadow-2xl lg:grid lg:h-[88vh] lg:grid-cols-[minmax(0,1fr)_340px] lg:overflow-hidden"
+        tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
       >
         <button
@@ -188,7 +182,7 @@ export function HistoryImageModal({ item, onClose, onReSearch }: HistoryImageMod
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase text-accent-600">History preview</p>
-              <h2 className="font-display mt-1 text-xl font-bold text-ink-primary">
+              <h2 id="history-image-detail-title" className="font-display mt-1 text-xl font-bold text-ink-primary">
                 Searched Image
               </h2>
             </div>

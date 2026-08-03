@@ -8,6 +8,10 @@ import { useBookmark } from '@/features/bookmark/useBookmark'
 import { ResultGrid, ResultGridSkeleton } from '@/features/search/components/ResultGrid'
 import { SearchResultDetailModal } from '@/features/search/components/SearchResultDetailModal'
 import type { SearchResult } from '@/features/search/types'
+import {
+  createImageSearchHistoryKey,
+  saveImageSearchFile,
+} from '@/features/search/utils/imageSearchSession'
 
 export default function BookmarkPage() {
   const navigate = useNavigate()
@@ -78,8 +82,19 @@ export default function BookmarkPage() {
     }
   }
 
-  function handleFindSimilar(result: SearchResult) {
+  async function handleFindSimilar(result: SearchResult, file?: File) {
     setSelectedResult(null)
+
+    if (file) {
+      const historyKey = createImageSearchHistoryKey()
+      await saveImageSearchFile(historyKey, file)
+      navigate(
+        `/search/results?mode=image&page=1&limit=20&historyKey=${encodeURIComponent(historyKey)}`,
+        { state: { file, fileName: file.name, historyKey } },
+      )
+      return
+    }
+
     navigate(`/search/results?mode=image&imageId=${result.id}&page=1&limit=20`)
   }
 
@@ -169,7 +184,12 @@ export default function BookmarkPage() {
       )}
 
       {removedResult && (
-        <div className="fixed inset-x-4 bottom-4 z-[60] mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-border bg-white p-3 shadow-2xl shadow-slate-900/15 sm:bottom-6">
+        <div
+          aria-atomic="true"
+          aria-live="polite"
+          className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[60] mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-border bg-white p-3 shadow-2xl shadow-slate-900/15 sm:bottom-6"
+          role="status"
+        >
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
             <CheckCircle2 className="h-5 w-5" />
           </div>
@@ -177,6 +197,7 @@ export default function BookmarkPage() {
             Removed from bookmarks
           </p>
           <button
+            aria-label="Undo removing this image from bookmarks"
             type="button"
             disabled={restoringImageId === removedResult.id}
             className="min-h-11 rounded-lg px-3 text-sm font-bold text-accent-700 hover:bg-accent-50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -188,6 +209,7 @@ export default function BookmarkPage() {
             Undo
           </button>
           <button
+            aria-label="Dismiss bookmark notification"
             type="button"
             className="min-h-11 rounded-lg px-2 text-xs font-bold text-ink-muted hover:bg-surface-1"
             onClick={() => setRemovedResult(null)}

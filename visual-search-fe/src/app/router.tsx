@@ -15,6 +15,7 @@ const ImageLibraryPage = lazy(() => import("@/pages/ImageLibraryPage"));
 const AdminOverviewPage = lazy(() => import("@/pages/admin/AdminOverviewPage"));
 const AdminIndexingPage = lazy(() => import("@/pages/admin/AdminIndexingPage"));
 const AdminUsersPage = lazy(() => import("@/pages/admin/AdminUsersPage"));
+const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
 const SearchPage = lazy(() =>
   import("@/features/search/pages/SearchPage").then((module) => ({
     default: module.SearchPage,
@@ -80,7 +81,7 @@ const router = createBrowserRouter([
     ],
   },
 
-  { path: "*", element: <div>404 - Page not found</div> },
+  { path: "*", element: <NotFoundPage /> },
 ]);
 
 export function AppRouter() {
