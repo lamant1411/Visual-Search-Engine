@@ -1,5 +1,5 @@
 ---
-title: Visual Search AI
+title: Visual Search Engine
 emoji: 🚀
 colorFrom: blue
 colorTo: red
