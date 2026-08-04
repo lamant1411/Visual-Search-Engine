@@ -1,0 +1,34 @@
+"""Bảng tùy chọn để lưu lịch sử truy vấn tìm kiếm."""
+
+from datetime import datetime
+from typing import TYPE_CHECKING
+
+from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.db.base import Base
+from app.schemas.common import SearchQueryType
+
+if TYPE_CHECKING:
+    from app.models.user import User
+
+
+class SearchHistory(Base):
+    # Hữu ích cho thống kê và lịch sử người dùng, nhưng không bắt buộc cho MVP.
+    __tablename__ = "search_history"
+    __table_args__ = (
+        UniqueConstraint("user_id", "query_type", "client_history_key", name="uq_search_history_user_type_key"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    query_type: Mapped[SearchQueryType] = mapped_column(
+        SAEnum(SearchQueryType, name="search_query_type", native_enum=False, create_constraint=True),
+        nullable=False,
+    )
+    query_value: Mapped[str] = mapped_column(Text, nullable=False)
+    query_image_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    client_history_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped["User"] = relationship(back_populates="search_history")

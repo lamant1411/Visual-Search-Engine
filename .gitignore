@@ -1,0 +1,23 @@
+.env
+.env.*
+.agents/
+node_modules/
+dist/
+__pycache__/
+*.pyc
+*.log
+.venv
+# Ignore AI Datasets and images
+AI/data/
+AI/output/
+# Ignore local static image files
+backend/static/images/indexing/
+backend/static/images/*.jpg
+backend/static/images/*.jpeg
+backend/static/images/*.png
+backend/static/images/*.webp
+backend/static/images/*.gif
+backend/static/images/*.bmp
+backend/static/images/*.tif
+backend/static/images/*.tiff
+backend/static/images/*

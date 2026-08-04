@@ -1,0 +1,36 @@
+# FastAPI
+# =========================
+fastapi==0.138.2
+uvicorn[standard]==0.49.0
+
+# Database
+# =========================
+SQLAlchemy==2.0.51
+asyncpg==0.31.0
+alembic==1.18.5
+
+# Validation & Config
+# =========================
+pydantic==2.13.4
+pydantic-settings==2.14.2
+python-dotenv==1.2.2
+email-validator==2.3.0
+
+# Authentication
+# =========================
+python-jose[cryptography]==3.5.0
+passlib[bcrypt]==1.7.4
+bcrypt==3.2.2
+
+# File Upload
+# =========================
+python-multipart==0.0.32
+
+# Vector Database
+# =========================
+qdrant-client==1.18.0
+
+# HTTP Client (nếu gọi AI/OCR API)
+# =========================
+httpx==0.28.1
+ 

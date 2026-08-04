@@ -1,0 +1,126 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      # BE serve anh local qua /static/images de Frontend hien thi duoc.
+      - ./backend/static/images:/app/static/images
+    env_file:
+      - ./backend/.env
+    environment:
+      - AI_SERVICE_URL=http://ai_service:8001 # Báo cho BE biết chỗ gọi AI
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      ai_service:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ai_service:
+    build:
+      context: ./AI
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./AI:/app
+      - ./backend/static/images:/app/static/images
+      # Persist downloaded models so recreating the container does not warm up
+      # from an empty cache every time.
+      - ai_huggingface_cache:/root/.cache/huggingface
+      - ai_easyocr_cache:/root/.EasyOCR
+    environment:
+      - POSTGRES_HOST=postgres
+      - QDRANT_URL=http://qdrant:6333
+      # Four queue workers keep the stages fed. While CLIP is busy only one OCR
+      # worker runs; a second worker catches up after semantic work finishes.
+      - AI_CPU_THREADS=12
+      - AI_INFERENCE_THREADS=4
+      - MAX_INDEX_WORKERS=4
+      - TORCH_NUM_INTEROP_THREADS=1
+      - CLIP_IMAGE_BATCH_SIZE=2
+      - CLIP_IMAGE_BATCH_WAIT_MS=8
+      - OCR_RECOGNITION_BATCH_SIZE=4
+      - OCR_MAX_CONCURRENT_INFERENCE=2
+      - OCR_MAX_INPUT_DIMENSION=1600
+      # RapidOCR handles new images first; EasyOCR remains the low-confidence
+      # fallback. Existing OCR rows are not rewritten by this setting.
+      - OCR_ENGINE=hybrid
+      - RAPID_OCR_MAX_CONCURRENT_INFERENCE=1
+      - RAPID_OCR_CONFIDENCE_THRESHOLD=0.45
+      - RAPID_OCR_MAX_INPUT_DIMENSION=1600
+      - RAPID_OCR_USE_CLS=true
+      - OCR_FALLBACK_CONFIDENCE_THRESHOLD=0.45
+      - AI_WARMUP_MODELS=true
+    command: uvicorn ai_service:app --host 0.0.0.0 --port 8001
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./visual-search-fe
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./visual-search-fe:/app
+      - frontend_node_modules:/app/node_modules
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000/api/v1
+      VITE_DEV_PROXY_TARGET: http://backend:8000
+      VITE_ENABLE_MOCK: "false"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: visual_search
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
+  pgadmin:
+    image: dpage/pgadmin4
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+volumes:
+  ai_huggingface_cache:
+  ai_easyocr_cache:
+  frontend_node_modules:
+  postgres_data:
+  qdrant_data:
