@@ -1,4 +1,4 @@
-"""Cấu hình ứng dụng được đọc từ biến môi trường."""
+"""Application settings loaded from environment variables."""
 
 from functools import lru_cache
 
@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Đối tượng cấu hình có kiểu rõ ràng dùng cho toàn bộ backend."""
+    """Typed settings object shared by the backend."""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     admin_index_upload_max_mb: int = Field(default=2)
     admin_index_batch_max_mb: int = Field(default=100)
     admin_index_upload_dir: str = Field(default="static/images/admin_uploads")
+    admin_index_optimize_images: bool = Field(default=True)
+    admin_index_image_max_dimension: int = Field(default=1280)
+    admin_index_image_quality: int = Field(default=85)
+    admin_index_image_format: str = Field(default="ORIGINAL")
     seed_admin_email: str | None = Field(default=None)
     seed_admin_password: str | None = Field(default=None)
     seed_admin_full_name: str = Field(default="System Admin")
@@ -57,7 +61,7 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    """Cache cấu hình để chỉ đọc biến môi trường một lần."""
+    """Cache settings so environment variables are read once."""
     return Settings()
 
 

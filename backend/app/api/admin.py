@@ -2,11 +2,13 @@
 
 import hashlib
 import uuid
+from io import BytesIO
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from PIL import Image as PILImage, ImageOps, UnidentifiedImageError
 from sqlalchemy import case, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -327,29 +329,70 @@ async def upload_images_to_batch(
     max_batch_bytes = settings.admin_index_batch_max_mb * 1024 * 1024
 
     try:
+        prepared_uploads: list[dict[str, object]] = []
+        duplicate_candidate_checksums: set[str] = set()
         for index, file in enumerate(files):
-            content = await _read_and_validate_upload_file(file)
+            original_content = await _read_and_validate_upload_file(file)
+            optimized_content, optimized_mime_type, optimized_width, optimized_height = _optimize_uploaded_image(
+                file,
+                original_content,
+            )
             retry_image_url = normalized_image_urls[index] if normalized_image_urls else None
+            checksum = hashlib.sha256(optimized_content).hexdigest()
+            raw_checksum = hashlib.sha256(original_content).hexdigest()
+
+            prepared_uploads.append(
+                {
+                    "file": file,
+                    "retry_image_url": retry_image_url,
+                    "content": optimized_content,
+                    "mime_type": optimized_mime_type,
+                    "width": optimized_width,
+                    "height": optimized_height,
+                    "checksum": checksum,
+                    "raw_checksum": raw_checksum,
+                }
+            )
+            if not retry_image_url:
+                duplicate_candidate_checksums.add(raw_checksum)
+                duplicate_candidate_checksums.add(checksum)
+
+        existing_duplicate_checksums = await _get_duplicate_upload_checksums(db, duplicate_candidate_checksums)
+        accepted_checksums: set[str] = set()
+
+        for prepared in prepared_uploads:
+            file = prepared["file"]
+            retry_image_url = prepared["retry_image_url"]
+            optimized_content = prepared["content"]
+            optimized_mime_type = prepared["mime_type"]
+            optimized_width = prepared["width"]
+            optimized_height = prepared["height"]
+            checksum = prepared["checksum"]
+            raw_checksum = prepared["raw_checksum"]
 
             if retry_image_url:
                 image, item = await _prepare_failed_replacement_item(
                     db=db,
                     batch_id=batch_id,
-                    image_url=retry_image_url,
+                    image_url=str(retry_image_url),
                     file=file,
-                    content=content,
-                    checksum=hashlib.sha256(content).hexdigest(),
+                    content=optimized_content,
+                    mime_type=optimized_mime_type,
+                    width=optimized_width,
+                    height=optimized_height,
+                    checksum=checksum,
                 )
                 queued_items.append(_build_ai_item_payload(item, image))
                 continue
 
-            checksum = hashlib.sha256(content).hexdigest()
-            should_skip_duplicate = await _should_skip_duplicate_upload(db, checksum)
-            if should_skip_duplicate:
+            if raw_checksum in existing_duplicate_checksums or checksum in existing_duplicate_checksums:
+                skipped_files += 1
+                continue
+            if raw_checksum in accepted_checksums or checksum in accepted_checksums:
                 skipped_files += 1
                 continue
 
-            uploaded_bytes += len(content)
+            uploaded_bytes += len(optimized_content)
             if uploaded_bytes > max_batch_bytes:
                 raise api_error(
                     status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -364,7 +407,7 @@ async def upload_images_to_batch(
 
             filename = _safe_filename(file.filename or f"image_{len(queued_items) + 1}.jpg")
             target = _dedupe_path(upload_dir / filename)
-            target.write_bytes(content)
+            target.write_bytes(optimized_content)
             saved_new_paths.append(target)
             storage_path = f"/static/images/admin_uploads/{batch_id}/{target.name}"
 
@@ -372,8 +415,10 @@ async def upload_images_to_batch(
                 source_type=ImageSourceType.upload,
                 storage_path=storage_path,
                 original_filename=file.filename or target.name,
-                mime_type=file.content_type,
-                file_size=len(content),
+                mime_type=optimized_mime_type,
+                file_size=len(optimized_content),
+                width=optimized_width,
+                height=optimized_height,
                 checksum=checksum,
                 status=ImageStatus.pending,
             )
@@ -388,6 +433,8 @@ async def upload_images_to_batch(
             db.add(item)
             await db.flush()
             new_item_count += 1
+            accepted_checksums.add(raw_checksum)
+            accepted_checksums.add(checksum)
 
             queued_items.append(
                 AIIndexItemPayload(
@@ -766,8 +813,9 @@ async def upload_indexing_batch(
     max_batch_bytes = settings.admin_index_batch_max_mb * 1024 * 1024
     try:
         for file in files:
-            content = await _read_and_validate_upload_file(file)
-            total_bytes += len(content)
+            original_content = await _read_and_validate_upload_file(file)
+            optimized_content, _, _, _ = _optimize_uploaded_image(file, original_content)
+            total_bytes += len(optimized_content)
             if total_bytes > max_batch_bytes:
                 raise api_error(
                     status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -782,7 +830,7 @@ async def upload_indexing_batch(
 
             filename = _safe_filename(file.filename or f"image_{saved_count + 1}.jpg")
             target = _dedupe_path(upload_dir / filename)
-            target.write_bytes(content)
+            target.write_bytes(optimized_content)
             saved_count += 1
     except Exception:
         for uploaded_file in upload_dir.glob("*"):
@@ -1152,6 +1200,9 @@ async def _prepare_failed_replacement_item(
     image_url: str,
     file: UploadFile,
     content: bytes,
+    mime_type: str | None,
+    width: int | None,
+    height: int | None,
     checksum: str,
 ) -> tuple[Image, IndexingItem]:
     storage_path = _normalize_image_url_to_storage_path(image_url)
@@ -1204,38 +1255,39 @@ async def _prepare_failed_replacement_item(
     target_path.write_bytes(content)
 
     image.original_filename = file.filename or image.original_filename or target_path.name
-    image.mime_type = file.content_type
+    image.mime_type = mime_type
     image.file_size = len(content)
-    image.width = None
-    image.height = None
+    image.width = width
+    image.height = height
     image.checksum = checksum
     image.status = ImageStatus.pending
     item.status = IndexingItemStatus.queued
     item.error_message = None
     return image, item
 
-async def _should_skip_duplicate_upload(db: AsyncSession, checksum: str) -> bool:
-    duplicate_status = await db.scalar(
-        select(Image.status)
-        .where(
-            Image.checksum == checksum,
-            Image.status.in_([ImageStatus.indexed, ImageStatus.pending, ImageStatus.deleted]),
-        )
-        .limit(1)
-    )
-    if duplicate_status is not None:
-        return True
+async def _get_duplicate_upload_checksums(db: AsyncSession, checksums: set[str]) -> set[str]:
+    if not checksums:
+        return set()
 
-    active_item_id = await db.scalar(
-        select(IndexingItem.id)
-        .join(Image, Image.id == IndexingItem.image_id)
-        .where(
-            Image.checksum == checksum,
-            IndexingItem.status.in_([IndexingItemStatus.queued, IndexingItemStatus.running]),
+    image_checksums = set(
+        await db.scalars(
+            select(Image.checksum).where(
+                Image.checksum.in_(checksums),
+                Image.status.in_([ImageStatus.indexed, ImageStatus.pending, ImageStatus.deleted]),
+            )
         )
-        .limit(1)
     )
-    return active_item_id is not None
+    active_item_checksums = set(
+        await db.scalars(
+            select(Image.checksum)
+            .join(Image, Image.id == IndexingItem.image_id)
+            .where(
+                Image.checksum.in_(checksums),
+                IndexingItem.status.in_([IndexingItemStatus.queued, IndexingItemStatus.running]),
+            )
+        )
+    )
+    return image_checksums | active_item_checksums
 
 def _normalize_image_url_to_storage_path(image_url: str) -> str:
     raw_value = image_url.strip()
@@ -1341,6 +1393,73 @@ async def _read_and_validate_upload_file(file: UploadFile) -> bytes:
         )
     return content
 
+
+
+def _optimize_uploaded_image(file: UploadFile, content: bytes) -> tuple[bytes, str | None, int | None, int | None]:
+    try:
+        with PILImage.open(BytesIO(content)) as source_image:
+            image = ImageOps.exif_transpose(source_image)
+            original_width, original_height = image.size
+            max_dimension = settings.admin_index_image_max_dimension
+            should_resize = (
+                settings.admin_index_optimize_images
+                and max_dimension > 0
+                and max(original_width, original_height) > max_dimension
+            )
+            if should_resize:
+                image = image.copy()
+                image.thumbnail((max_dimension, max_dimension), PILImage.Resampling.LANCZOS)
+
+            if not settings.admin_index_optimize_images:
+                return content, file.content_type, original_width, original_height
+
+            image_format = _resolve_output_image_format(file, image)
+            output = BytesIO()
+            save_kwargs: dict[str, object] = {"optimize": True}
+            if image_format in {"JPEG", "WEBP"}:
+                save_kwargs["quality"] = settings.admin_index_image_quality
+            if image_format == "JPEG" and image.mode not in {"RGB", "L"}:
+                image = image.convert("RGB")
+            image.save(output, format=image_format, **save_kwargs)
+            optimized = output.getvalue()
+            if not should_resize and len(optimized) >= len(content):
+                return content, file.content_type, original_width, original_height
+            width, height = image.size
+            return optimized, _mime_type_for_image_format(image_format, file.content_type), width, height
+    except (OSError, UnidentifiedImageError):
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "VALIDATION_ERROR",
+            "Uploaded file is not a valid image.",
+            {"field": "files", "filename": file.filename or ""},
+        )
+
+
+def _resolve_output_image_format(file: UploadFile, image: PILImage.Image) -> str:
+    configured_format = settings.admin_index_image_format.upper()
+    if configured_format in {"JPEG", "PNG", "WEBP"}:
+        return configured_format
+
+    source_format = (image.format or "").upper()
+    if source_format in {"JPEG", "PNG", "WEBP"}:
+        return source_format
+
+    content_type = (file.content_type or "").lower()
+    if content_type == "image/png":
+        return "PNG"
+    if content_type == "image/webp":
+        return "WEBP"
+    return "JPEG"
+
+
+def _mime_type_for_image_format(image_format: str, fallback: str | None) -> str | None:
+    if image_format == "JPEG":
+        return "image/jpeg"
+    if image_format == "PNG":
+        return "image/png"
+    if image_format == "WEBP":
+        return "image/webp"
+    return fallback
 
 def _safe_filename(filename: str) -> str:
     safe = Path(filename).name.replace(" ", "_")
