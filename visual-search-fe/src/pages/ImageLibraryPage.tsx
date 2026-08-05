@@ -326,6 +326,49 @@ export default function ImageLibraryPage() {
     ? 'Review soft-deleted images, restore them, or permanently remove them from the system.'
     : 'Browse indexed images that are ready for text and image-to-image search.'
 
+  function renderSelectedImageManagementAction() {
+    if (!canManageImages || !selectedResult) {
+      return undefined
+    }
+
+    if (isDeletedView) {
+      return (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            disabled={mutatingImageId === selectedResult.id}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 py-2.5 text-sm font-bold text-ink-primary transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={handleRestoreSelectedImage}
+          >
+            <Undo2 className="h-4 w-4" />
+            {mutatingImageId === selectedResult.id ? 'Restoring...' : 'Restore image'}
+          </button>
+          <button
+            type="button"
+            disabled={mutatingImageId === selectedResult.id}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={handlePermanentDeleteSelectedImage}
+          >
+            <Trash2 className="h-4 w-4" />
+            {mutatingImageId === selectedResult.id ? 'Deleting...' : 'Delete permanently'}
+          </button>
+        </div>
+      )
+    }
+
+    return (
+      <button
+        type="button"
+        disabled={mutatingImageId === selectedResult.id}
+        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+        onClick={handleSoftDeleteSelectedImage}
+      >
+        <Trash2 className="h-4 w-4" />
+        {mutatingImageId === selectedResult.id ? 'Moving...' : 'Move to deleted'}
+      </button>
+    )
+  }
+
   return (
     <>
       <PageContainer size="wide" className="space-y-6 py-5 sm:py-8">
@@ -633,48 +676,13 @@ export default function ImageLibraryPage() {
         <>
           <SearchResultDetailModal
             result={selectedResult}
+            footerAction={renderSelectedImageManagementAction()}
             isBookmarked={!isDeletedView && isBookmarked(selectedResult.id)}
             showSimilarity={false}
             onBookmark={isDeletedView ? undefined : handleBookmark}
             onClose={() => setSelectedResult(null)}
             onFindSimilar={isDeletedView ? undefined : handleFindSimilar}
           />
-          {canManageImages && (
-            <div className="fixed bottom-6 right-6 z-[60] flex flex-wrap justify-end gap-2">
-              {isDeletedView ? (
-                <>
-                  <button
-                    type="button"
-                    disabled={mutatingImageId === selectedResult.id}
-                    className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-bold text-ink-primary shadow-xl shadow-slate-900/20 ring-1 ring-border transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                    onClick={handleRestoreSelectedImage}
-                  >
-                    <Undo2 className="h-4 w-4" />
-                    {mutatingImageId === selectedResult.id ? 'Restoring...' : 'Restore image'}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={mutatingImageId === selectedResult.id}
-                    className="inline-flex items-center gap-2 rounded-full bg-red-600 px-5 py-3 text-sm font-bold text-white shadow-xl shadow-red-900/20 transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    onClick={handlePermanentDeleteSelectedImage}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    {mutatingImageId === selectedResult.id ? 'Deleting...' : 'Delete permanently'}
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  disabled={mutatingImageId === selectedResult.id}
-                  className="inline-flex items-center gap-2 rounded-full bg-red-600 px-5 py-3 text-sm font-bold text-white shadow-xl shadow-red-900/20 transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  onClick={handleSoftDeleteSelectedImage}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  {mutatingImageId === selectedResult.id ? 'Moving...' : 'Move to deleted'}
-                </button>
-              )}
-            </div>
-          )}
         </>
       )}
     </>

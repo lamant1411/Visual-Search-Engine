@@ -19,6 +19,35 @@ import { adminApi, type IndexingBatch } from '@/lib/api/admin'
 
 const INDEXING_POLL_INTERVAL_MS = 2_000
 const BATCH_HISTORY_PAGE_LIMIT = 10
+const MAX_INDEX_UPLOAD_FILE_BYTES = 10 * 1024 * 1024
+const MAX_INDEX_UPLOAD_CHUNK_BYTES = 100 * 1024 * 1024
+
+function splitFilesIntoUploadChunks(files: File[]): File[][] {
+  const chunks: File[][] = []
+  let currentChunk: File[] = []
+  let currentChunkBytes = 0
+
+  for (const file of files) {
+    if (file.size > MAX_INDEX_UPLOAD_FILE_BYTES) {
+      throw new Error(`Image "${file.name}" is larger than 10MB.`)
+    }
+
+    if (currentChunk.length > 0 && currentChunkBytes + file.size > MAX_INDEX_UPLOAD_CHUNK_BYTES) {
+      chunks.push(currentChunk)
+      currentChunk = []
+      currentChunkBytes = 0
+    }
+
+    currentChunk.push(file)
+    currentChunkBytes += file.size
+  }
+
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk)
+  }
+
+  return chunks
+}
 
 export default function AdminIndexingPage() {
   const [batches, setBatches] = useState<IndexingBatch[]>([])
@@ -323,7 +352,7 @@ export default function AdminIndexingPage() {
       activeBatchIdRef.current = createdBatchId
       setActiveBatchStatus(batch.status)
       applyServerTiming(batch)
-      const chunkSize = 10
+      const uploadChunks = splitFilesIntoUploadChunks(filesToUpload)
 
       const pollStatus = async () => {
         try {
@@ -422,16 +451,16 @@ export default function AdminIndexingPage() {
       if (pollingRef.current) clearInterval(pollingRef.current)
       pollingRef.current = window.setInterval(pollStatus, 2000)
 
-      for (let offset = 0; offset < filesToUpload.length; offset += chunkSize) {
-        const chunk = filesToUpload.slice(offset, offset + chunkSize)
+      let completedFiles = 0
+      for (const chunk of uploadChunks) {
         await adminApi.uploadImagesToBatch(createdBatchId, chunk, (chunkPercent) => {
-          const completedFiles = offset
           const currentChunkFiles = (chunkPercent / 100) * chunk.length
           const uploadedFiles = Math.min(filesToUpload.length, completedFiles + currentChunkFiles)
           setUploadedCount(Math.round(uploadedFiles))
           setUploadProgress(Math.round((uploadedFiles / filesToUpload.length) * 100))
         })
-        setUploadedCount(Math.min(filesToUpload.length, offset + chunk.length))
+        completedFiles += chunk.length
+        setUploadedCount(Math.min(filesToUpload.length, completedFiles))
       }
 
       await adminApi.completeIndexingBatch(createdBatchId)

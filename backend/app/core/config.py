@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     image_embedding_dim: int = Field(default=512)
     image_search_max_upload_mb: int = Field(default=10)
     image_search_max_results: int = Field(default=100)
-    admin_index_upload_max_mb: int = Field(default=2)
+    admin_index_upload_max_mb: int = Field(default=10)
     admin_index_batch_max_mb: int = Field(default=100)
     admin_index_upload_dir: str = Field(default="static/images/admin_uploads")
     admin_index_optimize_images: bool = Field(default=True)

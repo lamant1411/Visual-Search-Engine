@@ -4,6 +4,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  type ReactNode,
   useState,
 } from "react";
 import {
@@ -33,6 +34,7 @@ type SearchResultDetailModalProps = {
   onClose: () => void;
   onFindSimilar?: (result: SearchResult, croppedFile?: File) => void | Promise<void>;
   showSimilarity?: boolean;
+  footerAction?: ReactNode;
 };
 
 export function SearchResultDetailModal({
@@ -42,6 +44,7 @@ export function SearchResultDetailModal({
   onClose,
   onFindSimilar,
   showSimilarity = true,
+  footerAction,
 }: SearchResultDetailModalProps) {
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">(
     "idle",
@@ -324,6 +327,13 @@ export function SearchResultDetailModal({
                 Unable to copy this URL.
               </p>
             )}
+
+            {footerAction && (
+              <div className="pt-1">
+                {footerAction}
+              </div>
+            )}
+
           </div>
         </aside>
       </section>

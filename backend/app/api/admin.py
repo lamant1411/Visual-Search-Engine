@@ -265,7 +265,7 @@ async def create_indexing_batch(
     status_code=status.HTTP_201_CREATED,
     summary="Upload images to batch and enqueue indexing",
     description=(
-        "Receive multipart/form-data field files. Optional image_urls can be sent with the same length as files to replace failed images in this batch. Each new image is limited by ADMIN_INDEX_UPLOAD_MAX_MB, and each batch is limited by ADMIN_INDEX_BATCH_MAX_MB. Saved images are sent to the AI queue for item-level indexing. Requires admin role."
+        "Receive multipart/form-data field files. Optional image_urls can be sent with the same length as files to replace failed images in this batch. Each new image is limited by ADMIN_INDEX_UPLOAD_MAX_MB, and each upload request/chunk is limited by ADMIN_INDEX_BATCH_MAX_MB. Clients can upload multiple chunks to the same batch. Saved images are sent to the AI queue for item-level indexing. Requires admin role."
     ),
     responses={
         201: {"description": "Upload succeeded and items were enqueued to AI."},
@@ -274,7 +274,7 @@ async def create_indexing_batch(
         403: {"description": "User does not have admin role."},
         404: {"description": "Batch not found."},
         409: {"description": "Batch is closed and cannot accept more uploads."},
-        413: {"description": "File or total batch size exceeds the allowed limit."},
+        413: {"description": "File or upload chunk size exceeds the allowed limit."},
         503: {"description": "AI indexing service is unavailable."},
     },
 )
@@ -318,14 +318,7 @@ async def upload_images_to_batch(
     saved_new_paths: list[Path] = []
     new_item_count = 0
     skipped_files = 0
-    uploaded_bytes = int(
-        await db.scalar(
-            select(func.coalesce(func.sum(Image.file_size), 0))
-            .join(IndexingItem, IndexingItem.image_id == Image.id)
-            .where(IndexingItem.batch_id == batch_id)
-        )
-        or 0
-    )
+    uploaded_bytes = 0
     max_batch_bytes = settings.admin_index_batch_max_mb * 1024 * 1024
 
     try:
@@ -397,7 +390,7 @@ async def upload_images_to_batch(
                 raise api_error(
                     status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                     "PAYLOAD_TOO_LARGE",
-                    f"Batch upload must be <= {settings.admin_index_batch_max_mb}MB in total.",
+                    f"Each upload chunk must be <= {settings.admin_index_batch_max_mb}MB.",
                     {
                         "field": "files",
                         "maxBatchMb": settings.admin_index_batch_max_mb,
@@ -1280,6 +1273,7 @@ async def _get_duplicate_upload_checksums(db: AsyncSession, checksums: set[str])
     active_item_checksums = set(
         await db.scalars(
             select(Image.checksum)
+            .select_from(IndexingItem)
             .join(Image, Image.id == IndexingItem.image_id)
             .where(
                 Image.checksum.in_(checksums),

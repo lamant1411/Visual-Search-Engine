@@ -280,19 +280,19 @@ export const adminApi = {
 
   /**
    * Tải ảnh hàng loạt lên server (Tạo Batch ở trạng thái queued)
-   * Giới hạn: File <= 2MB, Batch <= 100MB
+   * Giới hạn: File <= 10MB, chunk/request <= 100MB
    */
   async uploadBatchImages(
     files: File[],
     onProgress?: (percent: number) => void
   ): Promise<AdminIndexUploadResponse> {
-    const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
+    const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
     const MAX_BATCH_SIZE = 100 * 1024 * 1024 // 100MB
 
     let totalBatchSize = 0
     for (const file of files) {
       if (file.size > MAX_FILE_SIZE) {
-        throw new Error(`Ảnh "${file.name}" vượt quá kích thước tối đa cho phép là 2MB.`)
+        throw new Error(`Ảnh "${file.name}" vượt quá kích thước tối đa cho phép là 10MB.`)
       }
       totalBatchSize += file.size
     }
