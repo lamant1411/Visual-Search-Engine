@@ -48,6 +48,7 @@ class Settings(BaseSettings):
             "http://localhost:4173",
             "http://127.0.0.1:4173",
             "https://visual-search-engine-git-deploy-lamant1411s-projects.vercel.app",
+            "https://visual-search-engine-plum.vercel.app",
         ]
     )
 
