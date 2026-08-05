@@ -34,6 +34,7 @@ class AIIndexItemPayload(BaseModel):
     image_path: str
     storage_path: str
     original_filename: str | None = None
+    owner_user_id: int | None = None
 
 
 class AIIndexItemsResponse(BaseModel):

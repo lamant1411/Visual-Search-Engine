@@ -164,10 +164,9 @@ async def _get_mutable_image(
             {"image_id": image_id},
         )
 
-    is_admin = requester_role == UserRole.admin or str(requester_role) == UserRole.admin.value
     owns_image = image.owner_user_id == requester_id
     deleted_by_user = image.deleted_by_user_id == requester_id
-    if not is_admin and not owns_image and not deleted_by_user:
+    if not owns_image and not deleted_by_user:
         raise api_error(
             status.HTTP_403_FORBIDDEN,
             "FORBIDDEN",

@@ -21,6 +21,7 @@ async def build_search_response_from_hits(
     page: int,
     limit: int,
     total: int | None = None,
+    owner_user_id: int | None = None,
 ) -> SearchResponse:
     image_ids = [hit.image_id for hit in hits]
     if not image_ids:
@@ -31,6 +32,7 @@ async def build_search_response_from_hits(
         .outerjoin(OCRText, OCRText.image_id == Image.id)
         .where(Image.id.in_(image_ids))
         .where(Image.status == ImageStatus.indexed)
+        .where(Image.owner_user_id == owner_user_id)
     )
     image_by_id = {image.id: (image, ocr_text) for image, ocr_text in rows.all()}
 
@@ -96,6 +98,7 @@ async def search_images_by_ocr_text(
     *,
     page: int,
     limit: int,
+    owner_user_id: int | None = None,
 ) -> SearchResponse:
     """Search raw OCR text exactly first, then use normalized fuzzy fallback."""
     if not query or not query.strip():
@@ -117,6 +120,7 @@ async def search_images_by_ocr_text(
         .select_from(Image)
         .join(OCRText, OCRText.image_id == Image.id)
         .where(Image.status == ImageStatus.indexed)
+        .where(Image.owner_user_id == owner_user_id)
         .where(or_(fts_condition, ilike_condition))
         .where(OCRText.raw_text.isnot(None))
         .where(OCRText.raw_text != "")
@@ -196,6 +200,7 @@ async def search_images_by_ocr_text(
         .select_from(Image)
         .join(OCRText, OCRText.image_id == Image.id)
         .where(Image.status == ImageStatus.indexed)
+        .where(Image.owner_user_id == owner_user_id)
         .where(fallback_condition)
         .where(OCRText.normalized_text.isnot(None))
         .where(OCRText.normalized_text != "")

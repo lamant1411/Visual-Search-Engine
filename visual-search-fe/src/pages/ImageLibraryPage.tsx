@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
-import { AlertCircle, CheckSquare, Images, RefreshCw, RotateCcw, Trash2, Undo2, X } from 'lucide-react'
+import { AlertCircle, CheckSquare, Images, Loader2, RefreshCw, RotateCcw, Trash2, Undo2, Upload, X } from 'lucide-react'
 import { useNavigate } from 'react-router'
 
 import { Button } from '@/components/base/button'
@@ -18,6 +18,39 @@ import { adminApi, type AdminIndexingItem } from '@/lib/api/admin'
 import { imageLibraryApi } from '@/lib/api/images'
 
 const IMAGE_LIBRARY_PAGE_LIMIT = 20
+const MAX_IMAGE_UPLOAD_FILE_BYTES = 10 * 1024 * 1024
+const MAX_IMAGE_UPLOAD_CHUNK_BYTES = 100 * 1024 * 1024
+
+function splitFilesIntoUploadChunks(files: File[]): File[][] {
+  const chunks: File[][] = []
+  let currentChunk: File[] = []
+  let currentChunkBytes = 0
+
+  for (const file of files) {
+    if (file.size > MAX_IMAGE_UPLOAD_FILE_BYTES) {
+      throw new Error(`Image "${file.name}" is larger than 10MB.`)
+    }
+
+    if (currentChunk.length > 0 && currentChunkBytes + file.size > MAX_IMAGE_UPLOAD_CHUNK_BYTES) {
+      chunks.push(currentChunk)
+      currentChunk = []
+      currentChunkBytes = 0
+    }
+
+    currentChunk.push(file)
+    currentChunkBytes += file.size
+  }
+
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk)
+  }
+
+  return chunks
+}
+
+function isSupportedImageFile(file: File) {
+  return ['image/jpeg', 'image/png', 'image/webp'].includes(file.type)
+}
 
 type LibraryViewMode = 'indexed' | 'deleted'
 type BatchItemStatusFilter = 'all' | AdminIndexingItem['status']
@@ -33,6 +66,7 @@ const batchStatusFilters: Array<{ label: string; value: BatchItemStatusFilter }>
 export default function ImageLibraryPage() {
   const navigate = useNavigate()
   const loadMoreRef = useRef<HTMLDivElement | null>(null)
+  const uploadInputRef = useRef<HTMLInputElement | null>(null)
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null)
   const [viewMode, setViewMode] = useState<LibraryViewMode>('indexed')
   const [selectedBatchId, setSelectedBatchId] = useState('')
@@ -42,7 +76,12 @@ export default function ImageLibraryPage() {
   const [mutatingImageId, setMutatingImageId] = useState<number | null>(null)
   const [selectedImageIds, setSelectedImageIds] = useState<Set<number>>(() => new Set())
   const [isBulkMutating, setIsBulkMutating] = useState(false)
-  const canManageImages = user?.role === 'admin'
+  const [selectedUploadFiles, setSelectedUploadFiles] = useState<File[]>([])
+  const [isUploadingImages, setIsUploadingImages] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadStatusMessage, setUploadStatusMessage] = useState<string | null>(null)
+  const [uploadErrorMessage, setUploadErrorMessage] = useState<string | null>(null)
+  const canManageImages = Boolean(user)
   const isDeletedView = viewMode === 'deleted'
   const isBatchView = canManageImages && !isDeletedView && Boolean(selectedBatchId)
 
@@ -110,6 +149,77 @@ export default function ImageLibraryPage() {
   const results = rawResults
   const total = listQuery.data?.pages[0]?.total ?? 0
   const selectedCount = selectedImageIds.size
+
+
+  function handleUploadFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []).filter(isSupportedImageFile)
+    if (files.length > 0) {
+      setSelectedUploadFiles((current) => [...current, ...files])
+      setUploadErrorMessage(null)
+      setUploadStatusMessage(null)
+    }
+    event.target.value = ''
+  }
+
+  function handleRemoveUploadFile(index: number) {
+    setSelectedUploadFiles((current) => current.filter((_, currentIndex) => currentIndex !== index))
+  }
+
+  function handleClearUploadFiles() {
+    setSelectedUploadFiles([])
+    setUploadProgress(0)
+    setUploadErrorMessage(null)
+    setUploadStatusMessage(null)
+  }
+
+  async function handleUploadSelectedFiles() {
+    if (selectedUploadFiles.length === 0 || isUploadingImages) return
+
+    const filesToUpload = [...selectedUploadFiles]
+    setIsUploadingImages(true)
+    setUploadProgress(0)
+    setUploadErrorMessage(null)
+    setUploadStatusMessage('Creating upload batch...')
+
+    let batchId: string | null = null
+    try {
+      const chunks = splitFilesIntoUploadChunks(filesToUpload)
+      const batch = await adminApi.createIndexingBatch()
+      batchId = batch.batch_id
+      let uploadedFiles = 0
+
+      for (const chunk of chunks) {
+        await adminApi.uploadImagesToBatch(batch.batch_id, chunk, (chunkPercent) => {
+          const currentChunkFiles = (chunkPercent / 100) * chunk.length
+          const totalUploadedFiles = Math.min(filesToUpload.length, uploadedFiles + currentChunkFiles)
+          setUploadProgress(Math.round((totalUploadedFiles / filesToUpload.length) * 100))
+        })
+        uploadedFiles += chunk.length
+        setUploadProgress(Math.round((uploadedFiles / filesToUpload.length) * 100))
+        setUploadStatusMessage(`Uploaded ${uploadedFiles}/${filesToUpload.length} image(s). Indexing is running in background...`)
+      }
+
+      await adminApi.completeIndexingBatch(batch.batch_id)
+      setUploadProgress(100)
+      setUploadStatusMessage('Upload completed. Images will appear after indexing finishes.')
+      setSelectedUploadFiles([])
+      await Promise.all([listQuery.refetch(), batchesQuery.refetch()])
+    } catch (error) {
+      if (batchId) {
+        try {
+          await adminApi.completeIndexingBatch(batchId)
+        } catch (completeError) {
+          console.error('[ImageLibraryPage] Complete upload after failure failed', completeError)
+        }
+      }
+      const message = error instanceof Error ? error.message : 'Unable to upload selected images.'
+      setUploadErrorMessage(message)
+      setUploadStatusMessage(null)
+      console.error('[ImageLibraryPage] Upload selected images failed', error)
+    } finally {
+      setIsUploadingImages(false)
+    }
+  }
 
   function handleChangeViewMode(nextMode: LibraryViewMode) {
     setViewMode(nextMode)
@@ -408,6 +518,113 @@ export default function ImageLibraryPage() {
             </div>
           </div>
         </header>
+
+
+        <section className="rounded-2xl border border-border bg-white p-4 shadow-sm shadow-slate-200/60 sm:p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-sm font-bold text-ink-primary">Upload to your library</p>
+              <p className="mt-1 text-xs leading-5 text-ink-secondary">
+                Add JPG, PNG, or WebP images to your private library. Each image must be 10MB or less; large selections are uploaded in 100MB chunks.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <input
+                ref={uploadInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                className="hidden"
+                onChange={handleUploadFileChange}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-11 rounded-xl"
+                leftIcon={<Upload className="h-4 w-4" />}
+                disabled={isUploadingImages}
+                onClick={() => uploadInputRef.current?.click()}
+              >
+                Choose images
+              </Button>
+              <Button
+                type="button"
+                className="min-h-11 rounded-xl"
+                leftIcon={isUploadingImages ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                disabled={selectedUploadFiles.length === 0 || isUploadingImages}
+                onClick={handleUploadSelectedFiles}
+              >
+                {isUploadingImages ? 'Uploading...' : 'Upload and index'}
+              </Button>
+            </div>
+          </div>
+
+          {(selectedUploadFiles.length > 0 || uploadStatusMessage || uploadErrorMessage) && (
+            <div className="mt-4 space-y-3 rounded-2xl border border-border bg-surface-1/40 p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-bold text-ink-primary">
+                  {selectedUploadFiles.length.toLocaleString('vi-VN')} selected image(s)
+                </p>
+                {selectedUploadFiles.length > 0 && !isUploadingImages && (
+                  <button
+                    type="button"
+                    className="text-xs font-bold text-ink-secondary underline underline-offset-2 hover:text-ink-primary"
+                    onClick={handleClearUploadFiles}
+                  >
+                    Clear selection
+                  </button>
+                )}
+              </div>
+
+              {selectedUploadFiles.length > 0 && (
+                <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto pr-1">
+                  {selectedUploadFiles.map((file, index) => (
+                    <span
+                      key={`${file.name}-${file.lastModified}-${index}`}
+                      className="inline-flex max-w-full items-center gap-2 rounded-full border border-border bg-white px-3 py-1.5 text-xs font-semibold text-ink-secondary"
+                    >
+                      <span className="max-w-48 truncate">{file.name}</span>
+                      {!isUploadingImages && (
+                        <button
+                          type="button"
+                          className="rounded-full p-0.5 text-ink-muted hover:bg-surface-1 hover:text-ink-primary"
+                          aria-label={`Remove ${file.name}`}
+                          onClick={() => handleRemoveUploadFile(index)}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {(isUploadingImages || uploadProgress > 0) && (
+                <div className="space-y-1.5">
+                  <div className="h-2 overflow-hidden rounded-full bg-white">
+                    <div
+                      className="h-full rounded-full bg-accent-600 transition-all"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                  <p className="text-xs font-semibold text-ink-secondary">{uploadProgress}%</p>
+                </div>
+              )}
+
+              {uploadStatusMessage && (
+                <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+                  {uploadStatusMessage}
+                </p>
+              )}
+
+              {uploadErrorMessage && (
+                <p className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                  {uploadErrorMessage}
+                </p>
+              )}
+            </div>
+          )}
+        </section>
 
         {canManageImages && (
           <section className="rounded-2xl border border-border bg-white p-4 shadow-sm shadow-slate-200/60 sm:p-5">
@@ -745,7 +962,7 @@ function EmptyState({
             ? 'Try another batch status filter or choose a different indexing batch.'
           : isDeletedView
             ? 'Soft-deleted images will appear here so they can be restored or permanently deleted.'
-            : 'Indexed images will appear here after admin batch indexing is completed.'}
+            : 'Indexed images will appear here after you upload images and indexing is completed.'}
       </p>
     </section>
   )

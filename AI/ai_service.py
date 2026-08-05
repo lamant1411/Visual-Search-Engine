@@ -128,6 +128,7 @@ class IndexItemRequest(BaseModel):
     image_path: str = Field(min_length=1, max_length=2048)
     storage_path: str = Field(min_length=1, max_length=2048)
     original_filename: Optional[str] = None
+    owner_user_id: Optional[int] = None
 
 
 class IndexItemsRequest(BaseModel):

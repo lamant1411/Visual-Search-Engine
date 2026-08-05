@@ -12,7 +12,7 @@ from PIL import Image as PILImage, ImageOps, UnidentifiedImageError
 from sqlalchemy import case, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_admin
+from app.api.deps import get_current_user, require_admin
 from app.core.config import settings
 from app.core.errors import api_error
 from app.db.session import get_db
@@ -57,7 +57,7 @@ ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
     "/dashboard",
     response_model=AdminDashboardResponse,
     summary="Get admin dashboard stats",
-    description="Return total images, indexed/pending/failed image counts, total users, and latest indexing batches. Requires admin role.",
+    description="Return aggregate image/user counts and latest indexing batches. Requires admin role. Does not expose private image URLs.",
     responses={
         200: {"description": "Dashboard stats returned successfully."},
         401: {"description": "Missing, invalid, or expired token."},
@@ -139,7 +139,7 @@ async def list_users(
     "/images",
     response_model=AdminImageListResponse,
     summary="List stored images",
-    description="Return paginated images from the image library. Supports status filter and keyword search by filename or storage path. Requires admin role.",
+    description="Return paginated images owned by the current admin account. Admins cannot view private images owned by other users.",
     responses={
         200: {"description": "Images returned successfully."},
         401: {"description": "Missing, invalid, or expired token."},
@@ -151,11 +151,11 @@ async def list_images(
     limit: int = Query(20, ge=1, le=100),
     image_status: ImageStatus | None = Query(None, alias="status"),
     q: str | None = Query(None, min_length=1, max_length=255),
-    _: User = Depends(require_admin),
+    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> AdminImageListResponse:
     """Tra danh sach anh trong kho de admin quan ly."""
-    filters = []
+    filters = [Image.owner_user_id == current_user.id]
     if image_status is not None:
         filters.append(Image.status == image_status)
     if q:
@@ -186,7 +186,7 @@ async def list_images(
     "/images/{image_id}",
     response_model=AdminImageDeleteResponse,
     summary="Soft delete stored image",
-    description="Soft delete an image from the image library. The image is hidden from normal library/search results and can be restored or permanently deleted later. Requires admin role.",
+    description="Soft delete an image owned by the current admin account. Admins cannot delete private images owned by other users.",
     responses={
         200: {"description": "Image soft-deleted successfully."},
         401: {"description": "Missing, invalid, or expired token."},
@@ -220,7 +220,7 @@ async def delete_image(
     response_model=AdminBatchCreateResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create indexing batch",
-    description="Create an empty batch so the frontend can upload images in chunks. After creating a batch, call /index/batches/{batch_id}/images. Requires admin role.",
+    description="Create an empty batch so the frontend can upload images in chunks. After creating a batch, call /index/batches/{batch_id}/images. Requires authentication; the batch belongs to the current user.",
     responses={
         201: {"description": "Batch created successfully."},
         401: {"description": "Missing, invalid, or expired token."},
@@ -228,12 +228,13 @@ async def delete_image(
     },
 )
 async def create_indexing_batch(
-    _: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AdminBatchCreateResponse:
     """Tao batch rong de FE upload anh theo tung chunk."""
     batch = IndexingBatch(
         batch_id=f"idx_{uuid.uuid4().hex[:12]}",
+        owner_user_id=current_user.id,
         status=BatchStatus.queued,
         total_images=0,
         processed_images=0,
@@ -265,7 +266,7 @@ async def create_indexing_batch(
     status_code=status.HTTP_201_CREATED,
     summary="Upload images to batch and enqueue indexing",
     description=(
-        "Receive multipart/form-data field files. Optional image_urls can be sent with the same length as files to replace failed images in this batch. Each new image is limited by ADMIN_INDEX_UPLOAD_MAX_MB, and each upload request/chunk is limited by ADMIN_INDEX_BATCH_MAX_MB. Clients can upload multiple chunks to the same batch. Saved images are sent to the AI queue for item-level indexing. Requires admin role."
+        "Receive multipart/form-data field files. Optional image_urls can be sent with the same length as files to replace failed images in this batch. Each new image is limited by ADMIN_INDEX_UPLOAD_MAX_MB, and each upload request/chunk is limited by ADMIN_INDEX_BATCH_MAX_MB. Clients can upload multiple chunks to the same batch. Saved images are owned by the current user and sent to the AI queue for item-level indexing."
     ),
     responses={
         201: {"description": "Upload succeeded and items were enqueued to AI."},
@@ -282,11 +283,11 @@ async def upload_images_to_batch(
     batch_id: str,
     files: list[UploadFile] = File(...),
     image_urls: list[str] | None = Form(None),
-    _: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AdminBatchImageUploadResponse:
     """Upload anh moi hoac upload lai file thay the cho anh failed trong cung batch."""
-    batch = await db.scalar(select(IndexingBatch).where(IndexingBatch.batch_id == batch_id))
+    batch = await _get_owned_batch(db, batch_id=batch_id, owner_user_id=current_user.id)
     if batch is None:
         raise api_error(
             status.HTTP_404_NOT_FOUND,
@@ -350,7 +351,11 @@ async def upload_images_to_batch(
                 duplicate_candidate_checksums.add(raw_checksum)
                 duplicate_candidate_checksums.add(checksum)
 
-        existing_duplicate_checksums = await _get_duplicate_upload_checksums(db, duplicate_candidate_checksums)
+        existing_duplicate_checksums = await _get_duplicate_upload_checksums(
+            db,
+            duplicate_candidate_checksums,
+            owner_user_id=current_user.id,
+        )
         accepted_checksums: set[str] = set()
 
         for prepared in prepared_uploads:
@@ -367,6 +372,7 @@ async def upload_images_to_batch(
                 image, item = await _prepare_failed_replacement_item(
                     db=db,
                     batch_id=batch_id,
+                    owner_user_id=current_user.id,
                     image_url=str(retry_image_url),
                     file=file,
                     content=optimized_content,
@@ -414,6 +420,7 @@ async def upload_images_to_batch(
                 height=optimized_height,
                 checksum=checksum,
                 status=ImageStatus.pending,
+                owner_user_id=current_user.id,
             )
             db.add(image)
             await db.flush()
@@ -436,6 +443,7 @@ async def upload_images_to_batch(
                     image_path=f"/app/{settings.admin_index_upload_dir}/{batch_id}/{target.name}",
                     storage_path=storage_path,
                     original_filename=image.original_filename,
+                    owner_user_id=image.owner_user_id,
                 )
             )
 
@@ -480,7 +488,7 @@ async def upload_images_to_batch(
     "/index/batches/{batch_id}/complete-upload",
     response_model=AdminBatchCompleteUploadResponse,
     summary="Complete batch upload",
-    description="Frontend calls this endpoint after all upload chunks are finished. Indexing continues for queued/running items. Requires admin role.",
+    description="Frontend calls this endpoint after all upload chunks are finished. Indexing continues for queued/running items. Requires authentication and batch ownership.",
     responses={
         200: {"description": "Batch upload marked as complete."},
         401: {"description": "Missing, invalid, or expired token."},
@@ -490,11 +498,11 @@ async def upload_images_to_batch(
 )
 async def complete_batch_upload(
     batch_id: str,
-    _: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AdminBatchCompleteUploadResponse:
     """Danh dau FE da upload xong batch. Indexing van tiep tuc neu con item queued/running."""
-    batch = await db.scalar(select(IndexingBatch).where(IndexingBatch.batch_id == batch_id))
+    batch = await _get_owned_batch(db, batch_id=batch_id, owner_user_id=current_user.id)
     if batch is None:
         raise api_error(
             status.HTTP_404_NOT_FOUND,
@@ -518,7 +526,7 @@ async def complete_batch_upload(
     "/index/batches/{batch_id}/cancel",
     response_model=AdminIndexStatusResponse,
     summary="Cancel indexing batch",
-    description="Mark queued/running items in this batch as cancelled. Other batches are not affected. Requires admin role.",
+    description="Mark queued/running items in this batch as cancelled. Other batches are not affected. Requires authentication and batch ownership.",
     responses={
         200: {"description": "Batch cancelled successfully."},
         401: {"description": "Missing, invalid, or expired token."},
@@ -528,11 +536,11 @@ async def complete_batch_upload(
 )
 async def cancel_indexing_batch(
     batch_id: str,
-    _: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AdminIndexStatusResponse:
     """Cancel queued/running items without stopping other indexing batches."""
-    batch = await db.scalar(select(IndexingBatch).where(IndexingBatch.batch_id == batch_id))
+    batch = await _get_owned_batch(db, batch_id=batch_id, owner_user_id=current_user.id)
     if batch is None:
         raise api_error(
             status.HTTP_404_NOT_FOUND,
@@ -611,7 +619,7 @@ async def cancel_indexing_batch(
     "/index/{batch_id}/items",
     response_model=AdminIndexingItemListResponse,
     summary="List indexing items in batch",
-    description="Return images in a batch. Can be filtered with status=queued/running/indexed/failed/cancelled. Requires admin role.",
+    description="Return images in a batch. Can be filtered with status=queued/running/indexed/failed/cancelled. Requires authentication and batch ownership.",
     responses={
         200: {"description": "Indexing items returned successfully."},
         401: {"description": "Missing, invalid, or expired token."},
@@ -623,15 +631,21 @@ async def list_indexing_items(
     item_status: IndexingItemStatus | None = Query(None, alias="status"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
-    _: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AdminIndexingItemListResponse:
     """Tra danh sach item trong batch, co the loc anh failed/queued/running/indexed."""
-    filters = [IndexingItem.batch_id == batch_id]
+    filters = [IndexingItem.batch_id == batch_id, Image.owner_user_id == current_user.id]
     if item_status is not None:
         filters.append(IndexingItem.status == item_status)
 
-    total = await _count_rows(db, select(func.count()).select_from(IndexingItem).where(*filters))
+    total = await _count_rows(
+        db,
+        select(func.count())
+        .select_from(IndexingItem)
+        .join(Image, Image.id == IndexingItem.image_id)
+        .where(*filters),
+    )
     offset = (page - 1) * limit
     rows = (
         await db.execute(
@@ -658,7 +672,7 @@ async def list_indexing_items(
     summary="Retry failed indexing items",
     description=(
         "Requeue failed images that are already stored on the server. "
-        "If item_ids is omitted, all failed items in the batch are retried. Requires admin role."
+        "If item_ids is omitted, all failed items in the batch are retried. Requires authentication and batch ownership."
     ),
     responses={
         202: {"description": "Failed items were requeued for indexing."},
@@ -672,11 +686,11 @@ async def list_indexing_items(
 async def retry_failed_indexing_items(
     batch_id: str,
     payload: AdminIndexRetryItemsRequest | None = None,
-    _: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AdminIndexRetryItemsResponse:
     """Dua lai cac anh failed vao hang doi AI ma khong can upload lai file."""
-    batch = await db.scalar(select(IndexingBatch).where(IndexingBatch.batch_id == batch_id))
+    batch = await _get_owned_batch(db, batch_id=batch_id, owner_user_id=current_user.id)
     if batch is None:
         raise api_error(
             status.HTTP_404_NOT_FOUND,
@@ -687,6 +701,7 @@ async def retry_failed_indexing_items(
 
     filters = [
         IndexingItem.batch_id == batch_id,
+        Image.owner_user_id == current_user.id,
         IndexingItem.status == IndexingItemStatus.failed,
     ]
     requested_item_ids = payload.item_ids if payload and payload.item_ids else None
@@ -774,7 +789,7 @@ async def retry_failed_indexing_items(
     response_model=AdminIndexUploadResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Legacy upload image batch",
-    description="Legacy flow: upload all images to the server first, then call /index/{batch_id}/start to index the folder. Prefer the new item-level batch flow. Requires admin role.",
+    description="Legacy flow: upload all images to the server first, then call /index/{batch_id}/start to index the folder. Prefer the new item-level batch flow. Requires authentication and batch ownership.",
     responses={
         201: {"description": "Legacy batch uploaded successfully."},
         400: {"description": "Missing file or unsupported file type."},
@@ -785,7 +800,7 @@ async def retry_failed_indexing_items(
 )
 async def upload_indexing_batch(
     files: list[UploadFile] = File(...),
-    _: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AdminIndexUploadResponse:
     """Receive multiple images from FE and create a queued batch without starting AI indexing."""
@@ -833,6 +848,7 @@ async def upload_indexing_batch(
 
     batch = IndexingBatch(
         batch_id=batch_id,
+        owner_user_id=current_user.id,
         status=BatchStatus.queued,
         total_images=saved_count,
         processed_images=0,
@@ -857,7 +873,7 @@ async def upload_indexing_batch(
     summary="Start legacy batch indexing",
     description=(
         "Start AI indexing for a legacy batch that was already uploaded to the server. "
-        "For the new item-level flow, images are queued immediately after upload. Requires admin role."
+        "For the new item-level flow, images are queued immediately after upload. Requires authentication and batch ownership."
     ),
     responses={
         202: {"description": "Indexing task accepted."},
@@ -870,11 +886,11 @@ async def upload_indexing_batch(
 )
 async def start_batch_indexing(
     batch_id: str,
-    _: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AdminIndexStartResponse:
     """Start AI indexing for an uploaded batch."""
-    batch = await db.scalar(select(IndexingBatch).where(IndexingBatch.batch_id == batch_id))
+    batch = await _get_owned_batch(db, batch_id=batch_id, owner_user_id=current_user.id)
     if batch is None:
         raise api_error(
             status.HTTP_404_NOT_FOUND,
@@ -941,7 +957,7 @@ async def start_batch_indexing(
     "/index/status/{batch_id}",
     response_model=AdminIndexStatusResponse,
     summary="Get indexing batch status",
-    description="Return batch progress for frontend polling and progress bar display. Requires admin role.",
+    description="Return batch progress for frontend polling and progress bar display. Requires authentication and batch ownership.",
     responses={
         200: {"description": "Batch status returned successfully."},
         401: {"description": "Missing, invalid, or expired token."},
@@ -951,11 +967,11 @@ async def start_batch_indexing(
 )
 async def get_batch_status(
     batch_id: str,
-    _: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AdminIndexStatusResponse:
     """Return indexing status for a batch."""
-    batch = await db.scalar(select(IndexingBatch).where(IndexingBatch.batch_id == batch_id))
+    batch = await _get_owned_batch(db, batch_id=batch_id, owner_user_id=current_user.id)
     if batch is None:
         raise api_error(
             status.HTTP_404_NOT_FOUND,
@@ -1014,6 +1030,20 @@ async def get_batch_status(
     )
 
 
+async def _get_owned_batch(
+    db: AsyncSession,
+    *,
+    batch_id: str,
+    owner_user_id: int,
+) -> IndexingBatch | None:
+    return await db.scalar(
+        select(IndexingBatch).where(
+            IndexingBatch.batch_id == batch_id,
+            IndexingBatch.owner_user_id == owner_user_id,
+        )
+    )
+
+
 async def _sync_batch_if_active(db: AsyncSession, batch: IndexingBatch) -> None:
     if batch.status in {BatchStatus.queued, BatchStatus.running}:
         item_count = await _count_rows(
@@ -1039,7 +1069,7 @@ async def _sync_batch_if_active(db: AsyncSession, batch: IndexingBatch) -> None:
     "/index/batches",
     response_model=AdminIndexBatchListResponse,
     summary="List indexing batches",
-    description="Return recent indexing batches so admin can track upload/indexing history. Requires admin role.",
+    description="Return recent indexing batches so the current user can track upload/indexing history. Requires authentication and batch ownership.",
     responses={
         200: {"description": "Indexing batches returned successfully."},
         401: {"description": "Missing, invalid, or expired token."},
@@ -1047,13 +1077,16 @@ async def _sync_batch_if_active(db: AsyncSession, batch: IndexingBatch) -> None:
     },
 )
 async def list_batches(
-    _: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AdminIndexBatchListResponse:
     """Return recent indexing batches for admin dashboard."""
     items = (
         await db.scalars(
-            select(IndexingBatch).order_by(IndexingBatch.created_at.desc()).limit(20)
+            select(IndexingBatch)
+            .where(IndexingBatch.owner_user_id == current_user.id)
+            .order_by(IndexingBatch.created_at.desc())
+            .limit(20)
         )
     ).all()
     await _sync_batch_counts_for_batches(db, list(items))
@@ -1190,6 +1223,7 @@ async def _prepare_failed_replacement_item(
     *,
     db: AsyncSession,
     batch_id: str,
+    owner_user_id: int,
     image_url: str,
     file: UploadFile,
     content: bytes,
@@ -1199,7 +1233,12 @@ async def _prepare_failed_replacement_item(
     checksum: str,
 ) -> tuple[Image, IndexingItem]:
     storage_path = _normalize_image_url_to_storage_path(image_url)
-    image = await db.scalar(select(Image).where(Image.storage_path == storage_path))
+    image = await db.scalar(
+        select(Image).where(
+            Image.storage_path == storage_path,
+            Image.owner_user_id == owner_user_id,
+        )
+    )
     if image is None:
         raise api_error(
             status.HTTP_404_NOT_FOUND,
@@ -1258,7 +1297,12 @@ async def _prepare_failed_replacement_item(
     item.error_message = None
     return image, item
 
-async def _get_duplicate_upload_checksums(db: AsyncSession, checksums: set[str]) -> set[str]:
+async def _get_duplicate_upload_checksums(
+    db: AsyncSession,
+    checksums: set[str],
+    *,
+    owner_user_id: int,
+) -> set[str]:
     if not checksums:
         return set()
 
@@ -1266,6 +1310,7 @@ async def _get_duplicate_upload_checksums(db: AsyncSession, checksums: set[str])
         await db.scalars(
             select(Image.checksum).where(
                 Image.checksum.in_(checksums),
+                Image.owner_user_id == owner_user_id,
                 Image.status.in_([ImageStatus.indexed, ImageStatus.pending, ImageStatus.deleted]),
             )
         )
@@ -1277,6 +1322,7 @@ async def _get_duplicate_upload_checksums(db: AsyncSession, checksums: set[str])
             .join(Image, Image.id == IndexingItem.image_id)
             .where(
                 Image.checksum.in_(checksums),
+                Image.owner_user_id == owner_user_id,
                 IndexingItem.status.in_([IndexingItemStatus.queued, IndexingItemStatus.running]),
             )
         )
@@ -1351,6 +1397,7 @@ def _build_ai_item_payload(item: IndexingItem, image: Image) -> AIIndexItemPaylo
         image_path=_storage_path_to_ai_path(image.storage_path),
         storage_path=image.storage_path,
         original_filename=image.original_filename,
+        owner_user_id=image.owner_user_id,
     )
 
 async def _count_rows(db: AsyncSession, statement) -> int:

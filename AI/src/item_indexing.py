@@ -31,6 +31,7 @@ class IndexQueueItem:
     image_path: str
     storage_path: str
     original_filename: Optional[str] = None
+    owner_user_id: Optional[int] = None
 
 
 _qdrant_client: Optional[QdrantClient] = None
@@ -49,7 +50,7 @@ def prepare_items_for_queue(batch_id: str, items: list[dict[str, Any]]) -> list[
         with conn.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT item.id, item.batch_id, item.image_id, item.status, image.storage_path
+                SELECT item.id, item.batch_id, item.image_id, item.status, image.storage_path, image.owner_user_id
                 FROM indexing_items AS item
                 JOIN images AS image ON image.id = item.image_id
                 WHERE item.id = ANY(%s)
@@ -64,7 +65,7 @@ def prepare_items_for_queue(batch_id: str, items: list[dict[str, Any]]) -> list[
                 raise ValueError(f"Indexing items not found: {missing_ids}")
 
             for item_id, row in rows_by_id.items():
-                _, db_batch_id, db_image_id, status, db_storage_path = row
+                _, db_batch_id, db_image_id, status, db_storage_path, db_owner_user_id = row
                 payload = requested[item_id]
                 if db_batch_id != batch_id or payload["image_id"] != db_image_id:
                     raise ValueError(f"Indexing item does not match batch/image: {item_id}")
@@ -108,7 +109,7 @@ def prepare_items_for_queue(batch_id: str, items: list[dict[str, Any]]) -> list[
                         """,
                         (batch_id,),
                     )
-                queued_items.append(_queue_item_from_payload(batch_id, payload))
+                queued_items.append(_queue_item_from_payload(batch_id, payload, db_owner_user_id))
         conn.commit()
         return queued_items
     except Exception:
@@ -135,7 +136,7 @@ def recover_pending_items() -> list[IndexQueueItem]:
             cursor.execute(
                 """
                 SELECT item.id, item.batch_id, item.image_id,
-                       image.storage_path, image.original_filename
+                       image.storage_path, image.original_filename, image.owner_user_id
                 FROM indexing_items AS item
                 JOIN images AS image ON image.id = item.image_id
                 WHERE item.status = 'queued'
@@ -158,6 +159,7 @@ def recover_pending_items() -> list[IndexQueueItem]:
             image_path=_storage_path_to_local_path(row[3]),
             storage_path=row[3],
             original_filename=row[4],
+            owner_user_id=row[5],
         )
         for row in rows
     ]
@@ -183,7 +185,7 @@ def recover_pending_ocr_items() -> list[IndexQueueItem]:
             cursor.execute(
                 """
                 SELECT item.id, item.batch_id, item.image_id,
-                       image.storage_path, image.original_filename
+                       image.storage_path, image.original_filename, image.owner_user_id
                 FROM indexing_items AS item
                 JOIN images AS image ON image.id = item.image_id
                 WHERE item.status = 'indexed' AND item.ocr_status = 'queued'
@@ -206,6 +208,7 @@ def recover_pending_ocr_items() -> list[IndexQueueItem]:
             image_path=_storage_path_to_local_path(row[3]),
             storage_path=row[3],
             original_filename=row[4],
+            owner_user_id=row[5],
         )
         for row in rows
     ]
@@ -255,6 +258,7 @@ def claim_indexing_item(queue_item: IndexQueueItem) -> Optional[dict[str, Any]]:
         "image_path": queue_item.image_path,
         "storage_path": queue_item.storage_path,
         "original_filename": queue_item.original_filename,
+        "owner_user_id": queue_item.owner_user_id,
         "retry_count": row[0],
         "max_retries": row[1],
     }
@@ -314,6 +318,7 @@ def claim_ocr_item(queue_item: IndexQueueItem) -> Optional[dict[str, Any]]:
         "image_path": queue_item.image_path,
         "storage_path": queue_item.storage_path,
         "original_filename": queue_item.original_filename,
+        "owner_user_id": queue_item.owner_user_id,
         "retry_count": row[0],
         "max_retries": row[1],
         "checksum": checksum,
@@ -394,6 +399,7 @@ def index_semantic_image_item(item: dict[str, Any], clip_model) -> None:
                         "storage_path": item["storage_path"],
                         "image_id": item["image_id"],
                         "image_id_int": item["image_id"],
+                        "owner_user_id": item.get("owner_user_id"),
                     },
                 )
             ],
@@ -916,7 +922,11 @@ def _update_ocr_batch_progress(
         raise RuntimeError(f"Indexing batch not found: {batch_id}")
 
 
-def _queue_item_from_payload(batch_id: str, payload: dict[str, Any]) -> IndexQueueItem:
+def _queue_item_from_payload(
+    batch_id: str,
+    payload: dict[str, Any],
+    owner_user_id: Optional[int],
+) -> IndexQueueItem:
     return IndexQueueItem(
         item_id=payload["item_id"],
         batch_id=batch_id,
@@ -924,6 +934,7 @@ def _queue_item_from_payload(batch_id: str, payload: dict[str, Any]) -> IndexQue
         image_path=payload["image_path"],
         storage_path=payload["storage_path"],
         original_filename=payload.get("original_filename"),
+        owner_user_id=owner_user_id,
     )
 
 

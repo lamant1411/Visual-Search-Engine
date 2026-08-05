@@ -46,11 +46,18 @@ async def list_image_library(
     q: str | None = Query(None, min_length=1, max_length=255),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SearchResponse:
     """Tr? danh sách ?nh indexed trong kho ?nh cho user xem."""
-    return await _list_images_by_status(db=db, image_status=ImageStatus.indexed, q=q, page=page, limit=limit)
+    return await _list_images_by_status(
+        db=db,
+        image_status=ImageStatus.indexed,
+        owner_user_id=current_user.id,
+        q=q,
+        page=page,
+        limit=limit,
+    )
 
 
 @router.get(
@@ -74,9 +81,10 @@ async def list_deleted_images(
     db: AsyncSession = Depends(get_db),
 ) -> SearchResponse:
     """Tr? danh sách ?nh dã xóa m?m d? user/admin có th? khôi ph?c ho?c xóa vinh vi?n."""
-    filters = [Image.status == ImageStatus.deleted]
-    if str(current_user.role) != "UserRole.admin" and getattr(current_user.role, "value", current_user.role) != "admin":
-        filters.append(or_(Image.owner_user_id == current_user.id, Image.deleted_by_user_id == current_user.id))
+    filters = [
+        Image.status == ImageStatus.deleted,
+        or_(Image.owner_user_id == current_user.id, Image.deleted_by_user_id == current_user.id),
+    ]
     return await _list_images(db=db, filters=filters, q=q, page=page, limit=limit)
 
 
@@ -265,8 +273,15 @@ async def _list_images_by_status(
     q: str | None,
     page: int,
     limit: int,
+    owner_user_id: int,
 ) -> SearchResponse:
-    return await _list_images(db=db, filters=[Image.status == image_status], q=q, page=page, limit=limit)
+    return await _list_images(
+        db=db,
+        filters=[Image.status == image_status, Image.owner_user_id == owner_user_id],
+        q=q,
+        page=page,
+        limit=limit,
+    )
 
 
 async def _list_images(
