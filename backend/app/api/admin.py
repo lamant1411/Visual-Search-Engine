@@ -139,7 +139,7 @@ async def list_users(
     "/images",
     response_model=AdminImageListResponse,
     summary="List stored images",
-    description="Return paginated images owned by the current admin account. Admins cannot view private images owned by other users.",
+    description="Return paginated images owned by the current admin account. This endpoint is for admin workspace image management and does not expose private images owned by other users.",
     responses={
         200: {"description": "Images returned successfully."},
         401: {"description": "Missing, invalid, or expired token."},
@@ -186,7 +186,7 @@ async def list_images(
     "/images/{image_id}",
     response_model=AdminImageDeleteResponse,
     summary="Soft delete stored image",
-    description="Soft delete an image owned by the current admin account. Admins cannot delete private images owned by other users.",
+    description="Soft delete an image owned by the current admin account. This endpoint does not allow deleting private images owned by other users.",
     responses={
         200: {"description": "Image soft-deleted successfully."},
         401: {"description": "Missing, invalid, or expired token."},
@@ -220,11 +220,10 @@ async def delete_image(
     response_model=AdminBatchCreateResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create indexing batch",
-    description="Create an empty batch so the frontend can upload images in chunks. After creating a batch, call /index/batches/{batch_id}/images. Requires authentication; the batch belongs to the current user.",
+    description="Create an empty user-owned indexing batch so the frontend can upload images in chunks. After creating a batch, call /index/batches/{batch_id}/images. Requires authentication; regular users and admins can create batches for their own image library.",
     responses={
         201: {"description": "Batch created successfully."},
         401: {"description": "Missing, invalid, or expired token."},
-        403: {"description": "User does not have admin role."},
     },
 )
 async def create_indexing_batch(
@@ -272,7 +271,7 @@ async def create_indexing_batch(
         201: {"description": "Upload succeeded and items were enqueued to AI."},
         400: {"description": "Missing file or unsupported file type. Only JPG, PNG, and WebP are supported."},
         401: {"description": "Missing, invalid, or expired token."},
-        403: {"description": "User does not have admin role."},
+        403: {"description": "Authenticated user cannot access this batch or resource."},
         404: {"description": "Batch not found."},
         409: {"description": "Batch is closed and cannot accept more uploads."},
         413: {"description": "File or upload chunk size exceeds the allowed limit."},
@@ -488,11 +487,11 @@ async def upload_images_to_batch(
     "/index/batches/{batch_id}/complete-upload",
     response_model=AdminBatchCompleteUploadResponse,
     summary="Complete batch upload",
-    description="Frontend calls this endpoint after all upload chunks are finished. Indexing continues for queued/running items. Requires authentication and batch ownership.",
+    description="Mark a user-owned batch upload as complete after all upload chunks are finished. Indexing continues for queued/running items. Requires authentication and ownership of the batch.",
     responses={
         200: {"description": "Batch upload marked as complete."},
         401: {"description": "Missing, invalid, or expired token."},
-        403: {"description": "User does not have admin role."},
+        403: {"description": "Authenticated user cannot access this batch or resource."},
         404: {"description": "Batch not found."},
     },
 )
@@ -526,11 +525,11 @@ async def complete_batch_upload(
     "/index/batches/{batch_id}/cancel",
     response_model=AdminIndexStatusResponse,
     summary="Cancel indexing batch",
-    description="Mark queued/running items in this batch as cancelled. Other batches are not affected. Requires authentication and batch ownership.",
+    description="Cancel queued/running items in a user-owned batch. Other batches are not affected. Requires authentication and ownership of the batch.",
     responses={
         200: {"description": "Batch cancelled successfully."},
         401: {"description": "Missing, invalid, or expired token."},
-        403: {"description": "User does not have admin role."},
+        403: {"description": "Authenticated user cannot access this batch or resource."},
         404: {"description": "Batch not found."},
     },
 )
@@ -619,11 +618,11 @@ async def cancel_indexing_batch(
     "/index/{batch_id}/items",
     response_model=AdminIndexingItemListResponse,
     summary="List indexing items in batch",
-    description="Return images in a batch. Can be filtered with status=queued/running/indexed/failed/cancelled. Requires authentication and batch ownership.",
+    description="Return images in a user-owned indexing batch. Can be filtered with status=queued/running/indexed/failed/cancelled. Requires authentication and ownership of the batch.",
     responses={
         200: {"description": "Indexing items returned successfully."},
         401: {"description": "Missing, invalid, or expired token."},
-        403: {"description": "User does not have admin role."},
+        403: {"description": "Authenticated user cannot access this batch or resource."},
     },
 )
 async def list_indexing_items(
@@ -672,13 +671,13 @@ async def list_indexing_items(
     summary="Retry failed indexing items",
     description=(
         "Requeue failed images that are already stored on the server. "
-        "If item_ids is omitted, all failed items in the batch are retried. Requires authentication and batch ownership."
+        "If item_ids is omitted, all failed items in the user-owned batch are retried. Requires authentication and ownership of the batch."
     ),
     responses={
         202: {"description": "Failed items were requeued for indexing."},
         400: {"description": "No failed items are available to retry."},
         401: {"description": "Missing, invalid, or expired token."},
-        403: {"description": "User does not have admin role."},
+        403: {"description": "Authenticated user cannot access this batch or resource."},
         404: {"description": "Batch not found."},
         503: {"description": "AI indexing service is unavailable."},
     },
@@ -789,12 +788,12 @@ async def retry_failed_indexing_items(
     response_model=AdminIndexUploadResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Legacy upload image batch",
-    description="Legacy flow: upload all images to the server first, then call /index/{batch_id}/start to index the folder. Prefer the new item-level batch flow. Requires authentication and batch ownership.",
+    description="Legacy flow: upload all images to a user-owned server folder first, then call /index/{batch_id}/start to index the folder. Prefer the new item-level batch flow. Requires authentication and ownership of the batch.",
     responses={
         201: {"description": "Legacy batch uploaded successfully."},
         400: {"description": "Missing file or unsupported file type."},
         401: {"description": "Missing, invalid, or expired token."},
-        403: {"description": "User does not have admin role."},
+        403: {"description": "Authenticated user cannot access this batch or resource."},
         413: {"description": "File or batch size exceeds the allowed limit."},
     },
 )
@@ -873,13 +872,13 @@ async def upload_indexing_batch(
     summary="Start legacy batch indexing",
     description=(
         "Start AI indexing for a legacy batch that was already uploaded to the server. "
-        "For the new item-level flow, images are queued immediately after upload. Requires authentication and batch ownership."
+        "For the new item-level flow, images are queued immediately after upload. Requires authentication and ownership of the batch."
     ),
     responses={
         202: {"description": "Indexing task accepted."},
         400: {"description": "Batch has no uploaded images."},
         401: {"description": "Missing, invalid, or expired token."},
-        403: {"description": "User does not have admin role."},
+        403: {"description": "Authenticated user cannot access this batch or resource."},
         404: {"description": "Batch not found."},
         503: {"description": "AI indexing service is unavailable."},
     },
@@ -957,11 +956,11 @@ async def start_batch_indexing(
     "/index/status/{batch_id}",
     response_model=AdminIndexStatusResponse,
     summary="Get indexing batch status",
-    description="Return batch progress for frontend polling and progress bar display. Requires authentication and batch ownership.",
+    description="Return progress for a user-owned indexing batch so the frontend can update progress bars. Requires authentication and ownership of the batch.",
     responses={
         200: {"description": "Batch status returned successfully."},
         401: {"description": "Missing, invalid, or expired token."},
-        403: {"description": "User does not have admin role."},
+        403: {"description": "Authenticated user cannot access this batch or resource."},
         404: {"description": "Batch not found."},
     },
 )
@@ -1069,11 +1068,10 @@ async def _sync_batch_if_active(db: AsyncSession, batch: IndexingBatch) -> None:
     "/index/batches",
     response_model=AdminIndexBatchListResponse,
     summary="List indexing batches",
-    description="Return recent indexing batches so the current user can track upload/indexing history. Requires authentication and batch ownership.",
+    description="Return recent user-owned indexing batches so the current user can track upload/indexing history. Requires authentication.",
     responses={
         200: {"description": "Indexing batches returned successfully."},
         401: {"description": "Missing, invalid, or expired token."},
-        403: {"description": "User does not have admin role."},
     },
 )
 async def list_batches(
