@@ -50,9 +50,25 @@ app.include_router(api_router, prefix="/api/v1")
 
 @app.on_event("startup")
 async def seed_default_admin() -> None:
-    """T?o admin m?c ??nh t? bi?n m?i tr??ng ?? test dashboard qu?n tr?."""
-    async with AsyncSessionLocal() as db:
-        await ensure_seed_admin(db)
+    """Tạo admin mặc định từ biến môi trường để test dashboard quản trị."""
+    try:
+        async with AsyncSessionLocal() as db:
+            await ensure_seed_admin(db)
+    except Exception as e:
+        print(f"Warning: Startup admin seed skipped or failed: {e}")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    del request
+    return JSONResponse(
+        status_code=500,
+        content={
+            "code": "INTERNAL_SERVER_ERROR",
+            "message": f"Internal Server Error: {str(exc)}",
+            "details": {},
+        },
+    )
 
 
 @app.exception_handler(HTTPException)

@@ -1,8 +1,10 @@
 """Cấu hình ứng dụng được đọc từ biến môi trường."""
 
+import json
+from typing import Any
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -51,6 +53,22 @@ class Settings(BaseSettings):
             "https://visual-search-engine-plum.vercel.app",
         ]
     )
+
+    @field_validator("backend_cors_origins", mode="before")
+    @classmethod
+    def assemble_cors_origins(cls, v: Any) -> list[str]:
+        if isinstance(v, str):
+            if not v.strip():
+                return []
+            if v.startswith("[") and v.endswith("]"):
+                try:
+                    parsed = json.loads(v)
+                    if isinstance(parsed, list):
+                        return [str(item) for item in parsed]
+                except Exception:
+                    pass
+            return [i.strip() for i in v.replace("[", "").replace("]", "").replace("'", "").replace('"', "").split(",") if i.strip()]
+        return v
 
     jwt_secret_key: str = Field(default="change-me")
     jwt_algorithm: str = "HS256"
