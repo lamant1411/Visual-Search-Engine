@@ -6,12 +6,13 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
-      # BE serve anh local qua /static/images de Frontend hien thi duoc.
-      - ./backend/static/images:/app/static/images
+      # BE serve anh local qua /static/images va luu tru tren EC2 disk qua Docker Volume
+      - backend_static_images:/app/static/images
     env_file:
       - ./backend/.env
     environment:
       - AI_SERVICE_URL=http://ai_service:8001 # Báo cho BE biết chỗ gọi AI
+      - IMAGE_BASE_URL=${IMAGE_BASE_URL:-http://98.88.36.118:8000}
     depends_on:
       postgres:
         condition: service_healthy
@@ -28,7 +29,7 @@ services:
       - "8001:8001"
     volumes:
       - ./AI:/app
-      - ./backend/static/images:/app/static/images
+      - backend_static_images:/app/static/images
       # Persist downloaded models so recreating the container does not warm up
       # from an empty cache every time.
       - ai_huggingface_cache:/root/.cache/huggingface
@@ -119,6 +120,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  backend_static_images:
   ai_huggingface_cache:
   ai_easyocr_cache:
   frontend_node_modules:
