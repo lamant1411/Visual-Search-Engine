@@ -49,7 +49,7 @@ class Settings(BaseSettings):
             "http://127.0.0.1:5173",
             "http://localhost:4173",
             "http://127.0.0.1:4173",
-            "http://98.88.36.118",
+            "http://98.88.36.118:5173",
             "https://visual-search-engine-git-deploy-lamant1411s-projects.vercel.app",
             "https://visual-search-engine-plum.vercel.app",
         ]
@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     @field_validator("backend_cors_origins", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: Any) -> list[str]:
+        origins: list[str] = []
+        raw_items: list[str] = []
         if isinstance(v, str):
             if not v.strip():
                 return []
@@ -65,11 +67,20 @@ class Settings(BaseSettings):
                 try:
                     parsed = json.loads(v)
                     if isinstance(parsed, list):
-                        return [str(item) for item in parsed]
+                        raw_items = [str(item) for item in parsed]
                 except Exception:
-                    pass
-            return [i.strip() for i in v.replace("[", "").replace("]", "").replace("'", "").replace('"', "").split(",") if i.strip()]
-        return v
+                    raw_items = [i.strip() for i in v.replace("[", "").replace("]", "").replace("'", "").replace('"', "").split(",") if i.strip()]
+            else:
+                raw_items = [i.strip() for i in v.split(",") if i.strip()]
+        elif isinstance(v, list):
+            raw_items = [str(item) for item in v]
+
+        for item in raw_items:
+            cleaned = item.strip().rstrip("/")
+            if cleaned and cleaned not in origins:
+                origins.append(cleaned)
+
+        return origins
 
     jwt_secret_key: str = Field(default="change-me")
     jwt_algorithm: str = "HS256"
