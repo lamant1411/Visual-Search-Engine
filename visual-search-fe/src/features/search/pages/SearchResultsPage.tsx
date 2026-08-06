@@ -603,20 +603,7 @@ function runSearch({
 
   return searchByText({
     q: query,
-    mode: getAutoTextSearchMode(query),
     page,
     limit,
   });
-}
-
-function getAutoTextSearchMode(query: string) {
-  const normalizedQuery = query.trim();
-  const words = normalizedQuery.split(/\s+/).filter(Boolean);
-  const hasDigitsOrSymbols = /[\d%$€£¥#@&+=:/\\-]/.test(normalizedQuery);
-  const hasUppercaseLabel = /[A-Z]{2,}/.test(normalizedQuery);
-  const looksLikeShortPrintedText = normalizedQuery.length <= 32 && words.length <= 5;
-
-  return hasDigitsOrSymbols || (looksLikeShortPrintedText && hasUppercaseLabel)
-    ? "ocr"
-    : "semantic";
 }

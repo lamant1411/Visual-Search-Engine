@@ -34,6 +34,8 @@ class IndexingBatchOut(BaseModel):
 class AdminDashboardResponse(BaseModel):
     total_images: int
     indexed_images: int
+    dataset_indexed_images: int
+    upload_indexed_images: int
     pending_images: int
     failed_images: int
     total_users: int

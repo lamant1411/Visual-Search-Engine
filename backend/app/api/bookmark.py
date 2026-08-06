@@ -22,7 +22,7 @@ from app.schemas.bookmark import (
     BookmarkListResponse,
 )
 from app.schemas.common import ImageStatus
-from app.services.search import build_image_url
+from app.services.search import build_image_url, image_visible_to_user
 
 router = APIRouter()
 
@@ -44,7 +44,7 @@ async def list_bookmarks(
     """Return bookmarks of the current authenticated user."""
     filters = [
         Bookmark.user_id == current_user.id,
-        Image.owner_user_id == current_user.id,
+        image_visible_to_user(current_user.id),
         Image.status != ImageStatus.deleted,
     ]
     total = int(
@@ -95,7 +95,7 @@ async def list_bookmarked_image_ids(
             .join(Image, Image.id == Bookmark.image_id)
             .where(
                 Bookmark.user_id == current_user.id,
-                Image.owner_user_id == current_user.id,
+                image_visible_to_user(current_user.id),
                 Image.status != ImageStatus.deleted,
             )
             .order_by(Bookmark.created_at.desc(), Bookmark.id.desc())
@@ -125,7 +125,7 @@ async def create_bookmark(
     image = await db.get(Image, payload.image_id)
     if image is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "IMAGE_NOT_FOUND", "Image not found.", {"imageId": payload.image_id})
-    if image.owner_user_id != current_user.id:
+    if image.owner_user_id not in (None, current_user.id):
         raise api_error(status.HTTP_404_NOT_FOUND, "IMAGE_NOT_FOUND", "Image not found.", {"imageId": payload.image_id})
     if image.status != ImageStatus.indexed:
         raise api_error(
@@ -194,7 +194,7 @@ async def get_bookmark_detail(
             .where(
                 Bookmark.id == bookmark_id,
                 Bookmark.user_id == current_user.id,
-                Image.owner_user_id == current_user.id,
+                image_visible_to_user(current_user.id),
                 Image.status != ImageStatus.deleted,
             )
         )

@@ -148,11 +148,21 @@ class QdrantSearchService:
     def _owner_filter(owner_user_id: int | None):
         if owner_user_id is None:
             return None
+
+        # Images indexed before user-owned libraries were introduced do not
+        # have an owner_user_id payload. They form the shared catalogue; only
+        # points with a different, explicit owner must stay private.
         return models.Filter(
-            must=[
+            should=[
                 models.FieldCondition(
                     key="owner_user_id",
                     match=models.MatchValue(value=owner_user_id),
-                )
+                ),
+                models.IsEmptyCondition(
+                    is_empty=models.PayloadField(key="owner_user_id")
+                ),
+                models.IsNullCondition(
+                    is_null=models.PayloadField(key="owner_user_id")
+                ),
             ]
         )

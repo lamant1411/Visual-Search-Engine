@@ -76,6 +76,20 @@ async def get_dashboard(
     indexed_images = await _count_rows(
         db, select(func.count()).select_from(Image).where(Image.status == ImageStatus.indexed)
     )
+    dataset_indexed_images = await _count_rows(
+        db,
+        select(func.count()).select_from(Image).where(
+            Image.status == ImageStatus.indexed,
+            Image.source_type == ImageSourceType.dataset,
+        ),
+    )
+    upload_indexed_images = await _count_rows(
+        db,
+        select(func.count()).select_from(Image).where(
+            Image.status == ImageStatus.indexed,
+            Image.source_type == ImageSourceType.upload,
+        ),
+    )
     pending_images = await _count_rows(
         db, select(func.count()).select_from(Image).where(Image.status == ImageStatus.pending)
     )
@@ -95,6 +109,8 @@ async def get_dashboard(
     return AdminDashboardResponse(
         total_images=total_images,
         indexed_images=indexed_images,
+        dataset_indexed_images=dataset_indexed_images,
+        upload_indexed_images=upload_indexed_images,
         pending_images=pending_images,
         failed_images=failed_images,
         total_users=total_users,

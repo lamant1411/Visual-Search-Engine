@@ -20,7 +20,13 @@ from app.schemas.common import ImageStatus, SearchQueryType
 from app.schemas.search import SearchResponse
 from app.services.ai_service import AIServiceError, ai_embedding_client
 from app.services.qdrant_service import QdrantSearchService
-from app.services.search import build_image_url, build_search_response_from_hits, search_images_by_ocr_text
+from app.services.search import (
+    build_image_url,
+    build_search_response_from_hits,
+    extract_explicit_ocr_query,
+    image_visible_to_user,
+    search_images_by_ocr_text,
+)
 
 router = APIRouter()
 
@@ -87,7 +93,7 @@ async def search_by_image(
                 "Image not found.",
                 {"imageId": image_id},
             )
-        if image.owner_user_id != current_user.id:
+        if image.owner_user_id not in (None, current_user.id):
             raise api_error(
                 status.HTTP_404_NOT_FOUND,
                 "IMAGE_NOT_FOUND",
@@ -204,10 +210,11 @@ async def search_by_image(
 @router.get(
     "/text",
     response_model=SearchResponse,
-    summary="Search by semantic text",
+    summary="Unified semantic and OCR text search",
     description=(
-        "Receive text query through the q parameter, call AI service to embed text with CLIP, "
-        "query Qdrant, and return similar images. Requires Bearer access_token."
+        "Search the shared catalogue and the current user's images using CLIP semantic retrieval "
+        "plus OCR text retrieval. Explicit requests such as 'ảnh có chữ Nhím' are routed to OCR; "
+        "other text queries are routed to CLIP semantic search. Requires Bearer access_token."
     ),
     responses={
         200: {"description": "Search completed successfully."},
@@ -218,13 +225,13 @@ async def search_by_image(
     },
 )
 async def search_by_text(
-    q: str = Query(..., min_length=1, max_length=500, description="Text query for semantic image search"),
+    q: str = Query(..., min_length=1, max_length=500, description="Text query for unified semantic and OCR search"),
     page: int = Query(1, ge=1, description="Current page"),
     limit: int = Query(20, ge=1, le=100, description="Number of results per page"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SearchResponse:
-    """Đưa văn bản (semantic query) vào CLIP để tìm ảnh có ngữ nghĩa gần nhất trong Qdrant."""
+    """Run one text query through the appropriate semantic/OCR retrieval path."""
     query = q.strip()
     if not query:
         raise api_error(
@@ -234,35 +241,61 @@ async def search_by_text(
             {"field": "q"},
         )
 
-    try:
-        vector = await ai_embedding_client.embed_text(query)
-        max_results = max(page * limit, settings.image_search_max_results)
-        all_hits = QdrantSearchService().search(vector, limit=max_results, owner_user_id=current_user.id)
-    except AIServiceError as exc:
-        raise api_error(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            "AI_SERVICE_UNAVAILABLE",
-            str(exc),
-        ) from exc
-    except Exception as exc:
-        raise api_error(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            "VECTOR_SEARCH_UNAVAILABLE",
-            "Vector search service is unavailable.",
-        ) from exc
+    explicit_ocr_query = extract_explicit_ocr_query(query)
+    max_results = max(page * limit, settings.image_search_max_results)
 
-    response = await build_search_response_from_hits(
-        db,
-        all_hits,
-        page=page,
-        limit=limit,
-        owner_user_id=current_user.id,
-    )
+    if explicit_ocr_query is not None:
+        response = await search_images_by_ocr_text(
+            db,
+            explicit_ocr_query,
+            page=page,
+            limit=limit,
+            owner_user_id=current_user.id,
+        )
+    else:
+        try:
+            vector = await ai_embedding_client.embed_text(query)
+            all_hits = QdrantSearchService().search(
+                vector,
+                limit=max_results,
+                owner_user_id=current_user.id,
+            )
+            semantic_response = await build_search_response_from_hits(
+                db,
+                all_hits,
+                page=1,
+                limit=max_results,
+                owner_user_id=current_user.id,
+            )
+        except AIServiceError as exc:
+            raise api_error(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "AI_SERVICE_UNAVAILABLE",
+                str(exc),
+            ) from exc
+        except Exception as exc:
+            raise api_error(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "VECTOR_SEARCH_UNAVAILABLE",
+                "Vector search service is unavailable.",
+            ) from exc
+
+        response = await build_search_response_from_hits(
+            db,
+            all_hits,
+            page=page,
+            limit=limit,
+            owner_user_id=current_user.id,
+        )
     if page == 1:
         db.add(
             SearchHistory(
                 user_id=current_user.id,
-                query_type=SearchQueryType.semantic,
+                query_type=(
+                    SearchQueryType.ocr
+                    if explicit_ocr_query is not None
+                    else SearchQueryType.semantic
+                ),
                 query_value=query,
             )
         )
@@ -324,7 +357,7 @@ async def _get_owned_image_by_url(db: AsyncSession, image_url: str, owner_user_i
     image = await db.scalar(
         select(Image).where(
             Image.storage_path == storage_path,
-            Image.owner_user_id == owner_user_id,
+            image_visible_to_user(owner_user_id),
         )
     )
     if image is None:

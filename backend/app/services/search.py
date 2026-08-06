@@ -14,6 +14,16 @@ from app.schemas.search import SearchResponse, SearchResultItem, SearchResultMet
 from app.services.qdrant_service import VectorSearchHit
 
 
+def image_visible_to_user(owner_user_id: int | None):
+    """SQL condition for the shared catalogue plus a user's private images."""
+    if owner_user_id is None:
+        return True
+    return or_(
+        Image.owner_user_id.is_(None),
+        Image.owner_user_id == owner_user_id,
+    )
+
+
 async def build_search_response_from_hits(
     db: AsyncSession,
     hits: list[VectorSearchHit],
@@ -32,7 +42,7 @@ async def build_search_response_from_hits(
         .outerjoin(OCRText, OCRText.image_id == Image.id)
         .where(Image.id.in_(image_ids))
         .where(Image.status == ImageStatus.indexed)
-        .where(Image.owner_user_id == owner_user_id)
+        .where(image_visible_to_user(owner_user_id))
     )
     image_by_id = {image.id: (image, ocr_text) for image, ocr_text in rows.all()}
 
@@ -105,23 +115,44 @@ async def search_images_by_ocr_text(
         return SearchResponse(items=[], page=page, limit=limit, total=0)
 
     clean_query = query.strip()
+    normalized_query = _normalize_ocr_query(clean_query)
+    compact_length = len(normalized_query.replace(" ", ""))
+    if compact_length < 2:
+        return SearchResponse(items=[], page=page, limit=limit, total=0)
 
-    # Stage 1: preserve current FTS/ILIKE behavior and ranking.
+    # Stage 1: match complete OCR tokens/phrases. A substring condition such
+    # as "%cho%" is unsafe because it also matches "school" and "chocolate".
     ts_query = func.plainto_tsquery("simple", clean_query)
     fts_condition = OCRText.tsv.op("@@")(ts_query)
-    rank = func.ts_rank(OCRText.tsv, ts_query).cast(Float).label("rank")
-    ilike_condition = OCRText.raw_text.ilike(f"%{clean_query}%")
+    fts_rank = func.ts_rank(OCRText.tsv, ts_query).cast(Float)
+    raw_phrase_condition = OCRText.raw_text.ilike(f"%{clean_query}%")
+    normalized_token_condition = OCRText.normalized_text.op("~")(
+        literal(_ocr_token_pattern(normalized_query))
+    )
+    use_normalized_exact = not (
+        compact_length < 4 and _contains_diacritic(clean_query)
+    )
+    exact_condition = (
+        or_(fts_condition, normalized_token_condition)
+        if use_normalized_exact
+        else fts_condition
+    )
+    exact_rank = case(
+        (raw_phrase_condition, 1.0),
+        (normalized_token_condition, 0.90),
+        else_=fts_rank,
+    ).cast(Float)
 
     exact_subq = (
         select(
             func.min(Image.id).label("image_id"),
-            func.max(rank).label("max_rank"),
+            func.max(exact_rank).label("max_rank"),
         )
         .select_from(Image)
         .join(OCRText, OCRText.image_id == Image.id)
         .where(Image.status == ImageStatus.indexed)
-        .where(Image.owner_user_id == owner_user_id)
-        .where(or_(fts_condition, ilike_condition))
+        .where(image_visible_to_user(owner_user_id))
+        .where(exact_condition)
         .where(OCRText.raw_text.isnot(None))
         .where(OCRText.raw_text != "")
         .group_by(Image.storage_path)
@@ -139,69 +170,56 @@ async def search_images_by_ocr_text(
     # Stage 2: raw_text remains unchanged. Only the generated search derivative
     # is accent/punctuation normalized. Fuzzy expansion is disabled below four
     # alphanumeric characters to avoid noisy matches for very short queries.
-    normalized_query = _normalize_ocr_query(clean_query)
-    compact_length = len(normalized_query.replace(" ", ""))
-    if compact_length < 2:
+    if compact_length < 4:
         return exact_response
 
-    normalized_exact = OCRText.normalized_text.ilike(f"%{normalized_query}%")
     fuzzy_score = literal(0.0, Float)
     fuzzy_condition = None
-    if compact_length >= 4:
-        threshold = _ocr_fuzzy_threshold(compact_length)
-        await db.execute(
-            select(
-                func.set_config(
-                    "pg_trgm.strict_word_similarity_threshold",
-                    f"{threshold:.2f}",
-                    True,
-                )
+    threshold = _ocr_fuzzy_threshold(compact_length)
+    await db.execute(
+        select(
+            func.set_config(
+                "pg_trgm.strict_word_similarity_threshold",
+                f"{threshold:.2f}",
+                True,
             )
         )
-        trigram_candidate = literal(normalized_query).op("<<%")(
-            OCRText.normalized_text
-        )
-        if compact_length <= 5 and " " not in normalized_query:
-            # Trigrams alone are noisy for four-letter words. Use the index to
-            # shortlist candidates, then require at most one changed character
-            # against a complete OCR token (nhim -> nbim).
-            edit_distance = func.ocr_min_token_edit_distance(
-                literal(normalized_query),
-                OCRText.normalized_text,
-                1,
-            )
-            fuzzy_condition = and_(trigram_candidate, edit_distance <= 1)
-            fuzzy_score = case(
-                (edit_distance == 0, 1.0),
-                (edit_distance == 1, 0.75),
-                else_=0.0,
-            ).cast(Float)
-        else:
-            fuzzy_score = func.strict_word_similarity(
-                literal(normalized_query),
-                OCRText.normalized_text,
-            ).cast(Float)
-            fuzzy_condition = trigram_candidate
-
-    normalized_rank = case(
-        (normalized_exact, 1.0),
-        else_=fuzzy_score,
-    ).cast(Float)
-    fallback_condition = (
-        or_(normalized_exact, fuzzy_condition)
-        if fuzzy_condition is not None
-        else normalized_exact
     )
+    trigram_candidate = literal(normalized_query).op("<<%")(
+        OCRText.normalized_text
+    )
+    if compact_length <= 5 and " " not in normalized_query:
+        # Trigrams alone are noisy for four-letter words. Use the index to
+        # shortlist candidates, then require at most one changed character
+        # against a complete OCR token (nhim -> nbim).
+        edit_distance = func.ocr_min_same_length_token_edit_distance(
+            literal(normalized_query),
+            OCRText.normalized_text,
+            1,
+        )
+        fuzzy_condition = and_(trigram_candidate, edit_distance <= 1)
+        fuzzy_score = case(
+            (edit_distance == 0, 1.0),
+            (edit_distance == 1, 0.75),
+            else_=0.0,
+        ).cast(Float)
+    else:
+        fuzzy_score = func.strict_word_similarity(
+            literal(normalized_query),
+            OCRText.normalized_text,
+        ).cast(Float)
+        fuzzy_condition = trigram_candidate
+
     fuzzy_subq = (
         select(
             func.min(Image.id).label("image_id"),
-            func.max(normalized_rank).label("max_rank"),
+            func.max(fuzzy_score).label("max_rank"),
         )
         .select_from(Image)
         .join(OCRText, OCRText.image_id == Image.id)
         .where(Image.status == ImageStatus.indexed)
-        .where(Image.owner_user_id == owner_user_id)
-        .where(fallback_condition)
+        .where(image_visible_to_user(owner_user_id))
+        .where(fuzzy_condition)
         .where(OCRText.normalized_text.isnot(None))
         .where(OCRText.normalized_text != "")
         .group_by(Image.storage_path)
@@ -275,9 +293,60 @@ def _normalize_ocr_query(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", ascii_text.lower()).strip()
 
 
+def _ocr_token_pattern(normalized_query: str) -> str:
+    """PostgreSQL regex for a complete normalized OCR token or phrase."""
+    words = [re.escape(word) for word in normalized_query.split() if word]
+    phrase = "[[:space:]]+".join(words)
+    return rf"(^|[[:space:]]){phrase}([[:space:]]|$)"
+
+
+def _contains_diacritic(value: str) -> bool:
+    """Return whether text contains a combining accent or Vietnamese đ/Đ."""
+    if "đ" in value.casefold():
+        return True
+    return any(unicodedata.combining(char) for char in unicodedata.normalize("NFD", value))
+
+
 def _ocr_fuzzy_threshold(compact_length: int) -> float:
     if compact_length <= 5:
         return 0.20
     if compact_length <= 8:
         return 0.50
     return 0.60
+
+
+_OCR_INTENT_PATTERNS = (
+    re.compile(
+        r"(?:tìm|muốn|cần)?\s*(?:ảnh|hình)(?:\s+ảnh)?\s+"
+        r"(?:có|chứa)\s+(?:dòng\s+)?(?:chữ|text|văn\s*bản)"
+        r"\s*[:\-]?\s*(.+)$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:tìm|muốn|cần)?\s*(?:ảnh|hình)(?:\s+ảnh)?\s+"
+        r"(?:ghi|viết)\s+(?:(?:dòng\s+)?(?:chữ|text|văn\s*bản)\s+)?"
+        r"[:\-]?\s*(.+)$",
+        re.IGNORECASE,
+    ),
+    re.compile(r"^(?:tìm|search)\s+(?:chữ|text)\s+(.+)$", re.IGNORECASE),
+    re.compile(
+        r"(?:find|show|search)(?:\s+me)?\s+(?:an?\s+)?(?:image|photo|picture)"
+        r"\s+(?:with|containing|that\s+says|that\s+reads)\s+"
+        r"(?:the\s+)?(?:text|word|words)?\s*[:\-]?\s*(.+)$",
+        re.IGNORECASE,
+    ),
+    re.compile(r"^(?:ocr|text|chữ)\s*:\s*(.+)$", re.IGNORECASE),
+)
+
+
+def extract_explicit_ocr_query(query: str) -> str | None:
+    """Extract the requested printed text from an explicit OCR-style query."""
+    cleaned = " ".join(query.strip().split())
+    for pattern in _OCR_INTENT_PATTERNS:
+        match = pattern.search(cleaned)
+        if not match:
+            continue
+        candidate = match.group(1).strip().strip("\"'“”‘’.,!? ")
+        if candidate:
+            return candidate
+    return None

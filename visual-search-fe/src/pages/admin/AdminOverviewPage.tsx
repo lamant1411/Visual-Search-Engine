@@ -75,7 +75,7 @@ export default function AdminOverviewPage() {
                   Tổng số ảnh đã index
                 </span>
                 <p className="text-3xl font-bold font-display text-ink-primary">
-                  {stats?.total_images.toLocaleString('vi-VN') || 0}
+                  {stats?.indexed_images.toLocaleString('vi-VN') || 0}
                 </p>
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
