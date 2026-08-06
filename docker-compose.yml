@@ -74,7 +74,7 @@ services:
       - ./visual-search-fe:/app
       - frontend_node_modules:/app/node_modules
     environment:
-      VITE_API_BASE_URL: http://http://98.88.36.118:8000/api/v1
+      VITE_API_BASE_URL: http://98.88.36.118:8000/api/v1
       VITE_DEV_PROXY_TARGET: http://backend:8000
       VITE_ENABLE_MOCK: "false"
     depends_on:
