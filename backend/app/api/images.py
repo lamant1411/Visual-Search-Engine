@@ -1,4 +1,4 @@
-﻿"""API kho ?nh cho ngu?i dùng dã dang nh?p."""
+"""Image library API for authenticated users."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_, select
@@ -34,7 +34,7 @@ router = APIRouter()
     response_model=SearchResponse,
     summary="List image library",
     description=(
-        "Return paginated indexed images that authenticated users can browse. "
+        "Return paginated indexed images owned by the current authenticated user. "
         "Optional q filters by filename, storage path, or OCR text."
     ),
     responses={
@@ -46,11 +46,18 @@ async def list_image_library(
     q: str | None = Query(None, min_length=1, max_length=255),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SearchResponse:
-    """Tr? danh sách ?nh indexed trong kho ?nh cho user xem."""
-    return await _list_images_by_status(db=db, image_status=ImageStatus.indexed, q=q, page=page, limit=limit)
+    """Return indexed images owned by the current user."""
+    return await _list_images_by_status(
+        db=db,
+        image_status=ImageStatus.indexed,
+        owner_user_id=current_user.id,
+        q=q,
+        page=page,
+        limit=limit,
+    )
 
 
 @router.get(
@@ -58,8 +65,8 @@ async def list_image_library(
     response_model=SearchResponse,
     summary="List deleted images",
     description=(
-        "Return paginated soft-deleted images. Admin users can view all deleted images. "
-        "Regular users can view images they deleted or own."
+        "Return paginated soft-deleted images owned or deleted by the current authenticated user. "
+        "Private images from other users are not exposed."
     ),
     responses={
         200: {"description": "Deleted images returned successfully."},
@@ -73,10 +80,11 @@ async def list_deleted_images(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SearchResponse:
-    """Tr? danh sách ?nh dã xóa m?m d? user/admin có th? khôi ph?c ho?c xóa vinh vi?n."""
-    filters = [Image.status == ImageStatus.deleted]
-    if str(current_user.role) != "UserRole.admin" and getattr(current_user.role, "value", current_user.role) != "admin":
-        filters.append(or_(Image.owner_user_id == current_user.id, Image.deleted_by_user_id == current_user.id))
+    """Return soft-deleted images that the current user can restore or permanently delete."""
+    filters = [
+        Image.status == ImageStatus.deleted,
+        or_(Image.owner_user_id == current_user.id, Image.deleted_by_user_id == current_user.id),
+    ]
     return await _list_images(db=db, filters=filters, q=q, page=page, limit=limit)
 
 
@@ -85,7 +93,7 @@ async def list_deleted_images(
     response_model=ImageBulkDeleteResponse,
     summary="Soft delete multiple images from library",
     description=(
-        "Soft delete multiple images from the image library. Images are hidden from search and normal library results, "
+        "Soft delete multiple images from the current user image library. Images are hidden from search and normal library results, "
         "but remain available in the deleted images view for restore or permanent deletion."
     ),
     responses={
@@ -98,7 +106,7 @@ async def bulk_delete_images_from_user_library(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ImageBulkDeleteResponse:
-    """Xóa m?m nhi?u ?nh t? kho ?nh, không gi?i h?n s? lu?ng ?nh user ch?n."""
+    """Soft delete selected images from the current user library."""
     return await _bulk_delete(payload, current_user, db, permanent=False)
 
 
@@ -106,7 +114,7 @@ async def bulk_delete_images_from_user_library(
     "/bulk-restore",
     response_model=ImageBulkRestoreResponse,
     summary="Restore multiple deleted images",
-    description="Restore multiple soft-deleted images back to their previous status.",
+    description="Restore multiple soft-deleted images owned or deleted by the current user back to their previous status.",
     responses={
         200: {"description": "Bulk restore completed. Check restored_items and failed_items for per-image result."},
         401: {"description": "Missing, invalid, or expired token."},
@@ -117,7 +125,7 @@ async def bulk_restore_images(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ImageBulkRestoreResponse:
-    """Khôi ph?c nhi?u ?nh dã xóa m?m."""
+    """Restore selected soft-deleted images."""
     restored_items: list[ImageRestoreResponse] = []
     failed_items: list[ImageBulkDeleteFailedItem] = []
     seen_image_ids: set[int] = set()
@@ -156,7 +164,7 @@ async def bulk_restore_images(
     "/bulk-permanent-delete",
     response_model=ImageBulkDeleteResponse,
     summary="Permanently delete multiple images",
-    description="Permanently delete multiple soft-deleted images from DB, Qdrant metadata, bookmarks, OCR text, and local files.",
+    description="Permanently delete multiple soft-deleted images owned or deleted by the current user from DB, Qdrant metadata, bookmarks, OCR text, and local files.",
     responses={
         200: {"description": "Bulk permanent delete completed. Check deleted_items and failed_items for per-image result."},
         401: {"description": "Missing, invalid, or expired token."},
@@ -167,7 +175,7 @@ async def bulk_permanently_delete_images(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ImageBulkDeleteResponse:
-    """Xóa vinh vi?n nhi?u ?nh dã xóa m?m."""
+    """Permanently delete selected soft-deleted images."""
     return await _bulk_delete(payload, current_user, db, permanent=True)
 
 
@@ -175,7 +183,7 @@ async def bulk_permanently_delete_images(
     "/{image_id}/restore",
     response_model=ImageRestoreResponse,
     summary="Restore deleted image",
-    description="Restore a soft-deleted image back to its previous status.",
+    description="Restore a soft-deleted image owned or deleted by the current user back to its previous status.",
     responses={
         200: {"description": "Image restored successfully."},
         401: {"description": "Missing, invalid, or expired token."},
@@ -189,7 +197,7 @@ async def restore_image(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ImageRestoreResponse:
-    """Khôi ph?c m?t ?nh dã xóa m?m."""
+    """Restore one soft-deleted image."""
     result = await restore_deleted_image(
         db,
         image_id=image_id,
@@ -203,7 +211,7 @@ async def restore_image(
     "/{image_id}/permanent",
     response_model=ImageDeleteResponse,
     summary="Permanently delete image",
-    description="Permanently delete a soft-deleted image from DB, Qdrant metadata, bookmarks, OCR text, and local file.",
+    description="Permanently delete a soft-deleted image owned or deleted by the current user from DB, Qdrant metadata, bookmarks, OCR text, and local file.",
     responses={
         200: {"description": "Image permanently deleted successfully."},
         401: {"description": "Missing, invalid, or expired token."},
@@ -217,7 +225,7 @@ async def permanently_delete_image(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ImageDeleteResponse:
-    """Xóa vinh vi?n m?t ?nh dã xóa m?m."""
+    """Permanently delete one soft-deleted image."""
     result = await permanently_delete_image_from_library(
         db,
         image_id=image_id,
@@ -232,7 +240,7 @@ async def permanently_delete_image(
     response_model=ImageDeleteResponse,
     summary="Soft delete image from library",
     description=(
-        "Soft delete an image from the image library. The image is hidden from search and normal library results, "
+        "Soft delete an image from the current user image library. The image is hidden from search and normal library results, "
         "but remains available in the deleted images view for restore or permanent deletion."
     ),
     responses={
@@ -248,7 +256,7 @@ async def delete_image_from_user_library(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ImageDeleteResponse:
-    """Xóa m?m ?nh t? kho ?nh theo quy?n c?a user hi?n t?i."""
+    """Soft delete one image owned by the current user."""
     result = await delete_image_from_library(
         db,
         image_id=image_id,
@@ -265,8 +273,15 @@ async def _list_images_by_status(
     q: str | None,
     page: int,
     limit: int,
+    owner_user_id: int,
 ) -> SearchResponse:
-    return await _list_images(db=db, filters=[Image.status == image_status], q=q, page=page, limit=limit)
+    return await _list_images(
+        db=db,
+        filters=[Image.status == image_status, Image.owner_user_id == owner_user_id],
+        q=q,
+        page=page,
+        limit=limit,
+    )
 
 
 async def _list_images(

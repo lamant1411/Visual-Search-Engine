@@ -25,12 +25,11 @@ bcrypt==3.2.2
 # File Upload
 # =========================
 python-multipart==0.0.32
-
+Pillow==12.0.0
 # Vector Database
 # =========================
 qdrant-client==1.18.0
 
-# HTTP Client (nếu gọi AI/OCR API)
+# HTTP Client
 # =========================
 httpx==0.28.1
- 

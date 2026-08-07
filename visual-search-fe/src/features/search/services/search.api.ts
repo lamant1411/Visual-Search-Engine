@@ -14,12 +14,10 @@ export async function searchByText(params: TextSearchParams): Promise<SearchResp
     return createMockSearchResponse(page, limit)
   }
 
-  const endpoint = params.mode === 'ocr' ? '/search/ocr' : '/search/text'
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { mode: _mode, ...apiParams } = params
-
-  const response = await apiClient.get<unknown>(endpoint, {
-    params: apiParams,
+  // The backend now routes/fuses semantic and OCR candidates. Keeping that
+  // decision server-side prevents the browser from misclassifying queries.
+  const response = await apiClient.get<unknown>('/search/text', {
+    params,
   })
 
   return mapSearchResponse(response.data, { page, limit })

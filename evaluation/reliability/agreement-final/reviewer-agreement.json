@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-08-05T10:38:13.410889+00:00",
+  "primary_reviewers": [
+    "Nguyễn Kim Vũ"
+  ],
+  "secondary_reviewers": [
+    "Hoàng Khánh Văn"
+  ],
+  "independent_reviewers": true,
+  "expected_sample_judgements": 630,
+  "compared_judgements": 630,
+  "missing_secondary_judgements": 0,
+  "second_review_complete": true,
+  "warnings": [],
+  "overall": {
+    "judgement_count": 630,
+    "exact_agreement": 0.8888888888888888,
+    "exact_agreement_95_ci": {
+      "confidence_level": 0.95,
+      "lower": 0.8619528794964855,
+      "upper": 0.9111110991704809,
+      "count": 630
+    },
+    "binary_relevance_agreement": 0.953968253968254,
+    "cohen_kappa": 0.7604302477183832,
+    "quadratic_weighted_kappa": 0.8458458458458459,
+    "binary_cohen_kappa": 0.7568085616164847,
+    "disagreement_count": 70,
+    "confusion_matrix_primary_rows_secondary_columns": {
+      "0": {
+        "0": 52,
+        "1": 3,
+        "2": 2
+      },
+      "1": {
+        "0": 20,
+        "1": 92,
+        "2": 18
+      },
+      "2": {
+        "0": 4,
+        "1": 23,
+        "2": 416
+      }
+    }
+  },
+  "by_mode": {
+    "semantic": {
+      "judgement_count": 271,
+      "exact_agreement": 0.9298892988929889,
+      "exact_agreement_95_ci": {
+        "confidence_level": 0.95,
+        "lower": 0.8931019135945962,
+        "upper": 0.9546595595098256,
+        "count": 271
+      },
+      "binary_relevance_agreement": 0.981549815498155,
+      "cohen_kappa": 0.8293281182670952,
+      "quadratic_weighted_kappa": 0.893355790269011,
+      "binary_cohen_kappa": 0.8989183140619174,
+      "disagreement_count": 19,
+      "confusion_matrix_primary_rows_secondary_columns": {
+        "0": {
+          "0": 25,
+          "1": 0,
+          "2": 0
+        },
+        "1": {
+          "0": 3,
+          "1": 33,
+          "2": 6
+        },
+        "2": {
+          "0": 2,
+          "1": 8,
+          "2": 194
+        }
+      }
+    },
+    "ocr": {
+      "judgement_count": 158,
+      "exact_agreement": 0.8481012658227848,
+      "exact_agreement_95_ci": {
+        "confidence_level": 0.95,
+        "lower": 0.7839275462564425,
+        "upper": 0.8957499653128903,
+        "count": 158
+      },
+      "binary_relevance_agreement": 0.8860759493670886,
+      "cohen_kappa": 0.5822868473231988,
+      "quadratic_weighted_kappa": 0.7088452088452089,
+      "binary_cohen_kappa": 0.3113801452784506,
+      "disagreement_count": 24,
+      "confusion_matrix_primary_rows_secondary_columns": {
+        "0": {
+          "0": 5,
+          "1": 0,
+          "2": 2
+        },
+        "1": {
+          "0": 14,
+          "1": 10,
+          "2": 2
+        },
+        "2": {
+          "0": 2,
+          "1": 4,
+          "2": 119
+        }
+      }
+    },
+    "image": {
+      "judgement_count": 201,
+      "exact_agreement": 0.8656716417910447,
+      "exact_agreement_95_ci": {
+        "confidence_level": 0.95,
+        "lower": 0.8116151129704375,
+        "upper": 0.9060130510072214,
+        "count": 201
+      },
+      "binary_relevance_agreement": 0.9701492537313433,
+      "cohen_kappa": 0.7639203062467373,
+      "quadratic_weighted_kappa": 0.864369080048984,
+      "binary_cohen_kappa": 0.8629545454545456,
+      "disagreement_count": 27,
+      "confusion_matrix_primary_rows_secondary_columns": {
+        "0": {
+          "0": 22,
+          "1": 3,
+          "2": 0
+        },
+        "1": {
+          "0": 3,
+          "1": 49,
+          "2": 10
+        },
+        "2": {
+          "0": 0,
+          "1": 11,
+          "2": 103
+        }
+      }
+    }
+  },
+  "adjudication": {
+    "complete": true,
+    "reviewers": [
+      "Vũ Tuấn Minh"
+    ],
+    "resolved_disagreement_count": 70,
+    "unresolved_disagreement_count": 0,
+    "reviewed_at": "2026-08-05T10:34:41.965Z"
+  }
+}

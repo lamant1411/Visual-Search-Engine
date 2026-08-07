@@ -1,4 +1,4 @@
-# Visual-Search-Engine 
+# Visual-Search-Engine
 
 ## CPU tuning for batch indexing
 

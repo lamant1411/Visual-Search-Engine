@@ -1,0 +1,71 @@
+﻿query_id,mode,query,image_id,primary_grade,secondary_grade
+semantic-01,semantic,một chú chó ở ngoài trời,49179,2,0
+semantic-02,semantic,một con mèo đang ngồi,728,2,1
+semantic-03,semantic,người đi bộ trong rừng,11304,1,2
+semantic-03,semantic,người đi bộ trong rừng,4784,2,1
+semantic-04,semantic,ô tô màu đỏ,14546,1,2
+semantic-05,semantic,bãi biển lúc hoàng hôn,20394,2,1
+semantic-10,semantic,thuyền trên hồ,8750,2,0
+semantic-10,semantic,thuyền trên hồ,4998,2,1
+semantic-10,semantic,thuyền trên hồ,7621,1,2
+semantic-10,semantic,thuyền trên hồ,5396,2,1
+semantic-11,semantic,a cup of coffee,11950,2,1
+semantic-11,semantic,a cup of coffee,10670,2,1
+semantic-12,semantic,an airplane flying in the sky,15949,1,2
+semantic-12,semantic,an airplane flying in the sky,2571,1,2
+semantic-14,semantic,a close-up portrait of a person,51968,1,2
+semantic-15,semantic,a plate of food,4277,1,0
+semantic-17,semantic,sports players,21387,1,0
+semantic-17,semantic,sports players,20245,1,0
+semantic-18,semantic,historic architecture,11371,2,1
+ocr-01,ocr,STOP,51704,0,2
+ocr-01,ocr,STOP,49351,0,2
+ocr-02,ocr,OPEN,75682,2,0
+ocr-02,ocr,OPEN,50713,1,0
+ocr-02,ocr,OPEN,83194,2,0
+ocr-03,ocr,SCHOOL,80159,1,0
+ocr-04,ocr,COFFEE,3002,1,2
+ocr-06,ocr,HOTEL,68438,1,0
+ocr-09,ocr,FOOD,52576,2,1
+ocr-09,ocr,FOOD,46687,1,0
+ocr-10,ocr,POLICE,74963,1,0
+ocr-12,ocr,Nhím,56281,1,0
+ocr-12,ocr,Nhím,84737,1,0
+ocr-12,ocr,Nhím,32063,1,0
+ocr-12,ocr,Nhím,54325,1,0
+ocr-12,ocr,Nhím,64961,1,0
+ocr-12,ocr,Nhím,45458,1,0
+ocr-12,ocr,Nhím,68818,1,0
+ocr-13,ocr,ĐƯỜNG,45651,1,0
+ocr-14,ocr,SÀI GÒN,85499,1,0
+ocr-14,ocr,SÀI GÒN,74181,2,1
+ocr-14,ocr,SÀI GÒN,32063,1,2
+ocr-14,ocr,SÀI GÒN,50551,2,1
+ocr-15,ocr,HUẾ,29821,2,1
+image-01,image,,15932,2,1
+image-02,image,,17733,1,2
+image-02,image,,16591,1,2
+image-02,image,,5901,1,2
+image-03,image,,3335,2,1
+image-04,image,,2342,1,2
+image-05,image,,9868,0,1
+image-05,image,,6478,1,0
+image-06,image,,15095,1,2
+image-07,image,,8750,1,0
+image-08,image,,17172,2,1
+image-08,image,,42329,2,1
+image-08,image,,65006,2,1
+image-08,image,,9711,2,1
+image-08,image,,4094,1,0
+image-08,image,,20254,2,1
+image-08,image,,72209,2,1
+image-08,image,,19692,2,1
+image-08,image,,21101,2,1
+image-09,image,,5912,0,1
+image-09,image,,26367,2,1
+image-09,image,,8877,1,2
+image-09,image,,5076,1,2
+image-10,image,,64612,1,2
+image-11,image,,24770,0,1
+image-12,image,,9021,1,2
+image-13,image,,11356,1,2

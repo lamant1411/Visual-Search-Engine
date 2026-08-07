@@ -21,3 +21,9 @@ backend/static/images/*.bmp
 backend/static/images/*.tif
 backend/static/images/*.tiff
 backend/static/images/*
+
+# Evaluation credentials and generated reports
+evaluation/.env
+evaluation/results/
+evaluation/ground-truth-review.html
+evaluation/reliability/*.html

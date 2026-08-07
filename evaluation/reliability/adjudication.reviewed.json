@@ -1,0 +1,828 @@
+{
+  "schema_version": 1,
+  "evaluation_name": "Visual Search ground-truth disagreement adjudication",
+  "queries": [
+    {
+      "id": "semantic-01",
+      "mode": "semantic",
+      "query": "một chú chó ở ngoài trời",
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        49179
+      ],
+      "judged_image_ids": [
+        49179
+      ],
+      "relevant_image_ids": [],
+      "relevance_grades": {
+        "49179": 0
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "semantic-02",
+      "mode": "semantic",
+      "query": "một con mèo đang ngồi",
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        728
+      ],
+      "judged_image_ids": [
+        728
+      ],
+      "relevant_image_ids": [
+        728
+      ],
+      "relevance_grades": {
+        "728": 1
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "semantic-03",
+      "mode": "semantic",
+      "query": "người đi bộ trong rừng",
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        11304,
+        4784
+      ],
+      "judged_image_ids": [
+        11304,
+        4784
+      ],
+      "relevant_image_ids": [
+        11304,
+        4784
+      ],
+      "relevance_grades": {
+        "4784": 1,
+        "11304": 2
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "semantic-04",
+      "mode": "semantic",
+      "query": "ô tô màu đỏ",
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        14546
+      ],
+      "judged_image_ids": [
+        14546
+      ],
+      "relevant_image_ids": [
+        14546
+      ],
+      "relevance_grades": {
+        "14546": 2
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "semantic-05",
+      "mode": "semantic",
+      "query": "bãi biển lúc hoàng hôn",
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        20394
+      ],
+      "judged_image_ids": [
+        20394
+      ],
+      "relevant_image_ids": [
+        20394
+      ],
+      "relevance_grades": {
+        "20394": 1
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "semantic-10",
+      "mode": "semantic",
+      "query": "thuyền trên hồ",
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        8750,
+        4998,
+        7621,
+        5396
+      ],
+      "judged_image_ids": [
+        8750,
+        4998,
+        7621,
+        5396
+      ],
+      "relevant_image_ids": [
+        4998,
+        7621,
+        5396
+      ],
+      "relevance_grades": {
+        "4998": 1,
+        "5396": 1,
+        "7621": 2,
+        "8750": 0
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "semantic-11",
+      "mode": "semantic",
+      "query": "a cup of coffee",
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        11950,
+        10670
+      ],
+      "judged_image_ids": [
+        11950,
+        10670
+      ],
+      "relevant_image_ids": [
+        11950,
+        10670
+      ],
+      "relevance_grades": {
+        "10670": 1,
+        "11950": 1
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "semantic-12",
+      "mode": "semantic",
+      "query": "an airplane flying in the sky",
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        15949,
+        2571
+      ],
+      "judged_image_ids": [
+        15949,
+        2571
+      ],
+      "relevant_image_ids": [
+        15949,
+        2571
+      ],
+      "relevance_grades": {
+        "2571": 2,
+        "15949": 2
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "semantic-14",
+      "mode": "semantic",
+      "query": "a close-up portrait of a person",
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        51968
+      ],
+      "judged_image_ids": [
+        51968
+      ],
+      "relevant_image_ids": [
+        51968
+      ],
+      "relevance_grades": {
+        "51968": 2
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "semantic-15",
+      "mode": "semantic",
+      "query": "a plate of food",
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        4277
+      ],
+      "judged_image_ids": [
+        4277
+      ],
+      "relevant_image_ids": [
+        4277
+      ],
+      "relevance_grades": {
+        "4277": 1
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "semantic-17",
+      "mode": "semantic",
+      "query": "sports players",
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        21387,
+        20245
+      ],
+      "judged_image_ids": [
+        21387,
+        20245
+      ],
+      "relevant_image_ids": [],
+      "relevance_grades": {
+        "20245": 0,
+        "21387": 0
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "semantic-18",
+      "mode": "semantic",
+      "query": "historic architecture",
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        11371
+      ],
+      "judged_image_ids": [
+        11371
+      ],
+      "relevant_image_ids": [
+        11371
+      ],
+      "relevance_grades": {
+        "11371": 1
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "ocr-01",
+      "mode": "ocr",
+      "query": "STOP",
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        51704,
+        49351
+      ],
+      "judged_image_ids": [
+        51704,
+        49351
+      ],
+      "relevant_image_ids": [
+        51704,
+        49351
+      ],
+      "relevance_grades": {
+        "49351": 2,
+        "51704": 2
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "ocr-02",
+      "mode": "ocr",
+      "query": "OPEN",
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        75682,
+        50713,
+        83194
+      ],
+      "judged_image_ids": [
+        75682,
+        50713,
+        83194
+      ],
+      "relevant_image_ids": [],
+      "relevance_grades": {
+        "50713": 0,
+        "75682": 0,
+        "83194": 0
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "ocr-03",
+      "mode": "ocr",
+      "query": "SCHOOL",
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        80159
+      ],
+      "judged_image_ids": [
+        80159
+      ],
+      "relevant_image_ids": [
+        80159
+      ],
+      "relevance_grades": {
+        "80159": 1
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "ocr-04",
+      "mode": "ocr",
+      "query": "COFFEE",
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        3002
+      ],
+      "judged_image_ids": [
+        3002
+      ],
+      "relevant_image_ids": [
+        3002
+      ],
+      "relevance_grades": {
+        "3002": 2
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "ocr-06",
+      "mode": "ocr",
+      "query": "HOTEL",
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        68438
+      ],
+      "judged_image_ids": [
+        68438
+      ],
+      "relevant_image_ids": [
+        68438
+      ],
+      "relevance_grades": {
+        "68438": 1
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "ocr-09",
+      "mode": "ocr",
+      "query": "FOOD",
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        52576,
+        46687
+      ],
+      "judged_image_ids": [
+        52576,
+        46687
+      ],
+      "relevant_image_ids": [
+        52576
+      ],
+      "relevance_grades": {
+        "46687": 0,
+        "52576": 1
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "ocr-10",
+      "mode": "ocr",
+      "query": "POLICE",
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        74963
+      ],
+      "judged_image_ids": [
+        74963
+      ],
+      "relevant_image_ids": [],
+      "relevance_grades": {
+        "74963": 0
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "ocr-12",
+      "mode": "ocr",
+      "query": "Nhím",
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        56281,
+        84737,
+        32063,
+        54325,
+        64961,
+        45458,
+        68818
+      ],
+      "judged_image_ids": [
+        56281,
+        84737,
+        32063,
+        54325,
+        64961,
+        45458,
+        68818
+      ],
+      "relevant_image_ids": [],
+      "relevance_grades": {
+        "32063": 0,
+        "45458": 0,
+        "54325": 0,
+        "56281": 0,
+        "64961": 0,
+        "68818": 0,
+        "84737": 0
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "ocr-13",
+      "mode": "ocr",
+      "query": "ĐƯỜNG",
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        45651
+      ],
+      "judged_image_ids": [
+        45651
+      ],
+      "relevant_image_ids": [
+        45651
+      ],
+      "relevance_grades": {
+        "45651": 1
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "ocr-14",
+      "mode": "ocr",
+      "query": "SÀI GÒN",
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        85499,
+        74181,
+        32063,
+        50551
+      ],
+      "judged_image_ids": [
+        85499,
+        74181,
+        32063,
+        50551
+      ],
+      "relevant_image_ids": [
+        74181,
+        32063,
+        50551
+      ],
+      "relevance_grades": {
+        "32063": 2,
+        "50551": 1,
+        "74181": 1,
+        "85499": 0
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "ocr-15",
+      "mode": "ocr",
+      "query": "HUẾ",
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        29821
+      ],
+      "judged_image_ids": [
+        29821
+      ],
+      "relevant_image_ids": [
+        29821
+      ],
+      "relevance_grades": {
+        "29821": 2
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "image-01",
+      "mode": "image",
+      "image_id": 2243,
+      "exclude_image_id": 2243,
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        15932
+      ],
+      "judged_image_ids": [
+        15932
+      ],
+      "relevant_image_ids": [
+        15932
+      ],
+      "relevance_grades": {
+        "15932": 1
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "image-02",
+      "mode": "image",
+      "image_id": 2338,
+      "exclude_image_id": 2338,
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        17733,
+        16591,
+        5901
+      ],
+      "judged_image_ids": [
+        17733,
+        16591,
+        5901
+      ],
+      "relevant_image_ids": [
+        17733,
+        16591,
+        5901
+      ],
+      "relevance_grades": {
+        "5901": 2,
+        "16591": 2,
+        "17733": 2
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "image-03",
+      "mode": "image",
+      "image_id": 2470,
+      "exclude_image_id": 2470,
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        3335
+      ],
+      "judged_image_ids": [
+        3335
+      ],
+      "relevant_image_ids": [
+        3335
+      ],
+      "relevance_grades": {
+        "3335": 2
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "image-04",
+      "mode": "image",
+      "image_id": 2164,
+      "exclude_image_id": 2164,
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        2342
+      ],
+      "judged_image_ids": [
+        2342
+      ],
+      "relevant_image_ids": [
+        2342
+      ],
+      "relevance_grades": {
+        "2342": 1
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "image-05",
+      "mode": "image",
+      "image_id": 3245,
+      "exclude_image_id": 3245,
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        9868,
+        6478
+      ],
+      "judged_image_ids": [
+        9868,
+        6478
+      ],
+      "relevant_image_ids": [],
+      "relevance_grades": {
+        "6478": 0,
+        "9868": 0
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "image-06",
+      "mode": "image",
+      "image_id": 2772,
+      "exclude_image_id": 2772,
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        15095
+      ],
+      "judged_image_ids": [
+        15095
+      ],
+      "relevant_image_ids": [
+        15095
+      ],
+      "relevance_grades": {
+        "15095": 1
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "image-07",
+      "mode": "image",
+      "image_id": 2222,
+      "exclude_image_id": 2222,
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        8750
+      ],
+      "judged_image_ids": [
+        8750
+      ],
+      "relevant_image_ids": [],
+      "relevance_grades": {
+        "8750": 0
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "image-08",
+      "mode": "image",
+      "image_id": 3002,
+      "exclude_image_id": 3002,
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        17172,
+        42329,
+        65006,
+        9711,
+        4094,
+        20254,
+        72209,
+        19692,
+        21101
+      ],
+      "judged_image_ids": [
+        17172,
+        42329,
+        65006,
+        9711,
+        4094,
+        20254,
+        72209,
+        19692,
+        21101
+      ],
+      "relevant_image_ids": [
+        17172,
+        42329,
+        65006,
+        9711,
+        20254,
+        72209,
+        19692,
+        21101
+      ],
+      "relevance_grades": {
+        "4094": 0,
+        "9711": 1,
+        "17172": 1,
+        "19692": 1,
+        "20254": 1,
+        "21101": 1,
+        "42329": 1,
+        "65006": 1,
+        "72209": 1
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "image-09",
+      "mode": "image",
+      "image_id": 2571,
+      "exclude_image_id": 2571,
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        5912,
+        26367,
+        8877,
+        5076
+      ],
+      "judged_image_ids": [
+        5912,
+        26367,
+        8877,
+        5076
+      ],
+      "relevant_image_ids": [
+        5912,
+        26367,
+        8877,
+        5076
+      ],
+      "relevance_grades": {
+        "5076": 2,
+        "5912": 1,
+        "8877": 2,
+        "26367": 2
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "image-10",
+      "mode": "image",
+      "image_id": 4393,
+      "exclude_image_id": 4393,
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        64612
+      ],
+      "judged_image_ids": [
+        64612
+      ],
+      "relevant_image_ids": [
+        64612
+      ],
+      "relevance_grades": {
+        "64612": 2
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "image-11",
+      "mode": "image",
+      "image_id": 4259,
+      "exclude_image_id": 4259,
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        24770
+      ],
+      "judged_image_ids": [
+        24770
+      ],
+      "relevant_image_ids": [
+        24770
+      ],
+      "relevance_grades": {
+        "24770": 1
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "image-12",
+      "mode": "image",
+      "image_id": 2360,
+      "exclude_image_id": 2360,
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        9021
+      ],
+      "judged_image_ids": [
+        9021
+      ],
+      "relevant_image_ids": [
+        9021
+      ],
+      "relevance_grades": {
+        "9021": 2
+      },
+      "label_status": "reviewed"
+    },
+    {
+      "id": "image-13",
+      "mode": "image",
+      "image_id": 2233,
+      "exclude_image_id": 2233,
+      "notes": "Blind adjudication: review only reviewer disagreements.",
+      "candidate_image_ids": [
+        11356
+      ],
+      "judged_image_ids": [
+        11356
+      ],
+      "relevant_image_ids": [
+        11356
+      ],
+      "relevance_grades": {
+        "11356": 1
+      },
+      "label_status": "reviewed"
+    }
+  ],
+  "manual_checks": [],
+  "reliability_review": {
+    "review_round": "adjudication",
+    "blind": true,
+    "sampling_method": "all_primary_secondary_disagreements",
+    "source_manifest_sha256": "3635630f7c82600a4ca426c7280648622fa642c35c1f4ad7beae1a647b64d03f",
+    "secondary_manifest_sha256": "643c35664cad20efa58a32617db2d7a110049f14b339b264beac691c906ba158",
+    "selected_judgement_count": 70
+  },
+  "label_review": {
+    "reviewers": [
+      "Vũ Tuấn Minh"
+    ],
+    "reviewed_at": "2026-08-05T10:34:41.965Z",
+    "protocol": "Relevant khi ảnh thực sự đáp ứng truy vấn; image search xét đối tượng, bối cảnh và độ giống trực quan.",
+    "candidate_pool": "Top results from supplied evaluation report plus independent Unsplash/OCR metadata candidates"
+  }
+}

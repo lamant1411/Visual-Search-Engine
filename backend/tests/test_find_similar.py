@@ -41,6 +41,7 @@ class FindSimilarEndpointTests(unittest.IsolatedAsyncioTestCase):
     async def test_image_id_reuses_vector_and_excludes_source_image(self) -> None:
         image = SimpleNamespace(
             id=42,
+            owner_user_id=None,
             status=ImageStatus.indexed,
             original_filename="source.webp",
             storage_path="/static/images/source.webp",

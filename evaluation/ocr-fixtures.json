@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "description": "Human-verified Vietnamese text fixtures already indexed in the current local dataset.",
+  "fixtures": [
+    {
+      "query": "Nhím",
+      "relevant_image_ids": [87929],
+      "evidence": "Uploaded images.jpg visibly contains the word Nhím. This fixture intentionally detects OCR recognition failures."
+    },
+    {
+      "query": "ĐƯỜNG",
+      "relevant_image_ids": [29024],
+      "evidence": "The indexed image visibly contains Vietnamese road text including ĐƯỜNG."
+    },
+    {
+      "query": "SÀI GÒN",
+      "relevant_image_ids": [29821],
+      "evidence": "The indexed historical document visibly contains SAIGON."
+    },
+    {
+      "query": "HUẾ",
+      "relevant_image_ids": [29821],
+      "evidence": "The indexed historical document visibly contains HUE."
+    }
+  ]
+}

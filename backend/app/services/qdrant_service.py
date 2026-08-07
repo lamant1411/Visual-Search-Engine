@@ -22,8 +22,15 @@ class QdrantSearchService:
         self.client = QdrantClient(url=settings.qdrant_url)
         self.collection_name = settings.qdrant_images_collection
 
-    def search(self, vector: list[float], *, limit: int, offset: int = 0) -> list[VectorSearchHit]:
-        raw_points = self._query_points(vector, limit=limit + offset)
+    def search(
+        self,
+        vector: list[float],
+        *,
+        limit: int,
+        offset: int = 0,
+        owner_user_id: int | None = None,
+    ) -> list[VectorSearchHit]:
+        raw_points = self._query_points(vector, limit=limit + offset, owner_user_id=owner_user_id)
         selected_points = raw_points[offset : offset + limit]
         hits: list[VectorSearchHit] = []
 
@@ -90,21 +97,72 @@ class QdrantSearchService:
 
         return [float(value) for value in vector]
 
-    def _query_points(self, vector: list[float], *, limit: int) -> list[Any]:
+    def _query_points(
+        self,
+        vector: list[float],
+        *,
+        limit: int,
+        owner_user_id: int | None = None,
+    ) -> list[Any]:
+        query_filter = self._owner_filter(owner_user_id)
         if hasattr(self.client, "query_points"):
-            result = self.client.query_points(
-                collection_name=self.collection_name,
-                query=vector,
-                limit=limit,
-                with_payload=True,
-            )
+            try:
+                result = self.client.query_points(
+                    collection_name=self.collection_name,
+                    query=vector,
+                    limit=limit,
+                    query_filter=query_filter,
+                    with_payload=True,
+                )
+            except TypeError:
+                result = self.client.query_points(
+                    collection_name=self.collection_name,
+                    query=vector,
+                    limit=limit,
+                    with_payload=True,
+                )
             return list(getattr(result, "points", result))
 
-        return list(
-            self.client.search(
-                collection_name=self.collection_name,
-                query_vector=vector,
-                limit=limit,
-                with_payload=True,
+        try:
+            return list(
+                self.client.search(
+                    collection_name=self.collection_name,
+                    query_vector=vector,
+                    limit=limit,
+                    query_filter=query_filter,
+                    with_payload=True,
+                )
             )
+        except TypeError:
+            return list(
+                self.client.search(
+                    collection_name=self.collection_name,
+                    query_vector=vector,
+                    limit=limit,
+                    with_payload=True,
+                )
+            )
+
+
+    @staticmethod
+    def _owner_filter(owner_user_id: int | None):
+        if owner_user_id is None:
+            return None
+
+        # Images indexed before user-owned libraries were introduced do not
+        # have an owner_user_id payload. They form the shared catalogue; only
+        # points with a different, explicit owner must stay private.
+        return models.Filter(
+            should=[
+                models.FieldCondition(
+                    key="owner_user_id",
+                    match=models.MatchValue(value=owner_user_id),
+                ),
+                models.IsEmptyCondition(
+                    is_empty=models.PayloadField(key="owner_user_id")
+                ),
+                models.IsNullCondition(
+                    is_null=models.PayloadField(key="owner_user_id")
+                ),
+            ]
         )

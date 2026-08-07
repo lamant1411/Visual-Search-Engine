@@ -1,7 +1,5 @@
 export type SearchMode = 'image' | 'text'
 
-export type TextSearchMode = 'semantic' | 'ocr'
-
 export type ImageMetadata = {
   width: number | null
   height: number | null
@@ -26,7 +24,6 @@ export type SearchResponse = {
 
 export type TextSearchParams = {
   q: string
-  mode: TextSearchMode
   page?: number
   limit?: number
 }

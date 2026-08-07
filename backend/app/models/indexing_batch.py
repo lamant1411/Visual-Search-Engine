@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Enum as SAEnum, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Enum as SAEnum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -11,6 +11,7 @@ from app.schemas.common import BatchStatus
 
 if TYPE_CHECKING:
     from app.models.indexing_item import IndexingItem
+    from app.models.user import User
 
 
 class IndexingBatch(Base):
@@ -18,6 +19,7 @@ class IndexingBatch(Base):
     __tablename__ = "indexing_batches"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    owner_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     batch_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     status: Mapped[BatchStatus] = mapped_column(
         SAEnum(BatchStatus, name="batch_status", native_enum=False, create_constraint=True),
@@ -44,4 +46,5 @@ class IndexingBatch(Base):
         onupdate=func.now(),
     )
 
+    owner: Mapped["User | None"] = relationship()
     items: Mapped[list["IndexingItem"]] = relationship(back_populates="batch")

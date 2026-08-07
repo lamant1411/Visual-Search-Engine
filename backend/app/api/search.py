@@ -20,7 +20,13 @@ from app.schemas.common import ImageStatus, SearchQueryType
 from app.schemas.search import SearchResponse
 from app.services.ai_service import AIServiceError, ai_embedding_client
 from app.services.qdrant_service import QdrantSearchService
-from app.services.search import build_image_url, build_search_response_from_hits, search_images_by_ocr_text
+from app.services.search import (
+    build_image_url,
+    build_search_response_from_hits,
+    extract_explicit_ocr_query,
+    image_visible_to_user,
+    search_images_by_ocr_text,
+)
 
 router = APIRouter()
 
@@ -87,6 +93,13 @@ async def search_by_image(
                 "Image not found.",
                 {"imageId": image_id},
             )
+        if image.owner_user_id not in (None, current_user.id):
+            raise api_error(
+                status.HTTP_404_NOT_FOUND,
+                "IMAGE_NOT_FOUND",
+                "Image not found.",
+                {"imageId": image_id},
+            )
         if image.status != ImageStatus.indexed:
             raise api_error(
                 status.HTTP_409_CONFLICT,
@@ -112,8 +125,9 @@ async def search_by_image(
         history_image_url = build_image_url(image.storage_path)
         should_save_history = True
     else:
+        image = await _get_owned_image_by_url(db, image_url or "", current_user.id)
         content = _read_static_image_url(image_url or "")
-        query_filename = Path(urlparse(image_url or "").path).name or "history_image"
+        query_filename = image.original_filename or Path(urlparse(image_url or "").path).name or "history_image"
         query_content_type = _guess_image_content_type(query_filename)
         should_save_history = False
 
@@ -137,7 +151,7 @@ async def search_by_image(
         max_results = max(page * limit, settings.image_search_max_results) + (
             1 if source_image_id else 0
         )
-        all_hits = vector_search.search(vector, limit=max_results)
+        all_hits = vector_search.search(vector, limit=max_results, owner_user_id=current_user.id)
     except AIServiceError as exc:
         raise api_error(
             status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -159,6 +173,7 @@ async def search_by_image(
         all_hits,
         page=page,
         limit=limit,
+        owner_user_id=current_user.id,
     )
     if page == 1 and should_save_history:
         existing_history = None
@@ -195,10 +210,11 @@ async def search_by_image(
 @router.get(
     "/text",
     response_model=SearchResponse,
-    summary="Search by semantic text",
+    summary="Unified semantic and OCR text search",
     description=(
-        "Receive text query through the q parameter, call AI service to embed text with CLIP, "
-        "query Qdrant, and return similar images. Requires Bearer access_token."
+        "Search the shared catalogue and the current user's images using CLIP semantic retrieval "
+        "plus OCR text retrieval. Explicit requests such as 'ảnh có chữ Nhím' are routed to OCR; "
+        "other text queries are routed to CLIP semantic search. Requires Bearer access_token."
     ),
     responses={
         200: {"description": "Search completed successfully."},
@@ -209,13 +225,13 @@ async def search_by_image(
     },
 )
 async def search_by_text(
-    q: str = Query(..., min_length=1, max_length=500, description="Text query for semantic image search"),
+    q: str = Query(..., min_length=1, max_length=500, description="Text query for unified semantic and OCR search"),
     page: int = Query(1, ge=1, description="Current page"),
     limit: int = Query(20, ge=1, le=100, description="Number of results per page"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SearchResponse:
-    """Đưa văn bản (semantic query) vào CLIP để tìm ảnh có ngữ nghĩa gần nhất trong Qdrant."""
+    """Run one text query through the appropriate semantic/OCR retrieval path."""
     query = q.strip()
     if not query:
         raise api_error(
@@ -225,34 +241,61 @@ async def search_by_text(
             {"field": "q"},
         )
 
-    try:
-        vector = await ai_embedding_client.embed_text(query)
-        max_results = max(page * limit, settings.image_search_max_results)
-        all_hits = QdrantSearchService().search(vector, limit=max_results)
-    except AIServiceError as exc:
-        raise api_error(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            "AI_SERVICE_UNAVAILABLE",
-            str(exc),
-        ) from exc
-    except Exception as exc:
-        raise api_error(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            "VECTOR_SEARCH_UNAVAILABLE",
-            "Vector search service is unavailable.",
-        ) from exc
+    explicit_ocr_query = extract_explicit_ocr_query(query)
+    max_results = max(page * limit, settings.image_search_max_results)
 
-    response = await build_search_response_from_hits(
-        db,
-        all_hits,
-        page=page,
-        limit=limit,
-    )
+    if explicit_ocr_query is not None:
+        response = await search_images_by_ocr_text(
+            db,
+            explicit_ocr_query,
+            page=page,
+            limit=limit,
+            owner_user_id=current_user.id,
+        )
+    else:
+        try:
+            vector = await ai_embedding_client.embed_text(query)
+            all_hits = QdrantSearchService().search(
+                vector,
+                limit=max_results,
+                owner_user_id=current_user.id,
+            )
+            semantic_response = await build_search_response_from_hits(
+                db,
+                all_hits,
+                page=1,
+                limit=max_results,
+                owner_user_id=current_user.id,
+            )
+        except AIServiceError as exc:
+            raise api_error(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "AI_SERVICE_UNAVAILABLE",
+                str(exc),
+            ) from exc
+        except Exception as exc:
+            raise api_error(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "VECTOR_SEARCH_UNAVAILABLE",
+                "Vector search service is unavailable.",
+            ) from exc
+
+        response = await build_search_response_from_hits(
+            db,
+            all_hits,
+            page=page,
+            limit=limit,
+            owner_user_id=current_user.id,
+        )
     if page == 1:
         db.add(
             SearchHistory(
                 user_id=current_user.id,
-                query_type=SearchQueryType.semantic,
+                query_type=(
+                    SearchQueryType.ocr
+                    if explicit_ocr_query is not None
+                    else SearchQueryType.semantic
+                ),
                 query_value=query,
             )
         )
@@ -296,7 +339,7 @@ async def search_by_ocr(
             {"field": "q"},
         )
 
-    response = await search_images_by_ocr_text(db, query, page=page, limit=limit)
+    response = await search_images_by_ocr_text(db, query, page=page, limit=limit, owner_user_id=current_user.id)
     if page == 1:
         db.add(
             SearchHistory(
@@ -307,6 +350,47 @@ async def search_by_ocr(
         )
         await db.commit()
     return response
+
+
+async def _get_owned_image_by_url(db: AsyncSession, image_url: str, owner_user_id: int) -> Image:
+    storage_path = _normalize_static_image_url_to_storage_path(image_url)
+    image = await db.scalar(
+        select(Image).where(
+            Image.storage_path == storage_path,
+            image_visible_to_user(owner_user_id),
+        )
+    )
+    if image is None:
+        raise api_error(
+            status.HTTP_404_NOT_FOUND,
+            "IMAGE_NOT_FOUND",
+            "Image not found.",
+            {"field": "imageUrl"},
+        )
+    if image.status != ImageStatus.indexed:
+        raise api_error(
+            status.HTTP_409_CONFLICT,
+            "IMAGE_NOT_READY",
+            "Image has not finished indexing.",
+            {"imageId": image.id, "status": image.status},
+        )
+    return image
+
+
+def _normalize_static_image_url_to_storage_path(image_url: str) -> str:
+    parsed = urlparse(image_url)
+    raw_path = parsed.path if parsed.scheme or parsed.netloc else image_url
+    normalized_path = unquote(raw_path).replace("\\", "/").strip()
+    if normalized_path.startswith("static/"):
+        return f"/{normalized_path}"
+    if normalized_path.startswith("/static/"):
+        return normalized_path
+    raise api_error(
+        status.HTTP_400_BAD_REQUEST,
+        "VALIDATION_ERROR",
+        "imageUrl must point to a stored /static image.",
+        {"field": "imageUrl"},
+    )
 
 
 def _read_static_image_url(image_url: str) -> bytes:
