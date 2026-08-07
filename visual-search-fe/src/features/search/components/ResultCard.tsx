@@ -125,7 +125,7 @@ export function ResultCard({
             </span>
           )}
 
-          {result.metadata.status === 'failed' && (
+          {result.metadata.status?.toLowerCase() === 'failed' && (
             <span className="absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-600 px-2.5 py-1 text-xs font-bold text-white shadow-sm shadow-slate-900/20">
               <AlertCircle className="h-3.5 w-3.5" />
               Lỗi Index

@@ -327,7 +327,7 @@ async def _list_images(
     for image, ocr_text in rows:
         image_url = build_image_url(image.storage_path)
         source_type = image.source_type.value if hasattr(image.source_type, "value") else str(image.source_type)
-        status_val = image.status.value if hasattr(image.status, "value") else str(image.status)
+        status_val = str(image.status.value if hasattr(image.status, "value") else image.status).lower()
         items.append(
             SearchResultItem(
                 id=image.id,

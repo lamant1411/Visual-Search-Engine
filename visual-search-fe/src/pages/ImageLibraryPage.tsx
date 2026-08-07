@@ -499,8 +499,13 @@ export default function ImageLibraryPage() {
   const selectedBatch = batches.find((batch) => batch.batch_id === selectedBatchId)
   const hasPendingIndexing =
     isUploadingImages ||
-    rawResults.some((result) => result.metadata?.status === 'pending') ||
+    rawResults.some((result) => result.metadata?.status?.toLowerCase() === 'pending') ||
     batches.some((batch) => batch.status === 'queued' || batch.status === 'running')
+
+  const failedResults = useMemo(
+    () => rawResults.filter((result) => result.metadata?.status?.toLowerCase() === 'failed'),
+    [rawResults]
+  )
 
   const modeTitle = isBatchView ? 'Batch images' : isDeletedView ? 'Deleted images' : 'Indexed images'
   const modeDescription = isBatchView && selectedBatch
@@ -598,6 +603,26 @@ export default function ImageLibraryPage() {
             </div>
           </div>
         </header>
+
+        {!isDeletedView && failedResults.length > 0 && (
+          <section className="rounded-2xl border border-red-200 bg-red-50 p-4 shadow-sm shadow-red-100/50 sm:p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-600 text-white shadow-sm">
+                  <AlertCircle className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-red-900 sm:text-base">
+                    Phát hiện {failedResults.length} ảnh gặp lỗi khi Index AI
+                  </h2>
+                  <p className="mt-1 text-xs leading-5 text-red-700 sm:text-sm">
+                    Các ảnh này đã lưu an toàn trong kho nhưng gặp lỗi khi tạo vector tìm kiếm/OCR. Tên thẻ trên ảnh hiển thị nhãn <span className="font-bold underline">Lỗi Index</span> màu đỏ.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
 
 
         <section className="rounded-2xl border border-border bg-white p-4 shadow-sm shadow-slate-200/60 sm:p-5">
@@ -1057,6 +1082,7 @@ function mapIndexingItemToSearchResult(item: AdminIndexingItem): SearchResult {
       width: null,
       height: null,
       source: `Batch item: ${item.status}`,
+      status: item.status,
     },
   }
 }

@@ -228,7 +228,7 @@ export function SearchResultDetailModal({
             </div>
           )}
 
-          {result.metadata.status === 'failed' && (
+          {result.metadata.status?.toLowerCase() === 'failed' && (
             <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4">
               <div className="flex items-center gap-2 text-sm font-bold text-red-700">
                 <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
@@ -240,7 +240,7 @@ export function SearchResultDetailModal({
             </div>
           )}
 
-          {result.metadata.status === 'pending' && (
+          {result.metadata.status?.toLowerCase() === 'pending' && (
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
               <div className="flex items-center gap-2 text-sm font-bold text-amber-700">
                 <Loader2 className="h-4 w-4 shrink-0 animate-spin text-amber-600" />
