@@ -63,7 +63,11 @@ ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
         401: {"description": "Missing, invalid, or expired token."},
         403: {"description": "User does not have admin role."},
     },
+)
+async def get_dashboard(
+    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
+) -> AdminDashboardResponse:
     """Return admin dashboard summary metrics."""
     total_images = await _count_rows(
         db,
