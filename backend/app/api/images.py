@@ -34,7 +34,7 @@ router = APIRouter()
     response_model=SearchResponse,
     summary="List image library",
     description=(
-        "Return paginated indexed images owned by the current authenticated user. "
+        "Return paginated active images (indexed, pending, failed) owned by the current authenticated user. "
         "Optional q filters by filename, storage path, or OCR text."
     ),
     responses={
@@ -49,11 +49,11 @@ async def list_image_library(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SearchResponse:
-    """Return indexed images owned by the current user."""
-    return await _list_images_by_status(
+    """Return active images owned by the current user."""
+    filters = [Image.status != ImageStatus.deleted, Image.owner_user_id == current_user.id]
+    return await _list_images(
         db=db,
-        image_status=ImageStatus.indexed,
-        owner_user_id=current_user.id,
+        filters=filters,
         q=q,
         page=page,
         limit=limit,
@@ -327,6 +327,7 @@ async def _list_images(
     for image, ocr_text in rows:
         image_url = build_image_url(image.storage_path)
         source_type = image.source_type.value if hasattr(image.source_type, "value") else str(image.source_type)
+        status_val = image.status.value if hasattr(image.status, "value") else str(image.status)
         items.append(
             SearchResultItem(
                 id=image.id,
@@ -337,6 +338,7 @@ async def _list_images(
                     width=image.width,
                     height=image.height,
                     source=source_type,
+                    status=status_val,
                     ocr_text=ocr_text.raw_text if ocr_text else None,
                 ),
             )

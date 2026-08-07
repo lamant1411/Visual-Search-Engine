@@ -257,6 +257,7 @@ export const adminApi = {
       formData,
       {
         headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 0,
         onUploadProgress: (event) => {
           if (event.total && onProgress) {
             onProgress(Math.round((event.loaded * 100) / event.total))
@@ -313,7 +314,7 @@ export const adminApi = {
       formData,
       {
         headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 20000,
+        timeout: 0,
         onUploadProgress: (progressEvent) => {
           if (progressEvent.total && onProgress) {
             const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total)

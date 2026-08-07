@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bookmark, Check, ImageOff, Info, Zap } from "lucide-react";
+import { AlertCircle, Bookmark, Check, ImageOff, Info, Loader2, Zap } from "lucide-react";
 
 import type { SearchResult } from "../types";
 import { formatSimilarityScore } from "../utils/formatSimilarityScore";
@@ -122,6 +122,20 @@ export function ResultCard({
             <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-xs font-bold text-ink-primary shadow-sm shadow-slate-900/10 backdrop-blur">
               <Zap className="h-3.5 w-3.5 text-accent-600" />
               {similarityScore}%
+            </span>
+          )}
+
+          {result.metadata.status === 'failed' && (
+            <span className="absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-600 px-2.5 py-1 text-xs font-bold text-white shadow-sm shadow-slate-900/20">
+              <AlertCircle className="h-3.5 w-3.5" />
+              Lỗi Index
+            </span>
+          )}
+
+          {result.metadata.status === 'pending' && (
+            <span className="absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-500 px-2.5 py-1 text-xs font-bold text-white shadow-sm shadow-slate-900/20">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Đang Index...
             </span>
           )}
 

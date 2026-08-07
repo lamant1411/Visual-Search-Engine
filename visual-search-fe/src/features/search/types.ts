@@ -4,6 +4,7 @@ export type ImageMetadata = {
   width: number | null
   height: number | null
   source?: string
+  status?: string
   ocrText?: string
 }
 

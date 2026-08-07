@@ -20,6 +20,7 @@ class SearchResultMetadata(BaseModel):
     width: int | None = None
     height: int | None = None
     source: str | None = None
+    status: str | None = None
     ocr_text: str | None = Field(default=None, alias="ocrText")
 
 

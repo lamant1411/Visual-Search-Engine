@@ -8,11 +8,13 @@ import {
   useState,
 } from "react";
 import {
+  AlertCircle,
   Bookmark,
   Check,
   Copy,
   Crop,
   Info,
+  Loader2,
   Minus,
   Plus,
   RotateCcw,
@@ -223,6 +225,30 @@ export function SearchResultDetailModal({
                 <Zap className="h-4 w-4" />
                 {similarityScore}% similarity
               </div>
+            </div>
+          )}
+
+          {result.metadata.status === 'failed' && (
+            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4">
+              <div className="flex items-center gap-2 text-sm font-bold text-red-700">
+                <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
+                Lỗi Index AI
+              </div>
+              <p className="mt-1 text-xs text-red-600">
+                Ảnh này vừa được tải lên nhưng gặp lỗi trong quá trình trích xuất vector hoặc OCR. Ảnh đã được lưu an toàn trong thư viện nhưng chưa thể tìm kiếm bằng AI.
+              </p>
+            </div>
+          )}
+
+          {result.metadata.status === 'pending' && (
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <div className="flex items-center gap-2 text-sm font-bold text-amber-700">
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-amber-600" />
+                Đang tiến hành Indexing
+              </div>
+              <p className="mt-1 text-xs text-amber-600">
+                Ảnh đã tải lên thành công và đang được xử lý ở nền. Ảnh sẽ tự động sẵn sàng cho tìm kiếm sau khi hoàn tất.
+              </p>
             </div>
           )}
 

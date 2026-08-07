@@ -151,6 +151,14 @@ export default function ImageLibraryPage() {
   const selectedCount = selectedImageIds.size
 
 
+  type FailedUploadItem = {
+    fileName: string
+    reason: string
+    file: File
+  }
+
+  const [failedUploads, setFailedUploads] = useState<FailedUploadItem[]>([])
+
   function handleUploadFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []).filter(isSupportedImageFile)
     if (files.length > 0) {
@@ -174,51 +182,111 @@ export default function ImageLibraryPage() {
 
   async function handleUploadSelectedFiles() {
     if (selectedUploadFiles.length === 0 || isUploadingImages) return
+    await handleUploadFilesList([...selectedUploadFiles])
+  }
 
-    const filesToUpload = [...selectedUploadFiles]
+  async function handleUploadFilesList(filesToUpload: File[]) {
+    if (filesToUpload.length === 0 || isUploadingImages) return
+
     setIsUploadingImages(true)
     setUploadProgress(0)
     setUploadErrorMessage(null)
-    setUploadStatusMessage('Creating upload batch...')
+    setUploadStatusMessage('Đang khởi tạo đợt tải ảnh lên...')
+    setFailedUploads([])
+
+    const currentFailed: FailedUploadItem[] = []
+    const validFiles: File[] = []
+
+    for (const file of filesToUpload) {
+      if (file.size > MAX_IMAGE_UPLOAD_FILE_BYTES) {
+        currentFailed.push({
+          fileName: file.name,
+          reason: `Vượt quá 10MB (${(file.size / (1024 * 1024)).toFixed(1)}MB)`,
+          file,
+        })
+      } else if (!isSupportedImageFile(file)) {
+        currentFailed.push({
+          fileName: file.name,
+          reason: 'Định dạng không được hỗ trợ',
+          file,
+        })
+      } else {
+        validFiles.push(file)
+      }
+    }
+
+    if (validFiles.length === 0) {
+      setIsUploadingImages(false)
+      setFailedUploads(currentFailed)
+      setUploadStatusMessage(null)
+      return
+    }
 
     let batchId: string | null = null
+    let uploadedCount = 0
+
     try {
-      const chunks = splitFilesIntoUploadChunks(filesToUpload)
       const batch = await adminApi.createIndexingBatch()
       batchId = batch.batch_id
-      let uploadedFiles = 0
+      const chunks = splitFilesIntoUploadChunks(validFiles)
 
       for (const chunk of chunks) {
-        await adminApi.uploadImagesToBatch(batch.batch_id, chunk, (chunkPercent) => {
-          const currentChunkFiles = (chunkPercent / 100) * chunk.length
-          const totalUploadedFiles = Math.min(filesToUpload.length, uploadedFiles + currentChunkFiles)
-          setUploadProgress(Math.round((totalUploadedFiles / filesToUpload.length) * 100))
-        })
-        uploadedFiles += chunk.length
-        setUploadProgress(Math.round((uploadedFiles / filesToUpload.length) * 100))
-        setUploadStatusMessage(`Uploaded ${uploadedFiles}/${filesToUpload.length} image(s). Indexing is running in background...`)
+        try {
+          await adminApi.uploadImagesToBatch(batch.batch_id, chunk, (chunkPercent) => {
+            const currentChunkFiles = (chunkPercent / 100) * chunk.length
+            const totalUploadedFiles = Math.min(validFiles.length, uploadedCount + currentChunkFiles)
+            setUploadProgress(Math.round((totalUploadedFiles / validFiles.length) * 100))
+          })
+          uploadedCount += chunk.length
+          setUploadProgress(Math.round((uploadedCount / validFiles.length) * 100))
+          setUploadStatusMessage(`Đã tải lên ${uploadedCount}/${validFiles.length} ảnh. Tiến trình index đang chạy ngầm...`)
+        } catch (chunkError) {
+          console.warn('[ImageLibraryPage] Chunk upload failed, trying per-file upload', chunkError)
+          for (const file of chunk) {
+            try {
+              await adminApi.uploadImagesToBatch(batch.batch_id, [file])
+              uploadedCount += 1
+              setUploadProgress(Math.round((uploadedCount / validFiles.length) * 100))
+            } catch (fileError) {
+              const reason = fileError instanceof Error ? fileError.message : 'Tải lên không thành công'
+              currentFailed.push({ fileName: file.name, reason, file })
+            }
+          }
+        }
       }
 
       await adminApi.completeIndexingBatch(batch.batch_id)
       setUploadProgress(100)
-      setUploadStatusMessage('Upload completed. Images will appear after indexing finishes.')
-      setSelectedUploadFiles([])
+      if (uploadedCount > 0) {
+        setUploadStatusMessage(`Đã tải xong ${uploadedCount} ảnh. Ảnh đã xuất hiện trong kho ảnh!`)
+        setSelectedUploadFiles([])
+      } else {
+        setUploadStatusMessage(null)
+      }
+
       await Promise.all([listQuery.refetch(), batchesQuery.refetch()])
     } catch (error) {
       if (batchId) {
         try {
           await adminApi.completeIndexingBatch(batchId)
         } catch (completeError) {
-          console.error('[ImageLibraryPage] Complete upload after failure failed', completeError)
+          console.error('[ImageLibraryPage] Complete upload failed', completeError)
         }
       }
-      const message = error instanceof Error ? error.message : 'Unable to upload selected images.'
+      const message = error instanceof Error ? error.message : 'Không thể hoàn tất đợt tải ảnh.'
       setUploadErrorMessage(message)
-      setUploadStatusMessage(null)
-      console.error('[ImageLibraryPage] Upload selected images failed', error)
     } finally {
       setIsUploadingImages(false)
+      if (currentFailed.length > 0) {
+        setFailedUploads(currentFailed)
+      }
     }
+  }
+
+  function handleRetryFailedUploads() {
+    const filesToRetry = failedUploads.map((item) => item.file)
+    setFailedUploads([])
+    void handleUploadFilesList(filesToRetry)
   }
 
   function handleChangeViewMode(nextMode: LibraryViewMode) {
@@ -559,7 +627,7 @@ export default function ImageLibraryPage() {
             </div>
           </div>
 
-          {(selectedUploadFiles.length > 0 || uploadStatusMessage || uploadErrorMessage) && (
+          {(selectedUploadFiles.length > 0 || uploadStatusMessage || uploadErrorMessage || failedUploads.length > 0) && (
             <div className="mt-4 space-y-3 rounded-2xl border border-border bg-surface-1/40 p-4">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm font-bold text-ink-primary">
@@ -621,6 +689,45 @@ export default function ImageLibraryPage() {
                 <p className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
                   {uploadErrorMessage}
                 </p>
+              )}
+
+              {failedUploads.length > 0 && (
+                <div className="space-y-2.5 rounded-xl border border-red-200 bg-red-50/80 p-3.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="flex items-center gap-2 text-xs font-bold text-red-800">
+                      <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
+                      {failedUploads.length} ảnh gặp lỗi khi tải lên
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        className="text-xs font-bold text-red-700 underline underline-offset-2 hover:text-red-900"
+                        onClick={handleRetryFailedUploads}
+                      >
+                        Thử lại các ảnh lỗi
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-full p-1 text-red-500 hover:bg-red-100 hover:text-red-800"
+                        aria-label="Ẩn thông báo lỗi"
+                        onClick={() => setFailedUploads([])}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="max-h-36 space-y-1.5 overflow-y-auto pr-1">
+                    {failedUploads.map((item, idx) => (
+                      <div
+                        key={`${item.fileName}-${idx}`}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-red-100 bg-white px-3 py-2 text-xs font-medium text-red-700 shadow-sm"
+                      >
+                        <span className="truncate font-semibold max-w-[200px] sm:max-w-xs">{item.fileName}</span>
+                        <span className="shrink-0 text-[11px] font-semibold text-red-500">{item.reason}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           )}
