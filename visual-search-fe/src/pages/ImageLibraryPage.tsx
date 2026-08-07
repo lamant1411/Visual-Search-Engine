@@ -497,6 +497,11 @@ export default function ImageLibraryPage() {
   const batches = batchesQuery.data ?? []
   const batchesWithImages = batches.filter((batch) => batch.total_images > 0)
   const selectedBatch = batches.find((batch) => batch.batch_id === selectedBatchId)
+  const hasPendingIndexing =
+    isUploadingImages ||
+    rawResults.some((result) => result.metadata?.status === 'pending') ||
+    batches.some((batch) => batch.status === 'queued' || batch.status === 'running')
+
   const modeTitle = isBatchView ? 'Batch images' : isDeletedView ? 'Deleted images' : 'Indexed images'
   const modeDescription = isBatchView && selectedBatch
     ? `Review images from batch ${selectedBatch.batch_id}.`
@@ -572,6 +577,13 @@ export default function ImageLibraryPage() {
                   ].join(' ')}>
                     {isBatchView ? 'Batch view' : isDeletedView ? 'Trash view' : 'Search ready'}
                   </span>
+
+                  {hasPendingIndexing && (
+                    <span className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 text-xs font-bold text-amber-700 shadow-sm">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600" />
+                      Đang chạy tối ưu tìm kiếm
+                    </span>
+                  )}
                 </div>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-secondary">
                   {modeDescription}
