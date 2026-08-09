@@ -48,6 +48,7 @@ from app.services.qdrant_service import QdrantSearchService
 from app.services.search import build_image_url
 
 router = APIRouter()
+indexing_router = APIRouter()
 
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
@@ -241,6 +242,7 @@ async def delete_image(
         201: {"description": "Batch created successfully."},
         401: {"description": "Missing, invalid, or expired token."},
     },
+    include_in_schema=False,
 )
 async def create_indexing_batch(
     current_user: User = Depends(get_current_user),
@@ -293,6 +295,7 @@ async def create_indexing_batch(
         413: {"description": "File or upload chunk size exceeds the allowed limit."},
         503: {"description": "AI indexing service is unavailable."},
     },
+    include_in_schema=False,
 )
 async def upload_images_to_batch(
     batch_id: str,
@@ -510,6 +513,7 @@ async def upload_images_to_batch(
         403: {"description": "Authenticated user cannot access this batch or resource."},
         404: {"description": "Batch not found."},
     },
+    include_in_schema=False,
 )
 async def complete_batch_upload(
     batch_id: str,
@@ -548,6 +552,7 @@ async def complete_batch_upload(
         403: {"description": "Authenticated user cannot access this batch or resource."},
         404: {"description": "Batch not found."},
     },
+    include_in_schema=False,
 )
 async def cancel_indexing_batch(
     batch_id: str,
@@ -640,6 +645,7 @@ async def cancel_indexing_batch(
         401: {"description": "Missing, invalid, or expired token."},
         403: {"description": "Authenticated user cannot access this batch or resource."},
     },
+    include_in_schema=False,
 )
 async def list_indexing_items(
     batch_id: str,
@@ -697,6 +703,7 @@ async def list_indexing_items(
         404: {"description": "Batch not found."},
         503: {"description": "AI indexing service is unavailable."},
     },
+    include_in_schema=False,
 )
 async def retry_failed_indexing_items(
     batch_id: str,
@@ -812,6 +819,7 @@ async def retry_failed_indexing_items(
         403: {"description": "Authenticated user cannot access this batch or resource."},
         413: {"description": "File or batch size exceeds the allowed limit."},
     },
+    include_in_schema=False,
 )
 async def upload_indexing_batch(
     files: list[UploadFile] = File(...),
@@ -898,6 +906,7 @@ async def upload_indexing_batch(
         404: {"description": "Batch not found."},
         503: {"description": "AI indexing service is unavailable."},
     },
+    include_in_schema=False,
 )
 async def start_batch_indexing(
     batch_id: str,
@@ -979,6 +988,7 @@ async def start_batch_indexing(
         403: {"description": "Authenticated user cannot access this batch or resource."},
         404: {"description": "Batch not found."},
     },
+    include_in_schema=False,
 )
 async def get_batch_status(
     batch_id: str,
@@ -1089,6 +1099,7 @@ async def _sync_batch_if_active(db: AsyncSession, batch: IndexingBatch) -> None:
         200: {"description": "Indexing batches returned successfully."},
         401: {"description": "Missing, invalid, or expired token."},
     },
+    include_in_schema=False,
 )
 async def list_batches(
     current_user: User = Depends(get_current_user),
@@ -1713,6 +1724,101 @@ async def _mark_uploaded_items_failed(db: AsyncSession, item_ids: list[int], err
 
     await db.commit()
 
-
-
+# Alias cong khai cho indexing. Giu /admin/index/* de FE hien tai khong bi loi contract.
+indexing_router.add_api_route(
+    "/batches",
+    create_indexing_batch,
+    methods=["POST"],
+    response_model=AdminBatchCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create indexing batch",
+    description="Create an empty user-owned indexing batch so the frontend can upload images in chunks. Requires authentication.",
+    responses={201: {"description": "Batch created successfully."}, 401: {"description": "Missing, invalid, or expired token."}},
+)
+indexing_router.add_api_route(
+    "/batches/{batch_id}/images",
+    upload_images_to_batch,
+    methods=["POST"],
+    response_model=AdminBatchImageUploadResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload images to batch and enqueue indexing",
+    description="Upload one chunk of images to a user-owned batch and enqueue accepted images for AI indexing. Requires authentication and ownership of the batch.",
+    responses={
+        201: {"description": "Upload succeeded and items were enqueued to AI."},
+        400: {"description": "Missing file or unsupported file type."},
+        401: {"description": "Missing, invalid, or expired token."},
+        403: {"description": "Authenticated user cannot access this batch or resource."},
+        404: {"description": "Batch not found."},
+        409: {"description": "Batch is closed and cannot accept more uploads."},
+        413: {"description": "File or upload chunk size exceeds the allowed limit."},
+        503: {"description": "AI indexing service is unavailable."},
+    },
+)
+indexing_router.add_api_route(
+    "/batches/{batch_id}/complete-upload",
+    complete_batch_upload,
+    methods=["POST"],
+    response_model=AdminBatchCompleteUploadResponse,
+    summary="Complete batch upload",
+    description="Mark a user-owned batch upload as complete after all upload chunks are finished. Indexing continues for queued/running items.",
+)
+indexing_router.add_api_route(
+    "/batches/{batch_id}/cancel",
+    cancel_indexing_batch,
+    methods=["POST"],
+    response_model=AdminIndexStatusResponse,
+    summary="Cancel indexing batch",
+    description="Cancel queued/running items in a user-owned batch. Requires authentication and ownership of the batch.",
+)
+indexing_router.add_api_route(
+    "/{batch_id}/items",
+    list_indexing_items,
+    methods=["GET"],
+    response_model=AdminIndexingItemListResponse,
+    summary="List indexing items in batch",
+    description="Return images in a user-owned indexing batch. Can be filtered with status=queued/running/indexed/failed/cancelled.",
+)
+indexing_router.add_api_route(
+    "/{batch_id}/items/retry",
+    retry_failed_indexing_items,
+    methods=["POST"],
+    response_model=AdminIndexRetryItemsResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Retry failed indexing items",
+    description="Requeue failed images that are already stored on the server. If item_ids is omitted, all failed items in the user-owned batch are retried.",
+)
+indexing_router.add_api_route(
+    "/upload",
+    upload_indexing_batch,
+    methods=["POST"],
+    response_model=AdminIndexUploadResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Legacy upload image batch",
+    description="Legacy flow kept for backward compatibility. Prefer POST /index/batches followed by POST /index/batches/{batch_id}/images.",
+)
+indexing_router.add_api_route(
+    "/{batch_id}/start",
+    start_batch_indexing,
+    methods=["POST"],
+    response_model=AdminIndexStartResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Start legacy batch indexing",
+    description="Start AI indexing for a legacy batch. New item-level uploads are queued immediately and normally do not need this endpoint.",
+)
+indexing_router.add_api_route(
+    "/status/{batch_id}",
+    get_batch_status,
+    methods=["GET"],
+    response_model=AdminIndexStatusResponse,
+    summary="Get indexing batch status",
+    description="Return progress for a user-owned indexing batch so the frontend can update progress bars.",
+)
+indexing_router.add_api_route(
+    "/batches",
+    list_batches,
+    methods=["GET"],
+    response_model=AdminIndexBatchListResponse,
+    summary="List indexing batches",
+    description="Return recent user-owned indexing batches so the current user can track upload/indexing history.",
+)
 

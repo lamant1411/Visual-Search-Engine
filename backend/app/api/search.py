@@ -1,11 +1,13 @@
 """Endpoint tìm kiếm bằng ảnh."""
 
+import hashlib
 import uuid
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -176,15 +178,17 @@ async def search_by_image(
         owner_user_id=current_user.id,
     )
     if page == 1 and should_save_history:
-        existing_history = None
-        if history_key:
-            existing_history = await db.scalar(
-                select(SearchHistory).where(
-                    SearchHistory.user_id == current_user.id,
-                    SearchHistory.query_type == SearchQueryType.image,
-                    SearchHistory.client_history_key == history_key,
-                )
-            )
+        effective_history_key = _build_image_history_key(
+            history_key=history_key,
+            source_image_id=source_image_id,
+            content=content,
+        )
+        existing_history = await _get_existing_history(
+            db,
+            user_id=current_user.id,
+            query_type=SearchQueryType.image,
+            client_history_key=effective_history_key,
+        )
 
         if existing_history is None:
             query_image_url = history_image_url
@@ -194,16 +198,16 @@ async def search_by_image(
                     filename=query_filename,
                     user_id=current_user.id,
                 )
-            db.add(
+            await _save_search_history_once(
+                db,
                 SearchHistory(
                     user_id=current_user.id,
                     query_type=SearchQueryType.image,
                     query_value=query_filename,
                     query_image_url=query_image_url,
-                    client_history_key=history_key,
-                )
+                    client_history_key=effective_history_key,
+                ),
             )
-            await db.commit()
     return response
 
 
@@ -288,18 +292,16 @@ async def search_by_text(
             owner_user_id=current_user.id,
         )
     if page == 1:
-        db.add(
+        query_type = SearchQueryType.ocr if explicit_ocr_query is not None else SearchQueryType.semantic
+        await _save_search_history_once(
+            db,
             SearchHistory(
                 user_id=current_user.id,
-                query_type=(
-                    SearchQueryType.ocr
-                    if explicit_ocr_query is not None
-                    else SearchQueryType.semantic
-                ),
+                query_type=query_type,
                 query_value=query,
-            )
+                client_history_key=_build_text_history_key(query_type, query),
+            ),
         )
-        await db.commit()
     return response
 
 
@@ -341,15 +343,72 @@ async def search_by_ocr(
 
     response = await search_images_by_ocr_text(db, query, page=page, limit=limit, owner_user_id=current_user.id)
     if page == 1:
-        db.add(
+        await _save_search_history_once(
+            db,
             SearchHistory(
                 user_id=current_user.id,
                 query_type=SearchQueryType.ocr,
                 query_value=query,
-            )
+                client_history_key=_build_text_history_key(SearchQueryType.ocr, query),
+            ),
         )
-        await db.commit()
     return response
+
+
+async def _get_existing_history(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    query_type: SearchQueryType,
+    client_history_key: str | None,
+) -> SearchHistory | None:
+    if not client_history_key:
+        return None
+
+    return await db.scalar(
+        select(SearchHistory).where(
+            SearchHistory.user_id == user_id,
+            SearchHistory.query_type == query_type,
+            SearchHistory.client_history_key == client_history_key,
+        )
+    )
+
+
+async def _save_search_history_once(db: AsyncSession, history: SearchHistory) -> None:
+    existing_history = await _get_existing_history(
+        db,
+        user_id=history.user_id,
+        query_type=history.query_type,
+        client_history_key=history.client_history_key,
+    )
+    if existing_history is not None:
+        return
+
+    db.add(history)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+
+
+def _build_image_history_key(
+    *,
+    history_key: str | None,
+    source_image_id: int | None,
+    content: bytes | None,
+) -> str | None:
+    if history_key:
+        return f"image-client:{history_key}"
+    if source_image_id is not None:
+        return f"image-id:{source_image_id}"
+    if content:
+        return f"image-sha256:{hashlib.sha256(content).hexdigest()}"
+    return None
+
+
+def _build_text_history_key(query_type: SearchQueryType, query: str) -> str:
+    normalized_query = " ".join(query.strip().lower().split())
+    return f"{query_type.value}:{hashlib.sha256(normalized_query.encode('utf-8')).hexdigest()}"
 
 
 async def _get_owned_image_by_url(db: AsyncSession, image_url: str, owner_user_id: int) -> Image:

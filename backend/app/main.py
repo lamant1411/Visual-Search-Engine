@@ -21,12 +21,14 @@ app = FastAPI(
         "3) call Search, Bookmarks, or History APIs. Admin APIs require role=admin."
     ),
     openapi_tags=[
+        {"name": "Health", "description": "Backend liveness and readiness checks."},
         {"name": "Auth", "description": "Register, login, refresh token, logout, and current user."},
         {"name": "Search", "description": "Search images by uploaded image, semantic text, and OCR text."},
         {"name": "History", "description": "Search history of the current authenticated user."},
         {"name": "Image Library", "description": "Browse indexed images available to authenticated users."},
         {"name": "Bookmarks", "description": "Create, list, view, and delete image bookmarks."},
-        {"name": "Admin", "description": "Dashboard, users, and batch indexing. Requires admin role."},
+        {"name": "Indexing", "description": "Upload image batches, enqueue indexing, retry failed items, and track progress."},
+        {"name": "Admin", "description": "Admin-only dashboard, user list, and admin workspace image management."},
     ],
 )
 
@@ -136,6 +138,11 @@ async def root():
     return {"message": "Visual Search Engine API"}
 
 
-@app.get("/health")
+@app.get(
+    "/health",
+    summary="Backend liveness check",
+    description="Return a lightweight liveness status for infrastructure health checks.",
+    tags=["Health"],
+)
 async def health():
-    return {"status": "OK"}
+    return {"status": "ok", "service": "backend"}

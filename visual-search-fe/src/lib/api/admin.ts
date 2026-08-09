@@ -213,7 +213,7 @@ export const adminApi = {
   },
 
   async getIndexingBatches(): Promise<IndexingBatch[]> {
-    const response = await apiClient.get<{ items: IndexingBatch[] }>('/admin/index/batches')
+    const response = await apiClient.get<{ items: IndexingBatch[] }>('/index/batches')
     return response.data.items
   },
 
@@ -221,7 +221,7 @@ export const adminApi = {
    * Lấy trạng thái Indexing tổng quát (hỗ trợ polling)
    */
   async getIndexingStatus(): Promise<IndexingStatus> {
-    const response = await apiClient.get<{ items: IndexingBatch[] }>('/admin/index/batches')
+    const response = await apiClient.get<{ items: IndexingBatch[] }>('/index/batches')
     const latest = response.data.items[0]
     if (!latest) {
       return { status: 'idle', progress: 0, processed_count: 0, total_count: 0 }
@@ -238,7 +238,7 @@ export const adminApi = {
   },
 
   async createIndexingBatch(): Promise<AdminBatchCreateResponse> {
-    const response = await apiClient.post<AdminBatchCreateResponse>('/admin/index/batches')
+    const response = await apiClient.post<AdminBatchCreateResponse>('/index/batches')
     return response.data
   },
 
@@ -253,7 +253,7 @@ export const adminApi = {
     imageUrls?.forEach((url) => formData.append('image_urls', url))
 
     const response = await apiClient.post<AdminBatchImageUploadResponse>(
-      `/admin/index/batches/${batchId}/images`,
+      `/index/batches/${batchId}/images`,
       formData,
       {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -269,12 +269,12 @@ export const adminApi = {
   },
 
   async completeIndexingBatch(batchId: string): Promise<void> {
-    await apiClient.post(`/admin/index/batches/${batchId}/complete-upload`)
+    await apiClient.post(`/index/batches/${batchId}/complete-upload`)
   },
 
   async cancelIndexingBatch(batchId: string): Promise<AdminIndexStatusResponse> {
     const response = await apiClient.post<AdminIndexStatusResponse>(
-      `/admin/index/batches/${batchId}/cancel`
+      `/index/batches/${batchId}/cancel`
     )
     return response.data
   },
@@ -310,7 +310,7 @@ export const adminApi = {
     })
 
     const response = await apiClient.post<AdminIndexUploadResponse>(
-      '/admin/index/upload',
+      '/index/upload',
       formData,
       {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -330,7 +330,7 @@ export const adminApi = {
    * Kích hoạt tiến trình Indexing cho một batch đã upload trên Server
    */
   async startBatchIndexing(batchId: string): Promise<AdminIndexStartResponse> {
-    const response = await apiClient.post<AdminIndexStartResponse>(`/admin/index/${batchId}/start`)
+    const response = await apiClient.post<AdminIndexStartResponse>(`/index/${batchId}/start`)
     return response.data
   },
 
@@ -338,7 +338,7 @@ export const adminApi = {
    * Lấy trạng thái chi tiết của một batch
    */
   async getBatchStatus(batchId: string): Promise<AdminIndexStatusResponse> {
-    const response = await apiClient.get<AdminIndexStatusResponse>(`/admin/index/status/${batchId}`)
+    const response = await apiClient.get<AdminIndexStatusResponse>(`/index/status/${batchId}`)
     return response.data
   },
 
@@ -347,7 +347,7 @@ export const adminApi = {
     params?: { status?: AdminIndexingItem['status']; page?: number; limit?: number }
   ): Promise<PaginatedResponse<AdminIndexingItem>> {
     const response = await apiClient.get<PaginatedResponse<AdminIndexingItem>>(
-      `/admin/index/${batchId}/items`,
+      `/index/${batchId}/items`,
       { params }
     )
     return response.data
@@ -358,7 +358,7 @@ export const adminApi = {
     itemIds?: number[]
   ): Promise<AdminIndexRetryItemsResponse> {
     const response = await apiClient.post<AdminIndexRetryItemsResponse>(
-      `/admin/index/${batchId}/items/retry`,
+      `/index/${batchId}/items/retry`,
       itemIds && itemIds.length > 0 ? { item_ids: itemIds } : {}
     )
     return response.data
