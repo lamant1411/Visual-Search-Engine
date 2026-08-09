@@ -35,6 +35,7 @@ class SearchQueryType(str, Enum):
     image = "image"
     semantic = "semantic"
     ocr = "ocr"
+    hybrid = "hybrid"
 
 
 class ImageSourceType(str, Enum):

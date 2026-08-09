@@ -2,6 +2,7 @@
 
 import re
 import unicodedata
+from dataclasses import dataclass, field
 
 from sqlalchemy import Float, and_, case, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +13,56 @@ from app.models.ocr_text import OCRText
 from app.schemas.common import ImageStatus
 from app.schemas.search import SearchResponse, SearchResultItem, SearchResultMetadata
 from app.services.qdrant_service import VectorSearchHit
+
+
+# ---------------------------------------------------------------------------
+# Reciprocal Rank Fusion
+# ---------------------------------------------------------------------------
+
+_RRF_K = 60  # hằng số chuẩn của RRF (Cormack et al., 2009)
+
+
+@dataclass
+class _RrfEntry:
+    image_id: int
+    rrf_score: float = 0.0
+    semantic_rank: int | None = None
+    ocr_rank: int | None = None
+
+
+def fuse_search_hits(
+    semantic_hits: list[VectorSearchHit],
+    ocr_items: list[SearchResultItem],
+    *,
+    k: int = _RRF_K,
+    semantic_weight: float = 1.0,
+    ocr_weight: float = 1.0,
+) -> list[int]:
+    """Merge semantic Qdrant hits và OCR results bằng Reciprocal Rank Fusion.
+
+    Trả về danh sách image_id đã được sắp xếp theo RRF score giảm dần.
+    Dedup theo image_id (ưu tiên giữ entry đã có).
+    """
+    entries: dict[int, _RrfEntry] = {}
+
+    for rank, hit in enumerate(semantic_hits, start=1):
+        iid = hit.image_id
+        if iid not in entries:
+            entries[iid] = _RrfEntry(image_id=iid)
+        entry = entries[iid]
+        entry.semantic_rank = rank
+        entry.rrf_score += semantic_weight * (1.0 / (k + rank))
+
+    for rank, item in enumerate(ocr_items, start=1):
+        iid = item.id
+        if iid not in entries:
+            entries[iid] = _RrfEntry(image_id=iid)
+        entry = entries[iid]
+        entry.ocr_rank = rank
+        entry.rrf_score += ocr_weight * (1.0 / (k + rank))
+
+    sorted_entries = sorted(entries.values(), key=lambda e: e.rrf_score, reverse=True)
+    return [e.image_id for e in sorted_entries]
 
 
 def image_visible_to_user(owner_user_id: int | None):
@@ -82,6 +133,80 @@ async def build_search_response_from_hits(
     paged_items = all_items[offset : offset + limit]
 
     return SearchResponse(items=paged_items, page=page, limit=limit, total=total or len(all_items))
+
+
+async def build_search_response_from_ids(
+    db: AsyncSession,
+    ordered_image_ids: list[int],
+    *,
+    page: int,
+    limit: int,
+    rrf_scores: dict[int, float] | None = None,
+    owner_user_id: int | None = None,
+) -> SearchResponse:
+    """Build SearchResponse từ danh sách image_id đã được sắp xếp (ví dụ bởi RRF).
+
+    Giữ đúng thứ tự của ordered_image_ids và map score từ rrf_scores nếu có.
+    """
+    if not ordered_image_ids:
+        return SearchResponse(items=[], page=page, limit=limit, total=0)
+
+    rows = await db.execute(
+        select(Image, OCRText)
+        .outerjoin(OCRText, OCRText.image_id == Image.id)
+        .where(Image.id.in_(ordered_image_ids))
+        .where(Image.status == ImageStatus.indexed)
+        .where(image_visible_to_user(owner_user_id))
+    )
+    image_by_id = {image.id: (image, ocr_text) for image, ocr_text in rows.all()}
+
+    # Normalize RRF scores: top result = 100, còn lại tỉ lệ theo
+    max_rrf = max(rrf_scores.values()) if rrf_scores else 1.0
+
+    seen_urls: set[str] = set()
+    all_items: list[SearchResultItem] = []
+    for iid in ordered_image_ids:
+        row = image_by_id.get(iid)
+        if row is None:
+            continue
+
+        image, ocr_text = row
+        image_url = build_image_url(image.storage_path)
+        if image_url in seen_urls:
+            continue
+        seen_urls.add(image_url)
+
+        source_type = (
+            image.source_type.value if hasattr(image.source_type, "value") else str(image.source_type)
+        )
+
+        if rrf_scores and iid in rrf_scores and max_rrf > 0:
+            display_score = round((rrf_scores[iid] / max_rrf) * 100, 2)
+        else:
+            display_score = max(100.0 - len(all_items), 1.0)
+
+        all_items.append(
+            SearchResultItem(
+                id=image.id,
+                thumbnail_url=image_url,
+                image_url=image_url,
+                similarity_score=display_score,
+                metadata=SearchResultMetadata(
+                    width=image.width,
+                    height=image.height,
+                    source=source_type,
+                    ocr_text=ocr_text.raw_text if ocr_text else None,
+                ),
+            )
+        )
+
+    offset = (page - 1) * limit
+    paged_items = all_items[offset : offset + limit]
+
+    return SearchResponse(items=paged_items, page=page, limit=limit, total=len(all_items))
+
+
+
 
 
 def build_image_url(storage_path: str) -> str:

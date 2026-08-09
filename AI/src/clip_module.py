@@ -38,6 +38,17 @@ class CLIPEmbedder:
             "tieng",
             "duoc",
             "xe",
+            "hoa",
+            "cay",
+            "qua",
+            "nha",
+            "nui",
+            "song",
+            "mua",
+            "may",
+            "gio",
+            "nang",
+            "bien",
         }
     )
     _ENGLISH_DETERMINERS = frozenset(
@@ -109,8 +120,8 @@ class CLIPEmbedder:
             name="clip-image-batcher",
         )
         
-        # Khởi tạo bộ dịch
-        self.translator = GoogleTranslator(source='auto', target='en')
+        # Khởi tạo bộ dịch: Ép source='vi' để tránh auto-detect sai khi dịch 1 từ ngắn (vd: "hoa")
+        self.translator = GoogleTranslator(source='vi', target='en')
         print(f"Tải mô hình thành công trên {self.device.upper()}!\n")
 
     def embed_image(self, image_input) -> list:

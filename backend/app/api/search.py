@@ -23,9 +23,12 @@ from app.schemas.search import SearchResponse
 from app.services.ai_service import AIServiceError, ai_embedding_client
 from app.services.qdrant_service import QdrantSearchService
 from app.services.search import (
+    _RRF_K,
     build_image_url,
     build_search_response_from_hits,
+    build_search_response_from_ids,
     extract_explicit_ocr_query,
+    fuse_search_hits,
     image_visible_to_user,
     search_images_by_ocr_text,
 )
@@ -235,7 +238,7 @@ async def search_by_text(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SearchResponse:
-    """Run one text query through the appropriate semantic/OCR retrieval path."""
+    """Chạy text query qua cả semantic CLIP và OCR pipeline đồng thời, merge bằng RRF."""
     query = q.strip()
     if not query:
         raise api_error(
@@ -245,61 +248,80 @@ async def search_by_text(
             {"field": "q"},
         )
 
-    explicit_ocr_query = extract_explicit_ocr_query(query)
+    # Detect user intent
+    explicit_ocr = extract_explicit_ocr_query(query)
+    if explicit_ocr:
+        # User explicitly asked for text: e.g., "ảnh có chữ X"
+        semantic_w = 0.2
+        ocr_w = 1.0
+        ocr_query_str = explicit_ocr
+    else:
+        # General search: semantic is primary, OCR is a fallback/bonus
+        semantic_w = 1.0
+        ocr_w = 0.15
+        ocr_query_str = query
+
     max_results = max(page * limit, settings.image_search_max_results)
 
-    if explicit_ocr_query is not None:
-        response = await search_images_by_ocr_text(
-            db,
-            explicit_ocr_query,
-            page=page,
-            limit=limit,
+    # --- Semantic search (CLIP → Qdrant) ---
+    try:
+        vector = await ai_embedding_client.embed_text(query)
+        semantic_hits = QdrantSearchService().search(
+            vector,
+            limit=max_results,
             owner_user_id=current_user.id,
         )
-    else:
-        try:
-            vector = await ai_embedding_client.embed_text(query)
-            all_hits = QdrantSearchService().search(
-                vector,
-                limit=max_results,
-                owner_user_id=current_user.id,
-            )
-            semantic_response = await build_search_response_from_hits(
-                db,
-                all_hits,
-                page=1,
-                limit=max_results,
-                owner_user_id=current_user.id,
-            )
-        except AIServiceError as exc:
-            raise api_error(
-                status.HTTP_503_SERVICE_UNAVAILABLE,
-                "AI_SERVICE_UNAVAILABLE",
-                str(exc),
-            ) from exc
-        except Exception as exc:
-            raise api_error(
-                status.HTTP_503_SERVICE_UNAVAILABLE,
-                "VECTOR_SEARCH_UNAVAILABLE",
-                "Vector search service is unavailable.",
-            ) from exc
+    except AIServiceError as exc:
+        raise api_error(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "AI_SERVICE_UNAVAILABLE",
+            str(exc),
+        ) from exc
+    except Exception as exc:
+        raise api_error(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "VECTOR_SEARCH_UNAVAILABLE",
+            "Vector search service is unavailable.",
+        ) from exc
 
-        response = await build_search_response_from_hits(
-            db,
-            all_hits,
-            page=page,
-            limit=limit,
-            owner_user_id=current_user.id,
-        )
+    # --- OCR search (PostgreSQL FTS + trigram fuzzy) ---
+    ocr_response = await search_images_by_ocr_text(
+        db,
+        ocr_query_str,
+        page=1,
+        limit=max_results,
+        owner_user_id=current_user.id,
+    )
+
+    # --- Reciprocal Rank Fusion ---
+    ordered_ids = fuse_search_hits(
+        semantic_hits, ocr_response.items, semantic_weight=semantic_w, ocr_weight=ocr_w
+    )
+
+    # Tính lại rrf_scores để hiển thị
+    rrf_scores: dict[int, float] = {}
+    for rank, hit in enumerate(semantic_hits, start=1):
+        rrf_scores[hit.image_id] = rrf_scores.get(hit.image_id, 0.0) + semantic_w * (1.0 / (_RRF_K + rank))
+    for rank, item in enumerate(ocr_response.items, start=1):
+        rrf_scores[item.id] = rrf_scores.get(item.id, 0.0) + ocr_w * (1.0 / (_RRF_K + rank))
+
+    response = await build_search_response_from_ids(
+        db,
+        ordered_ids,
+        page=page,
+        limit=limit,
+        rrf_scores=rrf_scores,
+        owner_user_id=current_user.id,
+    )
+
     if page == 1:
-        query_type = SearchQueryType.ocr if explicit_ocr_query is not None else SearchQueryType.semantic
         await _save_search_history_once(
             db,
             SearchHistory(
                 user_id=current_user.id,
-                query_type=query_type,
+                query_type=SearchQueryType.hybrid,
                 query_value=query,
-                client_history_key=_build_text_history_key(query_type, query),
+                client_history_key=_build_text_history_key(SearchQueryType.hybrid, query),
             ),
         )
     return response
