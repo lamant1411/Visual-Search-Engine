@@ -41,6 +41,7 @@ export default function AlbumsPage() {
   const [form, setForm] = useState<AlbumFormState>(emptyForm)
   const [formError, setFormError] = useState<string | null>(null)
   const [mutatingImageId, setMutatingImageId] = useState<number | null>(null)
+  const [selectedImageIds, setSelectedImageIds] = useState<Set<number>>(() => new Set())
 
   const albumsQuery = useQuery({
     queryKey: ['albums'],
@@ -104,6 +105,7 @@ export default function AlbumsPage() {
     onSuccess: () => {
       setSelectedAlbumId(null)
       setSelectedImage(null)
+      setSelectedImageIds(new Set())
       setEditingAlbum(null)
       invalidateAlbums()
     },
@@ -129,14 +131,30 @@ export default function AlbumsPage() {
   const removeImageMutation = useMutation({
     mutationFn: ({ albumId, imageId }: { albumId: number; imageId: number }) =>
       albumsApi.removeImage(albumId, imageId),
-    onSuccess: () => {
+    onSuccess: (_response, variables) => {
       setSelectedImage(null)
+      setSelectedImageIds((current) => {
+        const next = new Set(current)
+        next.delete(variables.imageId)
+        return next
+      })
+      invalidateAlbums()
+    },
+  })
+
+  const bulkRemoveImagesMutation = useMutation({
+    mutationFn: ({ albumId, imageIds }: { albumId: number; imageIds: number[] }) =>
+      albumsApi.removeImages(albumId, imageIds),
+    onSuccess: () => {
+      setSelectedImageIds(new Set())
       invalidateAlbums()
     },
   })
 
   const isSavingAlbum = createMutation.isPending || updateMutation.isPending
   const images = imagesQuery.data?.items ?? []
+  const selectedImageCount = images.filter((image) => selectedImageIds.has(image.id)).length
+  const isAllImagesSelected = images.length > 0 && selectedImageCount === images.length
   const selectedResult = selectedImage ? albumImageToSearchResult(selectedImage) : null
   const isDeletedView = viewMode === 'deleted'
 
@@ -144,6 +162,7 @@ export default function AlbumsPage() {
     setViewMode(nextMode)
     setSelectedAlbumId(null)
     setSelectedImage(null)
+    setSelectedImageIds(new Set())
     setEditingAlbum(null)
     setForm(emptyForm)
     setFormError(null)
@@ -221,6 +240,33 @@ export default function AlbumsPage() {
   function handleRemoveSelectedImageFromAlbum() {
     if (!selectedImage || !activeAlbumId) return
     removeImageMutation.mutate({ albumId: activeAlbumId, imageId: selectedImage.id })
+  }
+
+  function toggleSelectedImage(imageId: number) {
+    setSelectedImageIds((current) => {
+      const next = new Set(current)
+      if (next.has(imageId)) {
+        next.delete(imageId)
+      } else {
+        next.add(imageId)
+      }
+      return next
+    })
+  }
+
+  function toggleSelectAllImages() {
+    if (isAllImagesSelected) {
+      setSelectedImageIds(new Set())
+      return
+    }
+    setSelectedImageIds(new Set(images.map((image) => image.id)))
+  }
+
+  function handleBulkRemoveImagesFromAlbum() {
+    if (!activeAlbumId || selectedImageCount === 0) return
+    const imageIds = images.filter((image) => selectedImageIds.has(image.id)).map((image) => image.id)
+    if (!window.confirm(`Remove ${imageIds.length} selected image(s) from this album? Images will remain in your library.`)) return
+    bulkRemoveImagesMutation.mutate({ albumId: activeAlbumId, imageIds })
   }
 
   function renderAlbumImageActions() {
@@ -371,7 +417,11 @@ export default function AlbumsPage() {
                           ? 'border-accent-200 bg-accent-50 text-ink-primary'
                           : 'border-transparent bg-white text-ink-secondary hover:border-border hover:bg-surface-1',
                       ].join(' ')}
-                      onClick={() => setSelectedAlbumId(album.id)}
+                      onClick={() => {
+                        setSelectedAlbumId(album.id)
+                        setSelectedImage(null)
+                        setSelectedImageIds(new Set())
+                      }}
                     >
                       {album.cover_image_url ? (
                         <img src={album.cover_image_url} alt="" className="h-14 w-14 rounded-xl object-cover" />
@@ -459,16 +509,39 @@ export default function AlbumsPage() {
                     <p className="mt-1 text-sm text-ink-secondary">Use Add to album from an image detail view. Deleted images are hidden until restored.</p>
                   </div>
                 ) : (
-                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    {images.map((image) => (
+                  <div className="space-y-4">
+                    <div className="flex flex-col gap-3 rounded-2xl border border-border bg-surface-1 p-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-sm font-semibold text-ink-secondary">{selectedImageCount} selected</p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" variant="outline" onClick={toggleSelectAllImages}>
+                          {isAllImagesSelected ? 'Clear selection' : 'Select all'}
+                        </Button>
+                        {selectedImageCount > 0 && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={bulkRemoveImagesMutation.isPending}
+                            leftIcon={bulkRemoveImagesMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
+                            onClick={handleBulkRemoveImagesFromAlbum}
+                          >
+                            {bulkRemoveImagesMutation.isPending ? 'Removing...' : 'Remove selected'}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                      {images.map((image) => (
                       <AlbumImageCard
                         key={image.id}
                         image={image}
-                        isRemoving={removeImageMutation.isPending}
+                        isRemoving={removeImageMutation.isPending || bulkRemoveImagesMutation.isPending}
+                        isSelected={selectedImageIds.has(image.id)}
+                        onToggleSelect={() => toggleSelectedImage(image.id)}
                         onOpen={() => setSelectedImage(image)}
                         onRemove={() => removeImageMutation.mutate({ albumId: selectedAlbum.id, imageId: image.id })}
                       />
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -583,16 +656,32 @@ function ReadOnlyAlbumImageCard({ image }: { image: AlbumImage }) {
 function AlbumImageCard({
   image,
   isRemoving,
+  isSelected,
+  onToggleSelect,
   onOpen,
   onRemove,
 }: {
   image: AlbumImage
   isRemoving: boolean
+  isSelected: boolean
+  onToggleSelect: () => void
   onOpen: () => void
   onRemove: () => void
 }) {
   return (
-    <article className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm shadow-slate-200/70 transition hover:-translate-y-0.5 hover:shadow-md hover:shadow-slate-200/80">
+    <article className={[
+      'relative overflow-hidden rounded-2xl border bg-white shadow-sm shadow-slate-200/70 transition hover:-translate-y-0.5 hover:shadow-md hover:shadow-slate-200/80',
+      isSelected ? 'border-accent-500 ring-4 ring-accent-100' : 'border-border',
+    ].join(' ')}>
+      <label className="absolute left-3 top-3 z-10 inline-flex h-5 w-5 items-center justify-center" onClick={(event) => event.stopPropagation()}>
+        <input
+          type="checkbox"
+          className="h-4 w-4 accent-accent-600"
+          checked={isSelected}
+          onChange={onToggleSelect}
+          aria-label={`Select image ${image.id}`}
+        />
+      </label>
       <button type="button" className="block w-full text-left" onClick={onOpen}>
         <img src={image.thumbnail_url} alt={image.original_filename ?? `Image ${image.id}`} className="h-44 w-full bg-surface-1 object-cover" />
         <div className="space-y-3 p-3">
