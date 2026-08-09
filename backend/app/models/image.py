@@ -11,6 +11,7 @@ from app.schemas.common import ImageSourceType, ImageStatus
 
 if TYPE_CHECKING:
     # Chi dung cho type hint, khong import luc chay that.
+    from app.models.album import AlbumImage
     from app.models.bookmark import Bookmark
     from app.models.image_embedding import ImageEmbedding
     from app.models.indexing_item import IndexingItem
@@ -57,3 +58,4 @@ class Image(Base):
     ocr_text: Mapped["OCRText | None"] = relationship(back_populates="image", uselist=False)
     bookmarks: Mapped[list["Bookmark"]] = relationship(back_populates="image")
     indexing_items: Mapped[list["IndexingItem"]] = relationship(back_populates="image")
+    album_links: Mapped[list["AlbumImage"]] = relationship(back_populates="image")

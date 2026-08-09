@@ -1,5 +1,6 @@
 """Import các ORM model ở đây để Alembic nhận diện toàn bộ bảng."""
 
+from app.models.album import Album, AlbumImage
 from app.models.bookmark import Bookmark
 from app.models.image import Image
 from app.models.image_embedding import ImageEmbedding

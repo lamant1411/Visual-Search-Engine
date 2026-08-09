@@ -27,6 +27,7 @@ app = FastAPI(
         {"name": "History", "description": "Search history of the current authenticated user."},
         {"name": "Image Library", "description": "Browse indexed images available to authenticated users."},
         {"name": "Bookmarks", "description": "Create, list, view, and delete image bookmarks."},
+        {"name": "Albums", "description": "Create albums, manage album images, and browse user-owned albums."},
         {"name": "Indexing", "description": "Upload image batches, enqueue indexing, retry failed items, and track progress."},
         {"name": "Admin", "description": "Admin-only dashboard, user list, and admin workspace image management."},
     ],

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.errors import api_error
+from app.models.album import AlbumImage
 from app.models.bookmark import Bookmark
 from app.models.image import Image
 from app.models.image_embedding import ImageEmbedding
@@ -130,6 +131,7 @@ async def permanently_delete_image_from_library(
     embedding = await db.get(ImageEmbedding, image_id)
     qdrant_deleted = _delete_qdrant_vector(embedding.qdrant_point_id if embedding else None, image_id)
 
+    await db.execute(delete(AlbumImage).where(AlbumImage.image_id == image_id))
     await db.execute(delete(Bookmark).where(Bookmark.image_id == image_id))
     await db.execute(delete(OCRText).where(OCRText.image_id == image_id))
     await db.execute(delete(ImageEmbedding).where(ImageEmbedding.image_id == image_id))

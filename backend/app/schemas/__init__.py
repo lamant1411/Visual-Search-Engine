@@ -1,3 +1,15 @@
+from app.schemas.album import (
+    AlbumCreate,
+    AlbumDeleteResponse,
+    AlbumFailedImageItem,
+    AlbumImageBulkRequest,
+    AlbumImageChangeResponse,
+    AlbumImageItem,
+    AlbumImageListResponse,
+    AlbumListResponse,
+    AlbumOut,
+    AlbumUpdate,
+)
 from app.schemas.admin import (
     AdminBatchCompleteUploadResponse,
     AdminBatchCreateResponse,

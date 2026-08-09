@@ -13,6 +13,7 @@ import {
   Check,
   Copy,
   Crop,
+  FolderPlus,
   Info,
   Loader2,
   Minus,
@@ -23,6 +24,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/base/button";
+import { AddToAlbumModal } from "@/features/albums/components/AddToAlbumModal";
 import { useDialogAccessibility } from "@/lib/ui/useDialogAccessibility";
 
 import type { SearchResult } from "../types";
@@ -36,6 +38,7 @@ type SearchResultDetailModalProps = {
   onClose: () => void;
   onFindSimilar?: (result: SearchResult, croppedFile?: File) => void | Promise<void>;
   showSimilarity?: boolean;
+  showAddToAlbum?: boolean;
   footerAction?: ReactNode;
 };
 
@@ -46,6 +49,7 @@ export function SearchResultDetailModal({
   onClose,
   onFindSimilar,
   showSimilarity = true,
+  showAddToAlbum = true,
   footerAction,
 }: SearchResultDetailModalProps) {
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">(
@@ -59,9 +63,11 @@ export function SearchResultDetailModal({
   const [cropSourceFile, setCropSourceFile] = useState<File | null>(null);
   const [cropError, setCropError] = useState<string>();
   const [isPreparingCrop, setIsPreparingCrop] = useState(false);
+  const [isAddToAlbumOpen, setIsAddToAlbumOpen] = useState(false);
   const prepareCropRequestRef = useRef<AbortController | null>(null);
   const isZoomed = zoom > 1;
   const similarityScore = formatSimilarityScore(result.similarityScore);
+  const canAddToAlbum = showAddToAlbum && result.metadata.status?.toLowerCase() !== "deleted";
   const sizeLabel =
     result.metadata.width && result.metadata.height
       ? `${result.metadata.width} x ${result.metadata.height}`
@@ -101,6 +107,7 @@ export function SearchResultDetailModal({
   }
 
   return (
+    <>
     <div
       aria-labelledby="search-result-detail-title"
       aria-modal="true"
@@ -232,10 +239,10 @@ export function SearchResultDetailModal({
             <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4">
               <div className="flex items-center gap-2 text-sm font-bold text-red-700">
                 <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
-                Lỗi Index AI
+                Lá»—i Index AI
               </div>
               <p className="mt-1 text-xs text-red-600">
-                Ảnh này vừa được tải lên nhưng gặp lỗi trong quá trình trích xuất vector hoặc OCR. Ảnh đã được lưu an toàn trong thư viện nhưng chưa thể tìm kiếm bằng AI.
+                áº¢nh nÃ y vá»«a Ä‘Æ°á»£c táº£i lÃªn nhÆ°ng gáº·p lá»—i trong quÃ¡ trÃ¬nh trÃ­ch xuáº¥t vector hoáº·c OCR. áº¢nh Ä‘Ã£ Ä‘Æ°á»£c lÆ°u an toÃ n trong thÆ° viá»‡n nhÆ°ng chÆ°a thá»ƒ tÃ¬m kiáº¿m báº±ng AI.
               </p>
             </div>
           )}
@@ -244,10 +251,10 @@ export function SearchResultDetailModal({
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
               <div className="flex items-center gap-2 text-sm font-bold text-amber-700">
                 <Loader2 className="h-4 w-4 shrink-0 animate-spin text-amber-600" />
-                Đang tiến hành Indexing
+                Äang tiáº¿n hÃ nh Indexing
               </div>
               <p className="mt-1 text-xs text-amber-600">
-                Ảnh đã tải lên thành công và đang được xử lý ở nền. Ảnh sẽ tự động sẵn sàng cho tìm kiếm sau khi hoàn tất.
+                áº¢nh Ä‘Ã£ táº£i lÃªn thÃ nh cÃ´ng vÃ  Ä‘ang Ä‘Æ°á»£c xá»­ lÃ½ á»Ÿ ná»n. áº¢nh sáº½ tá»± Ä‘á»™ng sáºµn sÃ ng cho tÃ¬m kiáº¿m sau khi hoÃ n táº¥t.
               </p>
             </div>
           )}
@@ -302,6 +309,19 @@ export function SearchResultDetailModal({
             >
               {isBookmarked ? "Remove bookmark" : "Save to bookmarks"}
             </Button>
+
+            {canAddToAlbum && (
+              <Button
+                fullWidth
+                className="focus-visible:ring-accent-600"
+                leftIcon={<FolderPlus className="h-4 w-4" />}
+                type="button"
+                variant="outline"
+                onClick={() => setIsAddToAlbumOpen(true)}
+              >
+                Add to album
+              </Button>
+            )}
 
             {onFindSimilar && (
               <>
@@ -364,6 +384,13 @@ export function SearchResultDetailModal({
         </aside>
       </section>
     </div>
+    {isAddToAlbumOpen && (
+      <AddToAlbumModal
+        imageIds={[result.id]}
+        onClose={() => setIsAddToAlbumOpen(false)}
+      />
+    )}
+    </>
   );
 
   function handleImageClick(event: MouseEvent<HTMLDivElement>) {

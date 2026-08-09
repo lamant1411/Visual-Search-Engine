@@ -11,6 +11,7 @@ import {
   ChevronDown,
   Clock,
   FileText,
+  FolderOpen,
   ImagePlus,
   Images,
   LogOut,
@@ -374,6 +375,19 @@ export function Header() {
                       >
                         <Images className="h-4 w-4" />
                         Image library
+                      </button>
+
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-xl px-3 text-sm font-bold text-ink-secondary transition hover:bg-accent-50 hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600"
+                        onClick={() => {
+                          setIsAccountMenuOpen(false);
+                          navigate("/albums");
+                        }}
+                      >
+                        <FolderOpen className="h-4 w-4" />
+                        Albums
                       </button>
 
                       <button

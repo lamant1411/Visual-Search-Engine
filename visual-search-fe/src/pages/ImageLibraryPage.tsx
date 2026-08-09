@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
-import { AlertCircle, CheckSquare, Images, Loader2, RefreshCw, RotateCcw, Trash2, Undo2, Upload, X } from 'lucide-react'
+import { AlertCircle, CheckSquare, FolderPlus, Images, Loader2, RefreshCw, RotateCcw, Trash2, Undo2, Upload, X } from 'lucide-react'
 import { useNavigate } from 'react-router'
 
 import { Button } from '@/components/base/button'
 import { PageContainer } from '@/components/layout/PageContainer'
+import { AddToAlbumModal } from '@/features/albums/components/AddToAlbumModal'
 import { useAuth } from '@/contexts/AuthContext'
 import { ResultGrid, ResultGridSkeleton } from '@/features/search/components/ResultGrid'
 import { SearchResultDetailModal } from '@/features/search/components/SearchResultDetailModal'
@@ -76,6 +77,7 @@ export default function ImageLibraryPage() {
   const [mutatingImageId, setMutatingImageId] = useState<number | null>(null)
   const [selectedImageIds, setSelectedImageIds] = useState<Set<number>>(() => new Set())
   const [isBulkMutating, setIsBulkMutating] = useState(false)
+  const [isAddSelectedToAlbumOpen, setIsAddSelectedToAlbumOpen] = useState(false)
   const [selectedUploadFiles, setSelectedUploadFiles] = useState<File[]>([])
   const [isUploadingImages, setIsUploadingImages] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
@@ -960,16 +962,28 @@ export default function ImageLibraryPage() {
                   </Button>
                 </>
               ) : (
-                <Button
-                  type="button"
-                  variant="danger"
-                  className="min-h-11 rounded-xl"
-                  disabled={isBulkMutating}
-                  leftIcon={<Trash2 className="h-4 w-4" />}
-                  onClick={handleSoftDeleteSelectedImages}
-                >
-                  {isBulkMutating ? 'Moving...' : 'Move to deleted'}
-                </Button>
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="min-h-11 rounded-xl"
+                    disabled={isBulkMutating}
+                    leftIcon={<FolderPlus className="h-4 w-4" />}
+                    onClick={() => setIsAddSelectedToAlbumOpen(true)}
+                  >
+                    Add selected to album
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="danger"
+                    className="min-h-11 rounded-xl"
+                    disabled={isBulkMutating}
+                    leftIcon={<Trash2 className="h-4 w-4" />}
+                    onClick={handleSoftDeleteSelectedImages}
+                  >
+                    {isBulkMutating ? 'Moving...' : 'Move to deleted'}
+                  </Button>
+                </>
               )}
             </div>
           </section>
@@ -1032,6 +1046,14 @@ export default function ImageLibraryPage() {
           </div>
         )}
       </PageContainer>
+
+      {isAddSelectedToAlbumOpen && (
+        <AddToAlbumModal
+          imageIds={Array.from(selectedImageIds)}
+          onClose={() => setIsAddSelectedToAlbumOpen(false)}
+          onSuccess={handleClearSelectedImages}
+        />
+      )}
 
       {selectedResult && (
         <>

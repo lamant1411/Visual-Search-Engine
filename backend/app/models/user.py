@@ -11,6 +11,7 @@ from app.schemas.common import UserRole
 
 if TYPE_CHECKING:
     # TYPE_CHECKING giup tranh import vong lap khi chay runtime.
+    from app.models.album import Album
     from app.models.bookmark import Bookmark
     from app.models.image import Image
     from app.models.refresh_token import RefreshToken
@@ -45,3 +46,4 @@ class User(Base):
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(back_populates="user")
     search_history: Mapped[list["SearchHistory"]] = relationship(back_populates="user")
     bookmarks: Mapped[list["Bookmark"]] = relationship(back_populates="user")
+    albums: Mapped[list["Album"]] = relationship(back_populates="owner")
