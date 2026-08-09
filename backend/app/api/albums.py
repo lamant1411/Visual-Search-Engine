@@ -59,6 +59,33 @@ async def list_albums(
     return AlbumListResponse(items=[await _to_album_out(db, album, current_user.id) for album in rows], page=page, limit=limit, total=total)
 
 
+
+@router.get(
+    "/deleted",
+    response_model=AlbumListResponse,
+    summary="List deleted albums",
+    description="Return paginated soft-deleted albums owned by the current authenticated user.",
+    responses={200: {"description": "Deleted albums returned successfully."}, 401: {"description": "Missing, invalid, or expired token."}},
+)
+async def list_deleted_albums(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> AlbumListResponse:
+    filters = [Album.owner_user_id == current_user.id, Album.deleted_at.is_not(None)]
+    total = int(await db.scalar(select(func.count()).select_from(Album).where(*filters)) or 0)
+    rows = (
+        await db.scalars(
+            select(Album)
+            .where(*filters)
+            .order_by(Album.deleted_at.desc(), Album.updated_at.desc(), Album.id.desc())
+            .offset((page - 1) * limit)
+            .limit(limit)
+        )
+    ).all()
+    return AlbumListResponse(items=[await _to_album_out(db, album, current_user.id) for album in rows], page=page, limit=limit, total=total)
+
 @router.post(
     "",
     response_model=AlbumOut,
@@ -151,6 +178,44 @@ async def delete_album(
     return AlbumDeleteResponse(album_id=album.id, deleted=True)
 
 
+
+@router.post(
+    "/{album_id}/restore",
+    response_model=AlbumOut,
+    summary="Restore deleted album",
+    description="Restore a soft-deleted album owned by the current user.",
+    responses={200: {"description": "Album restored successfully."}, 401: {"description": "Missing, invalid, or expired token."}, 404: {"description": "Deleted album not found."}},
+)
+async def restore_album(
+    album_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> AlbumOut:
+    album = await _get_owned_deleted_album(db, album_id, current_user.id)
+    album.deleted_at = None
+    album.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(album)
+    return await _to_album_out(db, album, current_user.id)
+
+
+@router.delete(
+    "/{album_id}/permanent",
+    response_model=AlbumDeleteResponse,
+    summary="Permanently delete album",
+    description="Permanently delete a soft-deleted album owned by the current user. Images are not deleted, but album-image links are removed.",
+    responses={200: {"description": "Album permanently deleted successfully."}, 401: {"description": "Missing, invalid, or expired token."}, 404: {"description": "Deleted album not found."}},
+)
+async def permanently_delete_album(
+    album_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> AlbumDeleteResponse:
+    album = await _get_owned_deleted_album(db, album_id, current_user.id)
+    await db.delete(album)
+    await db.commit()
+    return AlbumDeleteResponse(album_id=album_id, deleted=True)
+
 @router.get(
     "/{album_id}/images",
     response_model=AlbumImageListResponse,
@@ -165,7 +230,7 @@ async def list_album_images(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AlbumImageListResponse:
-    await _get_owned_album(db, album_id, current_user.id)
+    await _get_owned_album_for_read(db, album_id, current_user.id)
     filters = [
         AlbumImage.album_id == album_id,
         Image.status != ImageStatus.deleted,
@@ -319,6 +384,31 @@ async def _get_owned_album(db: AsyncSession, album_id: int, owner_user_id: int) 
     return album
 
 
+async def _get_owned_album_for_read(db: AsyncSession, album_id: int, owner_user_id: int) -> Album:
+    album = await db.scalar(
+        select(Album).where(
+            Album.id == album_id,
+            Album.owner_user_id == owner_user_id,
+        )
+    )
+    if album is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "ALBUM_NOT_FOUND", "Album not found.", {"album_id": album_id})
+    return album
+
+
+async def _get_owned_deleted_album(db: AsyncSession, album_id: int, owner_user_id: int) -> Album:
+    album = await db.scalar(
+        select(Album).where(
+            Album.id == album_id,
+            Album.owner_user_id == owner_user_id,
+            Album.deleted_at.is_not(None),
+        )
+    )
+    if album is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "ALBUM_NOT_FOUND", "Deleted album not found.", {"album_id": album_id})
+    return album
+
+
 async def _get_visible_active_image(db: AsyncSession, image_id: int, owner_user_id: int) -> Image:
     image = await db.scalar(
         select(Image).where(
@@ -367,6 +457,7 @@ async def _to_album_out(db: AsyncSession, album: Album, owner_user_id: int) -> A
         image_count=image_count,
         created_at=album.created_at,
         updated_at=album.updated_at,
+        deleted_at=album.deleted_at,
     )
 
 
@@ -381,6 +472,7 @@ def _to_album_image_item(link: AlbumImage, image: Image, ocr_text: OCRText | Non
         source_type=image.source_type,
         width=image.width,
         height=image.height,
+        ocr_text=ocr_text.raw_text if ocr_text else None,
         added_at=link.added_at,
     )
 

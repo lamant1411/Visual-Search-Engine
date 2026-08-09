@@ -10,6 +10,7 @@ export type Album = {
   image_count: number
   created_at: string
   updated_at?: string | null
+  deleted_at?: string | null
 }
 
 export type AlbumCreatePayload = {
@@ -60,6 +61,11 @@ export const albumsApi = {
     return response.data
   },
 
+  async listDeleted(params?: PaginationParams): Promise<PaginatedResponse<Album>> {
+    const response = await apiClient.get<PaginatedResponse<Album>>('/albums/deleted', { params })
+    return response.data
+  },
+
   async create(payload: AlbumCreatePayload): Promise<Album> {
     const response = await apiClient.post<Album>('/albums', payload)
     return response.data
@@ -77,6 +83,16 @@ export const albumsApi = {
 
   async delete(albumId: number): Promise<AlbumDeleteResponse> {
     const response = await apiClient.delete<AlbumDeleteResponse>(`/albums/${albumId}`)
+    return response.data
+  },
+
+  async restore(albumId: number): Promise<Album> {
+    const response = await apiClient.post<Album>(`/albums/${albumId}/restore`)
+    return response.data
+  },
+
+  async permanentDelete(albumId: number): Promise<AlbumDeleteResponse> {
+    const response = await apiClient.delete<AlbumDeleteResponse>(`/albums/${albumId}/permanent`)
     return response.data
   },
 
