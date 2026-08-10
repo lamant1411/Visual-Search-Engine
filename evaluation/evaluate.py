@@ -90,7 +90,9 @@ class ApiClient:
     def search_text(self, mode: str, query: str, *, limit: int) -> dict[str, Any]:
         if mode not in {"semantic", "ocr"}:
             raise ValueError("Text search mode must be semantic or ocr.")
-        endpoint = "/search/text" if mode == "semantic" else "/search/ocr"
+        
+        endpoint = "/search/text"
+        
         return self._request_json(
             "GET",
             endpoint,

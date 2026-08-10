@@ -168,7 +168,7 @@
     {
       "id": "ocr-01",
       "mode": "ocr",
-      "query": "STOP",
+      "query": "ảnh có chữ STOP",
       "notes": "Blind adjudication: review only reviewer disagreements.",
       "candidate_image_ids": [
         51704,
@@ -182,7 +182,7 @@
     {
       "id": "ocr-02",
       "mode": "ocr",
-      "query": "OPEN",
+      "query": "ảnh có chữ OPEN",
       "notes": "Blind adjudication: review only reviewer disagreements.",
       "candidate_image_ids": [
         75682,
@@ -197,7 +197,7 @@
     {
       "id": "ocr-03",
       "mode": "ocr",
-      "query": "SCHOOL",
+      "query": "tìm chữ SCHOOL",
       "notes": "Blind adjudication: review only reviewer disagreements.",
       "candidate_image_ids": [
         80159
@@ -210,7 +210,7 @@
     {
       "id": "ocr-04",
       "mode": "ocr",
-      "query": "COFFEE",
+      "query": "tìm chữ COFFEE",
       "notes": "Blind adjudication: review only reviewer disagreements.",
       "candidate_image_ids": [
         3002
@@ -223,7 +223,7 @@
     {
       "id": "ocr-06",
       "mode": "ocr",
-      "query": "HOTEL",
+      "query": "tìm chữ HOTEL",
       "notes": "Blind adjudication: review only reviewer disagreements.",
       "candidate_image_ids": [
         68438
@@ -236,7 +236,7 @@
     {
       "id": "ocr-09",
       "mode": "ocr",
-      "query": "FOOD",
+      "query": "tìm chữ FOOD",
       "notes": "Blind adjudication: review only reviewer disagreements.",
       "candidate_image_ids": [
         52576,
@@ -250,7 +250,7 @@
     {
       "id": "ocr-10",
       "mode": "ocr",
-      "query": "POLICE",
+      "query": "tìm chữ POLICE",
       "notes": "Blind adjudication: review only reviewer disagreements.",
       "candidate_image_ids": [
         74963
@@ -263,7 +263,7 @@
     {
       "id": "ocr-12",
       "mode": "ocr",
-      "query": "Nhím",
+      "query": "ảnh có chữ Nhím",
       "notes": "Blind adjudication: review only reviewer disagreements.",
       "candidate_image_ids": [
         56281,
@@ -282,7 +282,7 @@
     {
       "id": "ocr-13",
       "mode": "ocr",
-      "query": "ĐƯỜNG",
+      "query": "ảnh có chữ ĐƯỜNG",
       "notes": "Blind adjudication: review only reviewer disagreements.",
       "candidate_image_ids": [
         45651
@@ -295,7 +295,7 @@
     {
       "id": "ocr-14",
       "mode": "ocr",
-      "query": "SÀI GÒN",
+      "query": "ảnh chứa text SÀI GÒN",
       "notes": "Blind adjudication: review only reviewer disagreements.",
       "candidate_image_ids": [
         85499,
@@ -311,7 +311,7 @@
     {
       "id": "ocr-15",
       "mode": "ocr",
-      "query": "HUẾ",
+      "query": "ảnh chứa text HUẾ",
       "notes": "Blind adjudication: review only reviewer disagreements.",
       "candidate_image_ids": [
         29821

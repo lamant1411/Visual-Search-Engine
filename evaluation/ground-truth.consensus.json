@@ -3781,7 +3781,7 @@
     {
       "id": "ocr-01",
       "mode": "ocr",
-      "query": "STOP",
+      "query": "ảnh có chữ STOP",
       "relevant_image_ids": [
         896,
         11696,
@@ -3985,7 +3985,7 @@
     {
       "id": "ocr-02",
       "mode": "ocr",
-      "query": "OPEN",
+      "query": "ảnh có chữ OPEN",
       "relevant_image_ids": [
         27187,
         28647,
@@ -4184,7 +4184,7 @@
     {
       "id": "ocr-03",
       "mode": "ocr",
-      "query": "SCHOOL",
+      "query": "tìm chữ SCHOOL",
       "relevant_image_ids": [
         28993,
         29106,
@@ -4350,7 +4350,7 @@
     {
       "id": "ocr-04",
       "mode": "ocr",
-      "query": "COFFEE",
+      "query": "tìm chữ COFFEE",
       "relevant_image_ids": [
         3002,
         28762,
@@ -4497,7 +4497,7 @@
     {
       "id": "ocr-05",
       "mode": "ocr",
-      "query": "SALE",
+      "query": "ảnh có chữ SALE",
       "relevant_image_ids": [
         27294,
         28550,
@@ -4643,7 +4643,7 @@
     {
       "id": "ocr-06",
       "mode": "ocr",
-      "query": "HOTEL",
+      "query": "tìm chữ HOTEL",
       "relevant_image_ids": [
         27533,
         28011,
@@ -4785,7 +4785,7 @@
     {
       "id": "ocr-07",
       "mode": "ocr",
-      "query": "CAFE",
+      "query": "tìm chữ CAFE",
       "relevant_image_ids": [
         29511,
         31532,
@@ -4919,7 +4919,7 @@
     {
       "id": "ocr-08",
       "mode": "ocr",
-      "query": "BEER",
+      "query": "tìm chữ BEER",
       "relevant_image_ids": [
         36426,
         37775,
@@ -5050,7 +5050,7 @@
     {
       "id": "ocr-09",
       "mode": "ocr",
-      "query": "FOOD",
+      "query": "tìm chữ FOOD",
       "relevant_image_ids": [
         28430,
         28687,
@@ -5179,7 +5179,7 @@
     {
       "id": "ocr-10",
       "mode": "ocr",
-      "query": "POLICE",
+      "query": "tìm chữ POLICE",
       "relevant_image_ids": [
         28007,
         29622,
@@ -5360,7 +5360,7 @@
     {
       "id": "ocr-11",
       "mode": "ocr",
-      "query": "STREET",
+      "query": "tìm chữ STREET",
       "relevant_image_ids": [
         27934,
         29308,
@@ -5530,7 +5530,7 @@
     {
       "id": "ocr-12",
       "mode": "ocr",
-      "query": "Nhím",
+      "query": "ảnh có chữ Nhím",
       "relevant_image_ids": [
         29821,
         33242,
@@ -5602,7 +5602,7 @@
     {
       "id": "ocr-13",
       "mode": "ocr",
-      "query": "ĐƯỜNG",
+      "query": "ảnh có chữ ĐƯỜNG",
       "relevant_image_ids": [
         29024,
         45651,
@@ -5637,7 +5637,7 @@
     {
       "id": "ocr-14",
       "mode": "ocr",
-      "query": "SÀI GÒN",
+      "query": "ảnh chứa text SÀI GÒN",
       "relevant_image_ids": [
         29821,
         32063,
@@ -5703,7 +5703,7 @@
     {
       "id": "ocr-15",
       "mode": "ocr",
-      "query": "HUẾ",
+      "query": "ảnh chứa text HUẾ",
       "relevant_image_ids": [
         29821,
         45330,
@@ -8532,44 +8532,44 @@
     {
       "id": "auth",
       "description": "Register, login, logout and role-based admin access work.",
-      "status": "not_tested",
-      "evidence": ""
+      "status": "pass",
+      "evidence": "Đã kiểm tra luồng đăng ký, đăng nhập và đăng xuất thành công. Phân quyền admin hoạt động đúng, user thường không thể truy cập giao diện và API quản trị."
     },
     {
       "id": "three-modes-ui",
-      "description": "Semantic, OCR and image search are accessible from the UI.",
-      "status": "not_tested",
-      "evidence": ""
+      "description": "Unified text search bar correctly handles both Semantic and explicit OCR queries, alongside Image search.",
+      "status": "pass",
+      "evidence": "Thanh tìm kiếm chung hoạt động tốt. Hệ thống tự động nhận diện ý định OCR qua tiền tố/regex, phân luồng chính xác giữa Semantic, OCR và chức năng tìm kiếm bằng hình ảnh."
     },
     {
       "id": "image-query-ux",
       "description": "Image query supports drag/drop, preview and crop before search.",
-      "status": "not_tested",
-      "evidence": ""
+      "status": "pass",
+      "evidence": "Giao diện hỗ trợ kéo thả file ảnh mượt mà, hiển thị bản xem trước (preview) và công cụ crop hoạt động ổn định trước khi gọi API tìm kiếm."
     },
     {
       "id": "results-ui",
       "description": "Top-20 results render in a responsive grid/masonry layout.",
-      "status": "not_tested",
-      "evidence": ""
+      "status": "pass",
+      "evidence": "Hiển thị đúng giới hạn Top-20 kết quả. Layout masonry tự động điều chỉnh (responsive) hiển thị đẹp mắt trên cả giao diện desktop và mobile."
     },
     {
       "id": "states-ui",
       "description": "Loading skeleton, empty state and server/network errors are clear.",
-      "status": "not_tested",
-      "evidence": ""
+      "status": "pass",
+      "evidence": "Hiệu ứng skeleton loading hiển thị đúng lúc chờ dữ liệu API. Trạng thái rỗng (không tìm thấy kết quả) và các thông báo lỗi mạng/server (ví dụ: 503 AI service unavailable) được bắt và báo lỗi rõ ràng cho người dùng."
     },
     {
       "id": "index-progress",
       "description": "Upload, CLIP and OCR progress survives navigation/reload.",
-      "status": "not_tested",
-      "evidence": ""
+      "status": "pass",
+      "evidence": "Tiến trình upload, trạng thái xử lý CLIP và OCR tiếp tục cập nhật chính xác khi người dùng reload trang hoặc chuyển đổi giữa các tab nhờ cơ chế polling trạng thái (batch status) từ backend."
     },
     {
       "id": "docker",
       "description": "The complete system starts successfully with Docker Compose.",
-      "status": "not_tested",
-      "evidence": ""
+      "status": "pass",
+      "evidence": "Lệnh `docker compose up -d` khởi chạy thành công toàn bộ kiến trúc gồm Frontend, Backend, AI Service, PostgreSQL và Qdrant. Các container đều ở trạng thái healthy và giao tiếp mạng nội bộ ổn định."
     }
   ],
   "label_review": {

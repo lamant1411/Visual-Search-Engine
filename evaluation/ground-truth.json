@@ -1679,7 +1679,7 @@
     {
       "id": "ocr-01",
       "mode": "ocr",
-      "query": "STOP",
+      "query": "ảnh có chữ STOP",
       "relevant_image_ids": [
         40647,
         46904,
@@ -1787,7 +1787,7 @@
     {
       "id": "ocr-02",
       "mode": "ocr",
-      "query": "OPEN",
+      "query": "ảnh có chữ OPEN",
       "relevant_image_ids": [
         28647,
         86923,
@@ -1893,7 +1893,7 @@
     {
       "id": "ocr-03",
       "mode": "ocr",
-      "query": "SCHOOL",
+      "query": "tìm chữ SCHOOL",
       "relevant_image_ids": [
         86963,
         73886,
@@ -1981,7 +1981,7 @@
     {
       "id": "ocr-04",
       "mode": "ocr",
-      "query": "COFFEE",
+      "query": "tìm chữ COFFEE",
       "relevant_image_ids": [
         69061,
         37485,
@@ -2059,7 +2059,7 @@
     {
       "id": "ocr-05",
       "mode": "ocr",
-      "query": "SALE",
+      "query": "ảnh có chữ SALE",
       "relevant_image_ids": [
         32852,
         70500,
@@ -2137,7 +2137,7 @@
     {
       "id": "ocr-06",
       "mode": "ocr",
-      "query": "HOTEL",
+      "query": "tìm chữ HOTEL",
       "relevant_image_ids": [
         83862,
         38305,
@@ -2213,7 +2213,7 @@
     {
       "id": "ocr-07",
       "mode": "ocr",
-      "query": "CAFE",
+      "query": "tìm chữ CAFE",
       "relevant_image_ids": [
         78686,
         67526,
@@ -2285,7 +2285,7 @@
     {
       "id": "ocr-08",
       "mode": "ocr",
-      "query": "BEER",
+      "query": "tìm chữ BEER",
       "relevant_image_ids": [
         59611,
         59355,
@@ -2355,7 +2355,7 @@
     {
       "id": "ocr-09",
       "mode": "ocr",
-      "query": "FOOD",
+      "query": "tìm chữ FOOD",
       "relevant_image_ids": [
         45416,
         28687,
@@ -2425,7 +2425,7 @@
     {
       "id": "ocr-10",
       "mode": "ocr",
-      "query": "POLICE",
+      "query": "tìm chữ POLICE",
       "relevant_image_ids": [
         84737,
         37396,
@@ -2521,7 +2521,7 @@
     {
       "id": "ocr-11",
       "mode": "ocr",
-      "query": "STREET",
+      "query": "tìm chữ STREET",
       "relevant_image_ids": [
         68597,
         87126,
@@ -2611,7 +2611,7 @@
     {
       "id": "ocr-12",
       "mode": "ocr",
-      "query": "Nhím",
+      "query": "ảnh có chữ Nhím",
       "relevant_image_ids": [
         87929
       ],
@@ -2640,7 +2640,7 @@
     {
       "id": "ocr-13",
       "mode": "ocr",
-      "query": "ĐƯỜNG",
+      "query": "ảnh có chữ ĐƯỜNG",
       "relevant_image_ids": [
         87148,
         29024,
@@ -2662,7 +2662,7 @@
     {
       "id": "ocr-14",
       "mode": "ocr",
-      "query": "SÀI GÒN",
+      "query": "ảnh chứa text SÀI GÒN",
       "relevant_image_ids": [
         29821
       ],
@@ -2688,7 +2688,7 @@
     {
       "id": "ocr-15",
       "mode": "ocr",
-      "query": "HUẾ",
+      "query": "ảnh chứa text HUẾ",
       "relevant_image_ids": [
         52842,
         29821
@@ -3948,7 +3948,7 @@
     },
     {
       "id": "three-modes-ui",
-      "description": "Semantic, OCR and image search are accessible from the UI.",
+      "description": "Unified text search bar correctly handles both Semantic and explicit OCR queries, alongside Image search.",
       "status": "not_tested",
       "evidence": ""
     },
