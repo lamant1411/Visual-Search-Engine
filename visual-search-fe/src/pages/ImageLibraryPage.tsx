@@ -193,7 +193,7 @@ export default function ImageLibraryPage() {
     setIsUploadingImages(true)
     setUploadProgress(0)
     setUploadErrorMessage(null)
-    setUploadStatusMessage('Đang khởi tạo đợt tải ảnh lên...')
+    setUploadStatusMessage('Starting image upload batch...')
     setFailedUploads([])
 
     const currentFailed: FailedUploadItem[] = []
@@ -203,13 +203,13 @@ export default function ImageLibraryPage() {
       if (file.size > MAX_IMAGE_UPLOAD_FILE_BYTES) {
         currentFailed.push({
           fileName: file.name,
-          reason: `Vượt quá 10MB (${(file.size / (1024 * 1024)).toFixed(1)}MB)`,
+          reason: `Larger than 10MB (${(file.size / (1024 * 1024)).toFixed(1)}MB)`,
           file,
         })
       } else if (!isSupportedImageFile(file)) {
         currentFailed.push({
           fileName: file.name,
-          reason: 'Định dạng không được hỗ trợ',
+          reason: 'Unsupported file type',
           file,
         })
       } else {
@@ -241,7 +241,7 @@ export default function ImageLibraryPage() {
           })
           uploadedCount += chunk.length
           setUploadProgress(Math.round((uploadedCount / validFiles.length) * 100))
-          setUploadStatusMessage(`Đã tải lên ${uploadedCount}/${validFiles.length} ảnh. Tiến trình index đang chạy ngầm...`)
+          setUploadStatusMessage(`Uploaded ${uploadedCount}/${validFiles.length} images. Indexing is running in the background...`)
         } catch (chunkError) {
           console.warn('[ImageLibraryPage] Chunk upload failed, trying per-file upload', chunkError)
           for (const file of chunk) {
@@ -250,7 +250,7 @@ export default function ImageLibraryPage() {
               uploadedCount += 1
               setUploadProgress(Math.round((uploadedCount / validFiles.length) * 100))
             } catch (fileError) {
-              const reason = fileError instanceof Error ? fileError.message : 'Tải lên không thành công'
+              const reason = fileError instanceof Error ? fileError.message : 'Upload failed'
               currentFailed.push({ fileName: file.name, reason, file })
             }
           }
@@ -260,7 +260,7 @@ export default function ImageLibraryPage() {
       await adminApi.completeIndexingBatch(batch.batch_id)
       setUploadProgress(100)
       if (uploadedCount > 0) {
-        setUploadStatusMessage(`Đã tải xong ${uploadedCount} ảnh. Ảnh đã xuất hiện trong kho ảnh!`)
+        setUploadStatusMessage(`Uploaded ${uploadedCount} images. Images are now visible in your library!`)
         setSelectedUploadFiles([])
       } else {
         setUploadStatusMessage(null)
@@ -275,7 +275,7 @@ export default function ImageLibraryPage() {
           console.error('[ImageLibraryPage] Complete upload failed', completeError)
         }
       }
-      const message = error instanceof Error ? error.message : 'Không thể hoàn tất đợt tải ảnh.'
+      const message = error instanceof Error ? error.message : 'Could not complete image upload batch.'
       setUploadErrorMessage(message)
     } finally {
       setIsUploadingImages(false)
@@ -588,7 +588,7 @@ export default function ImageLibraryPage() {
                   {hasPendingIndexing && (
                     <span className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 text-xs font-bold text-amber-700 shadow-sm">
                       <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600" />
-                      Đang chạy tối ưu tìm kiếm
+                      Search optimization is running
                     </span>
                   )}
                 </div>
@@ -615,10 +615,10 @@ export default function ImageLibraryPage() {
                 </div>
                 <div>
                   <h2 className="text-sm font-bold text-red-900 sm:text-base">
-                    Phát hiện {failedResults.length} ảnh gặp lỗi khi Index AI
+                    Found {failedResults.length} image(s) with AI indexing errors
                   </h2>
                   <p className="mt-1 text-xs leading-5 text-red-700 sm:text-sm">
-                    Các ảnh này đã lưu an toàn trong kho nhưng gặp lỗi khi tạo vector tìm kiếm/OCR. Tên thẻ trên ảnh hiển thị nhãn <span className="font-bold underline">Lỗi Index</span> màu đỏ.
+                    These images are saved safely in the library, but vector/OCR indexing failed. They are marked with <span className="font-bold underline">Index Error</span> in red.
                   </p>
                 </div>
               </div>
@@ -735,7 +735,7 @@ export default function ImageLibraryPage() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="flex items-center gap-2 text-xs font-bold text-red-800">
                       <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
-                      {failedUploads.length} ảnh gặp lỗi khi tải lên
+                      {failedUploads.length} image(s) failed to upload
                     </p>
                     <div className="flex items-center gap-3">
                       <button
@@ -743,12 +743,12 @@ export default function ImageLibraryPage() {
                         className="text-xs font-bold text-red-700 underline underline-offset-2 hover:text-red-900"
                         onClick={handleRetryFailedUploads}
                       >
-                        Thử lại các ảnh lỗi
+                        Retry failed images
                       </button>
                       <button
                         type="button"
                         className="rounded-full p-1 text-red-500 hover:bg-red-100 hover:text-red-800"
-                        aria-label="Ẩn thông báo lỗi"
+                        aria-label="Dismiss error notice"
                         onClick={() => setFailedUploads([])}
                       >
                         <X className="h-3.5 w-3.5" />
@@ -793,7 +793,7 @@ export default function ImageLibraryPage() {
                     <option value="">All indexed images</option>
                     {batchesWithImages.map((batch) => (
                       <option key={batch.batch_id} value={batch.batch_id}>
-                        {batch.batch_id} · {batch.processed_images}/{batch.total_images} indexed
+                        {batch.batch_id} - {batch.processed_images}/{batch.total_images} indexed
                       </option>
                     ))}
                   </select>

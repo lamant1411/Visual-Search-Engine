@@ -239,10 +239,10 @@ export function SearchResultDetailModal({
             <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4">
               <div className="flex items-center gap-2 text-sm font-bold text-red-700">
                 <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
-                Lá»—i Index AI
+                Indexing failed
               </div>
               <p className="mt-1 text-xs text-red-600">
-                áº¢nh nÃ y vá»«a Ä‘Æ°á»£c táº£i lÃªn nhÆ°ng gáº·p lá»—i trong quÃ¡ trÃ¬nh trÃ­ch xuáº¥t vector hoáº·c OCR. áº¢nh Ä‘Ã£ Ä‘Æ°á»£c lÆ°u an toÃ n trong thÆ° viá»‡n nhÆ°ng chÆ°a thá»ƒ tÃ¬m kiáº¿m báº±ng AI.
+                This image was uploaded successfully, but vector/OCR extraction failed. It is saved in the library but cannot be found by AI search yet.
               </p>
             </div>
           )}
@@ -251,10 +251,10 @@ export function SearchResultDetailModal({
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
               <div className="flex items-center gap-2 text-sm font-bold text-amber-700">
                 <Loader2 className="h-4 w-4 shrink-0 animate-spin text-amber-600" />
-                Äang tiáº¿n hÃ nh Indexing
+                Indexing in progress
               </div>
               <p className="mt-1 text-xs text-amber-600">
-                áº¢nh Ä‘Ã£ táº£i lÃªn thÃ nh cÃ´ng vÃ  Ä‘ang Ä‘Æ°á»£c xá»­ lÃ½ á»Ÿ ná»n. áº¢nh sáº½ tá»± Ä‘á»™ng sáºµn sÃ ng cho tÃ¬m kiáº¿m sau khi hoÃ n táº¥t.
+                This image was uploaded successfully and is being processed in the background. It will become searchable after indexing completes.
               </p>
             </div>
           )}
