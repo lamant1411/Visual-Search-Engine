@@ -35,6 +35,114 @@ const searchModeOptions = [
   icon: typeof Search;
 }>;
 
+type SearchModeOption = (typeof searchModeOptions)[number];
+
+function SearchModePicker({
+  value,
+  options,
+  onChange,
+  compact = false,
+}: {
+  value: HeaderSearchMode;
+  options: SearchModeOption[];
+  onChange: (mode: HeaderSearchMode) => void;
+  compact?: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const selectedMode = options.find((mode) => mode.value === value) ?? options[0];
+  const SelectedIcon = selectedMode.icon;
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!pickerRef.current?.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
+
+  return (
+    <div
+      ref={pickerRef}
+      className="relative flex h-full shrink-0 items-center rounded-l-full border-r border-border bg-white"
+    >
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        aria-label="Search mode"
+        className={[
+          "flex h-full cursor-pointer items-center gap-2 rounded-l-full text-sm font-bold text-ink-primary transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-inset",
+          compact ? "w-28 px-3" : "min-w-36 px-4",
+        ].join(" ")}
+        onClick={() => setIsOpen((open) => !open)}
+      >
+        <SelectedIcon className="h-4 w-4 text-accent-600" />
+        <span className="min-w-0 flex-1 text-left">{selectedMode.label}</span>
+        <ChevronDown
+          className={[
+            "h-4 w-4 text-slate-400 transition-transform",
+            isOpen ? "rotate-180" : "",
+          ].join(" ")}
+        />
+      </button>
+
+      <div
+        role="listbox"
+        className={[
+          "absolute left-1 top-full z-50 mt-2 w-40 overflow-hidden rounded-2xl border border-border bg-white p-1 shadow-xl shadow-slate-200/80 transition duration-150",
+          isOpen
+            ? "visible translate-y-0 opacity-100"
+            : "invisible -translate-y-1 opacity-0 pointer-events-none",
+        ].join(" ")}
+      >
+        {options.map((option) => {
+          const Icon = option.icon;
+          const isActive = option.value === value;
+
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="option"
+              aria-selected={isActive}
+              className={[
+                "flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-xl px-3 text-sm font-bold transition",
+                isActive
+                  ? "bg-accent-600 text-white shadow-sm"
+                  : "text-ink-secondary hover:bg-accent-50 hover:text-ink-primary",
+              ].join(" ")}
+              onClick={() => {
+                onChange(option.value);
+                setIsOpen(false);
+              }}
+            >
+              <Icon className={isActive ? "h-4 w-4 text-white" : "h-4 w-4 text-accent-600"} />
+              <span>{option.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function Header() {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading: isAuthLoading, logout, user } = useAuth();
@@ -53,10 +161,6 @@ export function Header() {
   const userDisplayName =
     user?.full_name?.trim() || user?.username || user?.email || "Account";
   const userInitial = userDisplayName.charAt(0).toUpperCase();
-  const selectedMode =
-    searchModeOptions.find((mode) => mode.value === searchMode) ??
-    searchModeOptions[0];
-  const SelectedModeIcon = selectedMode.icon;
   const canSubmitSearch =
     searchMode === "image" ? Boolean(selectedFile) : query.trim().length > 0;
 
@@ -206,23 +310,11 @@ export function Header() {
             className="hidden h-11 min-w-0 max-w-2xl flex-1 items-center rounded-full border border-border bg-surface-1 shadow-sm shadow-slate-200/70 transition duration-200 focus-within:border-accent-600 focus-within:bg-white focus-within:ring-4 focus-within:ring-accent-100 md:flex"
             onSubmit={handleSearchSubmit}
           >
-            <label className="relative flex h-full shrink-0 cursor-pointer items-center gap-2 rounded-l-full border-r border-border bg-white px-3 text-sm font-bold text-ink-primary">
-              <SelectedModeIcon className="h-4 w-4 text-accent-600" />
-              <select
-                className="cursor-pointer appearance-none bg-transparent pr-5 outline-none"
-                value={searchMode}
-                onChange={(event) =>
-                  handleModeChange(event.target.value as HeaderSearchMode)
-                }
-              >
-                {searchModeOptions.map((mode) => (
-                  <option key={mode.value} value={mode.value}>
-                    {mode.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-2 h-4 w-4 text-slate-400" />
-            </label>
+            <SearchModePicker
+              value={searchMode}
+              options={searchModeOptions}
+              onChange={handleModeChange}
+            />
 
             {searchMode === "image" ? (
               <label className="flex h-full min-w-0 flex-1 cursor-pointer items-center px-4 text-sm font-semibold text-ink-secondary">
@@ -452,24 +544,12 @@ export function Header() {
               className="mx-auto flex h-12 max-w-xl items-center rounded-full border border-border bg-surface-1 shadow-sm focus-within:border-accent-600 focus-within:bg-white focus-within:ring-4 focus-within:ring-accent-100"
               onSubmit={handleSearchSubmit}
             >
-              <label className="relative flex h-full shrink-0 cursor-pointer items-center gap-2 rounded-l-full border-r border-border bg-white px-3 text-sm font-bold text-ink-primary">
-                <SelectedModeIcon className="h-4 w-4 text-accent-600" />
-                <select
-                  aria-label="Search mode"
-                  className="w-20 cursor-pointer appearance-none bg-transparent pr-4 outline-none"
-                  value={searchMode}
-                  onChange={(event) =>
-                    handleModeChange(event.target.value as HeaderSearchMode)
-                  }
-                >
-                  {searchModeOptions.map((mode) => (
-                    <option key={mode.value} value={mode.value}>
-                      {mode.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-1.5 h-3.5 w-3.5 text-slate-400" />
-              </label>
+              <SearchModePicker
+                value={searchMode}
+                options={searchModeOptions}
+                onChange={handleModeChange}
+                compact
+              />
 
               {searchMode === "image" ? (
                 <label className="flex h-full min-w-0 flex-1 cursor-pointer items-center px-3 text-sm font-semibold text-ink-secondary">
