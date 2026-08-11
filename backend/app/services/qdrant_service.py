@@ -52,6 +52,87 @@ class QdrantSearchService:
 
         return hits
 
+    def search_by_ids(
+        self,
+        vector: list[float],
+        image_ids: list[int],
+    ) -> list[VectorSearchHit]:
+        """Query Qdrant với vector query nhưng chỉ trong tập image_id cho trước.
+
+        Dùng để lấy CLIP similarity score cho các ảnh cụ thể (ví dụ: OCR-only results
+        cần được re-rank bằng CLIP). Trả về list đã được sắp xếp theo score giảm dần.
+        """
+        if not image_ids:
+            return []
+
+        # Qdrant filter: chỉ tìm trong các point có image_id nằm trong danh sách
+        id_filter = models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="image_id",
+                    match=models.MatchAny(any=image_ids),
+                )
+            ]
+        )
+
+        try:
+            if hasattr(self.client, "query_points"):
+                try:
+                    result = self.client.query_points(
+                        collection_name=self.collection_name,
+                        query=vector,
+                        limit=len(image_ids),
+                        query_filter=id_filter,
+                        with_payload=True,
+                    )
+                except TypeError:
+                    result = self.client.query_points(
+                        collection_name=self.collection_name,
+                        query=vector,
+                        limit=len(image_ids),
+                        with_payload=True,
+                    )
+                raw_points = list(getattr(result, "points", result))
+            else:
+                try:
+                    raw_points = list(
+                        self.client.search(
+                            collection_name=self.collection_name,
+                            query_vector=vector,
+                            limit=len(image_ids),
+                            query_filter=id_filter,
+                            with_payload=True,
+                        )
+                    )
+                except TypeError:
+                    raw_points = list(
+                        self.client.search(
+                            collection_name=self.collection_name,
+                            query_vector=vector,
+                            limit=len(image_ids),
+                            with_payload=True,
+                        )
+                    )
+        except Exception:
+            return []
+
+        hits: list[VectorSearchHit] = []
+        for point in raw_points:
+            payload = dict(getattr(point, "payload", None) or {})
+            image_id = payload.get("image_id") or payload.get("image_id_int")
+            if image_id is None:
+                continue
+            hits.append(
+                VectorSearchHit(
+                    image_id=int(image_id),
+                    score=float(getattr(point, "score", 0.0) or 0.0),
+                    point_id=str(getattr(point, "id", "")),
+                    payload=payload,
+                )
+            )
+        return hits
+
+
     def delete_image_vector(self, *, point_id: str | None = None, image_id: int | None = None) -> bool:
         point_ids: list[str] = []
         if point_id:

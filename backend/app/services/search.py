@@ -65,6 +65,57 @@ def fuse_search_hits(
     return [e.image_id for e in sorted_entries]
 
 
+# ---------------------------------------------------------------------------
+# CLIP Re-ranking
+# ---------------------------------------------------------------------------
+
+_RERANK_TOP_N = 20  # Chỉ re-rank top-N để tiết kiệm tài nguyên
+
+
+def rerank_by_clip(
+    ordered_ids: list[int],
+    query_vector: list[float],
+    semantic_hits: list[VectorSearchHit],
+    *,
+    top_n: int = _RERANK_TOP_N,
+) -> list[int]:
+    """Re-rank top-N kết quả RRF bằng CLIP cosine similarity thực sự.
+
+    Logic:
+    1. Lấy CLIP score từ semantic_hits (đã có, miễn phí).
+    2. Với ID nằm trong top_n nhưng chưa có CLIP score (ảnh OCR-only),
+       dùng QdrantSearchService.search_by_ids() để lấy score.
+    3. Sort lại top_n theo CLIP score giảm dần.
+    4. Ghép với phần còn lại (từ top_n+1 trở đi) giữ nguyên thứ tự RRF.
+    """
+    if not ordered_ids or not query_vector:
+        return ordered_ids
+
+    top_ids = ordered_ids[:top_n]
+    rest_ids = ordered_ids[top_n:]
+
+    # Bước 1: thu thập CLIP score từ semantic hits đã có
+    clip_scores: dict[int, float] = {hit.image_id: hit.score for hit in semantic_hits}
+
+    # Bước 2: tìm các ID chưa có CLIP score
+    missing_ids = [iid for iid in top_ids if iid not in clip_scores]
+    if missing_ids:
+        from app.services.qdrant_service import QdrantSearchService  # noqa: PLC0415
+        try:
+            extra_hits = QdrantSearchService().search_by_ids(query_vector, missing_ids)
+            for hit in extra_hits:
+                clip_scores[hit.image_id] = hit.score
+        except Exception:
+            # Nếu Qdrant lỗi, fallback: giữ nguyên thứ tự RRF cho top_n
+            pass
+
+    # Bước 3: sort top_n theo CLIP score (IDs không có score đưa xuống cuối top_n)
+    sorted_top = sorted(top_ids, key=lambda iid: clip_scores.get(iid, -1.0), reverse=True)
+
+    return sorted_top + rest_ids
+
+
+
 def image_visible_to_user(owner_user_id: int | None):
     """SQL condition for the shared catalogue plus a user's private images."""
     if owner_user_id is None:
@@ -142,11 +193,14 @@ async def build_search_response_from_ids(
     page: int,
     limit: int,
     rrf_scores: dict[int, float] | None = None,
+    clip_scores: dict[int, float] | None = None,
     owner_user_id: int | None = None,
 ) -> SearchResponse:
     """Build SearchResponse từ danh sách image_id đã được sắp xếp (ví dụ bởi RRF).
 
-    Giữ đúng thứ tự của ordered_image_ids và map score từ rrf_scores nếu có.
+    Thứ tự được giữ đúng. Display score theo ưu tiên:
+    1. CLIP cosine score × 100 (nếu có trong clip_scores)
+    2. RRF score normalize tương đối (fallback cho OCR-only results)
     """
     if not ordered_image_ids:
         return SearchResponse(items=[], page=page, limit=limit, total=0)
@@ -180,7 +234,11 @@ async def build_search_response_from_ids(
             image.source_type.value if hasattr(image.source_type, "value") else str(image.source_type)
         )
 
-        if rrf_scores and iid in rrf_scores and max_rrf > 0:
+        # Display score (theo ưu tiên: CLIP × 100 > RRF normalize > rank fallback)
+        if clip_scores and iid in clip_scores:
+            # CLIP cosine [0, 1] × 100 = giá trị thực, không inflate
+            display_score = round(clip_scores[iid] * 100, 2)
+        elif rrf_scores and iid in rrf_scores and max_rrf > 0:
             display_score = round((rrf_scores[iid] / max_rrf) * 100, 2)
         else:
             display_score = max(100.0 - len(all_items), 1.0)
