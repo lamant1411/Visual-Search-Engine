@@ -1,4 +1,4 @@
-﻿"""Schema Pydantic cho upload và phản hồi dữ liệu ảnh."""
+"""Schema Pydantic cho upload và phản hồi dữ liệu ảnh."""
 
 from datetime import datetime
 
@@ -55,7 +55,7 @@ class ImageRestoreResponse(BaseModel):
 
 
 class ImageBulkDeleteRequest(BaseModel):
-    image_ids: list[int] = Field(min_length=1)
+    image_ids: list[int] = Field(min_length=1, max_length=500)
 
 
 class ImageBulkDeleteFailedItem(BaseModel):

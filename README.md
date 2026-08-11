@@ -1,33 +1,182 @@
-# Visual-Search-Engine
+# Visual Search Engine
 
-## CPU tuning for batch indexing
+Visual Search Engine is a full-stack image search system that lets users upload,
+index, search, organize, bookmark, and manage private image collections. The
+system combines a FastAPI backend, React frontend, PostgreSQL relational data,
+Qdrant vector search, and an AI service for CLIP embedding and OCR extraction.
 
-The AI service uses one shared CLIP model and one shared EasyOCR model. Its CPU
-budget is controlled with these environment variables:
+## Main features
 
-- `AI_CPU_THREADS`: total logical CPU threads available to AI inference. The
-  default is the smaller of 4 or the detected CPU count minus one.
-- `MAX_INDEX_WORKERS`: concurrent item workers. The default is 1 and the value
-  is capped by `AI_CPU_THREADS`.
-- `AI_INFERENCE_THREADS`: PyTorch intra-op threads used by each active model
-  call. By default the CPU budget is divided by the item-worker count.
-- `TORCH_NUM_INTEROP_THREADS`: PyTorch inter-op threads. Keep this at 1 for the
-  current per-image pipeline.
-- `CLIP_IMAGE_BATCH_SIZE`: concurrent image requests combined into one CLIP
-  forward pass. Keep this at 2 for the current CPU profile.
-- `OCR_MAX_CONCURRENT_INFERENCE`: maximum simultaneous EasyOCR calls. The
-  current 12-thread profile uses 2 and automatically falls back to serial mode
-  if EasyOCR reports a runtime/concurrency failure.
-- `OCR_MAX_INPUT_DIMENSION`: maximum image dimension passed to EasyOCR. Lower
-  values use less CPU at the cost of small-text accuracy.
+- User authentication with registration, login, refresh token, logout, and
+  role-based access control.
+- Image-to-image search using uploaded reference images.
+- Semantic text search and OCR text search.
+- User-owned image library with upload, soft delete, restore, permanent delete,
+  and deleted-image filtering.
+- Album management with create, update, soft delete, restore, permanent delete,
+  add images, remove images, and view album images.
+- Bookmark management for saved images.
+- Search history for image, semantic, and OCR searches.
+- Batch image indexing with progress tracking, failed-item retry, and item-level
+  status.
+- Admin dashboard APIs for system stats, users, images, and indexing workflows.
+- Swagger/OpenAPI documentation for backend API testing.
 
-The development Docker configuration is tuned for maximum batch throughput on
-a 6-core/12-thread CPU. Four queue workers keep the stages fed while each model
-call uses four threads. One CLIP call and up to two EasyOCR calls can overlap,
-filling 12 logical CPUs. CLIP dynamically combines two concurrent image
-requests, and EasyOCR recognizes up to four detected text regions per batch.
-For a smaller machine, use the latency-friendly profile `AI_CPU_THREADS=4`,
-`AI_INFERENCE_THREADS=4`, `MAX_INDEX_WORKERS=1`, and
-`OCR_RECOGNITION_BATCH_SIZE=1`. If the API must stay responsive during
-indexing, reserve two logical CPUs and set `AI_INFERENCE_THREADS` to half of
-`AI_CPU_THREADS`.
+## Architecture
+
+```text
+Frontend (React + Vite)
+        |
+        | REST API
+        v
+Backend (FastAPI)
+        |
+        | PostgreSQL: users, images, albums, bookmarks, history, indexing jobs
+        | Qdrant: CLIP vectors for similarity search
+        | Static files: uploaded image storage
+        v
+AI Service (FastAPI)
+        |
+        | CLIP embedding
+        | OCR extraction
+        | Item-level indexing workers
+```
+
+## Tech stack
+
+- **Frontend:** TypeScript, React, Vite
+- **Backend:** Python, FastAPI, SQLAlchemy, Alembic
+- **Database:** PostgreSQL
+- **Vector database:** Qdrant
+- **AI:** CLIP embedding, OCR, item-level indexing workers
+- **Auth:** JWT, refresh token, bcrypt-sha256, role-based access control
+- **Infrastructure:** Docker, Docker Compose
+- **Documentation:** Swagger/OpenAPI
+
+## Repository structure
+
+```text
+.
+|-- AI/                # AI service, CLIP/OCR modules, indexing pipeline
+|-- backend/           # FastAPI backend, database models, schemas, migrations
+|-- db/                # Database notes and project documentation
+|-- evaluation/        # Evaluation-related files
+|-- visual-search-fe/  # React frontend
+|-- docker-compose.yml # Local full-stack Docker setup
+`-- README.md
+```
+
+## Run with Docker Compose
+
+Create the required environment files first:
+
+- `backend/.env`
+- `visual-search-fe/.env`
+
+Then start the full stack from the project root:
+
+```bash
+docker compose up --build
+```
+
+For later runs, if Docker images do not need to be rebuilt:
+
+```bash
+docker compose up
+```
+
+Run database migrations manually if needed:
+
+```bash
+docker compose exec backend alembic upgrade head
+```
+
+Stop containers:
+
+```bash
+docker compose down
+```
+
+Do not use `docker compose down -v` unless you intentionally want to remove
+PostgreSQL and Qdrant volumes.
+
+## Service URLs
+
+- Frontend: `http://localhost:5173`
+- Backend API: `http://localhost:8000`
+- Swagger UI: `http://localhost:8000/docs`
+- Backend health: `http://localhost:8000/health`
+- API health: `http://localhost:8000/api/v1/health`
+- AI service: `http://localhost:8001`
+- Qdrant: `http://localhost:6333`
+- pgAdmin: `http://localhost:5050`
+
+## Backend API groups
+
+All versioned backend APIs are mounted under:
+
+```text
+/api/v1
+```
+
+Main API groups:
+
+- `GET /api/v1/health`
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/refresh`
+- `POST /api/v1/auth/logout`
+- `GET /api/v1/auth/me`
+- `POST /api/v1/search/image`
+- `GET /api/v1/search/text`
+- `GET /api/v1/search/ocr`
+- `GET /api/v1/history`
+- `GET /api/v1/images`
+- `GET /api/v1/images/deleted`
+- `POST /api/v1/images/bulk-delete`
+- `POST /api/v1/images/bulk-restore`
+- `POST /api/v1/images/bulk-permanent-delete`
+- `GET /api/v1/albums`
+- `POST /api/v1/albums`
+- `GET /api/v1/bookmarks`
+- `POST /api/v1/bookmarks`
+- `GET /api/v1/index/batches`
+- `POST /api/v1/index/batches`
+- `POST /api/v1/index/batches/{batch_id}/images`
+- `POST /api/v1/index/batches/{batch_id}/complete-upload`
+- `GET /api/v1/index/status/{batch_id}`
+- `GET /api/v1/admin/dashboard`
+- `GET /api/v1/admin/users`
+
+Use Swagger UI for the complete endpoint list, request schemas, response
+schemas, and error responses.
+
+## Indexing flow
+
+1. A user or admin creates an indexing batch.
+2. Images are uploaded to the backend and saved under the static image storage.
+3. The backend creates image and indexing item records in PostgreSQL.
+4. The backend sends uploaded items to the AI service.
+5. The AI service runs CLIP embedding and writes vectors to Qdrant.
+6. OCR extraction runs separately so OCR failure does not block semantic image
+   search.
+7. Item status is updated in PostgreSQL for progress tracking, retry, and error
+   handling.
+
+## Image ownership and deletion
+
+- User-uploaded images are owned by the uploading user.
+- Users can manage their own image library.
+- Soft-deleted images are hidden from normal library, search, bookmark, and
+  album workflows.
+- Deleted images can be restored or permanently deleted.
+- Dataset images without a user owner can be treated as public indexed images.
+
+## AI tuning
+
+CPU and worker tuning details for indexing are documented in:
+
+```text
+AI_INDEXING_TUNING.md
+```
+

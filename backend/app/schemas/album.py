@@ -20,7 +20,7 @@ class AlbumUpdate(BaseModel):
 
 
 class AlbumImageBulkRequest(BaseModel):
-    image_ids: list[int] = Field(min_length=1)
+    image_ids: list[int] = Field(min_length=1, max_length=500)
 
 
 class AlbumFailedImageItem(BaseModel):

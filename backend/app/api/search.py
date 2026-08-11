@@ -1,4 +1,4 @@
-"""Endpoint tìm kiếm bằng ảnh."""
+"""Endpoint tÃ¬m kiáº¿m báº±ng áº£nh."""
 
 import hashlib
 import uuid
@@ -69,7 +69,7 @@ async def search_by_image(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SearchResponse:
-    """Nhận ảnh từ frontend và trả kết quả tìm kiếm theo contract đã thống nhất."""
+    """Nháº­n áº£nh tá»« frontend vÃ  tráº£ káº¿t quáº£ tÃ¬m kiáº¿m theo contract Ä‘Ã£ thá»‘ng nháº¥t."""
     _validate_pagination(page, limit)
 
     if file is None and image_id is None and not image_url:
@@ -221,7 +221,7 @@ async def search_by_image(
     summary="Unified semantic and OCR text search",
     description=(
         "Search the shared catalogue and the current user's images using CLIP semantic retrieval "
-        "plus OCR text retrieval. Explicit requests such as 'ảnh có chữ Nhím' are routed to OCR; "
+        "plus OCR text retrieval. Explicit requests such as 'áº£nh cÃ³ chá»¯ NhÃ­m' are routed to OCR; "
         "other text queries are routed to CLIP semantic search. Requires Bearer access_token."
     ),
     responses={
@@ -239,20 +239,20 @@ async def search_by_text(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SearchResponse:
-    """Chạy text query qua cả semantic CLIP và OCR pipeline đồng thời, merge bằng RRF."""
+    """Cháº¡y text query qua cáº£ semantic CLIP vÃ  OCR pipeline Ä‘á»“ng thá»i, merge báº±ng RRF."""
     query = q.strip()
     if not query:
         raise api_error(
             status.HTTP_400_BAD_REQUEST,
             "VALIDATION_ERROR",
-            "Query không được để trống sau khi strip.",
+            "Query khÃ´ng Ä‘Æ°á»£c Ä‘á»ƒ trá»‘ng sau khi strip.",
             {"field": "q"},
         )
 
     # Detect user intent
     explicit_ocr = extract_explicit_ocr_query(query)
     if explicit_ocr:
-        # User explicitly asked for text: e.g., "ảnh có chữ X"
+        # User explicitly asked for text: e.g., "áº£nh cÃ³ chá»¯ X"
         semantic_w = 0.2
         ocr_w = 1.0
         ocr_query_str = explicit_ocr
@@ -264,7 +264,7 @@ async def search_by_text(
 
     max_results = max(page * limit, settings.image_search_max_results)
 
-    # --- Semantic search (CLIP → Qdrant) ---
+    # --- Semantic search (CLIP â†’ Qdrant) ---
     try:
         vector = await ai_embedding_client.embed_text(query)
         semantic_hits = QdrantSearchService().search(
@@ -360,17 +360,17 @@ async def search_by_ocr(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SearchResponse:
-    """Tìm ảnh có chứa text được nhận diện bằng OCR khớp với query.
+    """TÃ¬m áº£nh cÃ³ chá»©a text Ä‘Æ°á»£c nháº­n diá»‡n báº±ng OCR khá»›p vá»›i query.
 
-    Dùng PostgreSQL full-text search (plainto_tsquery) kết hợp ILIKE fallback.
-    Kết quả được sắp xếp theo độ liên quan (ts_rank) giảm dần.
+    DÃ¹ng PostgreSQL full-text search (plainto_tsquery) káº¿t há»£p ILIKE fallback.
+    Káº¿t quáº£ Ä‘Æ°á»£c sáº¯p xáº¿p theo Ä‘á»™ liÃªn quan (ts_rank) giáº£m dáº§n.
     """
     query = q.strip()
     if not query:
         raise api_error(
             status.HTTP_400_BAD_REQUEST,
             "VALIDATION_ERROR",
-            "Query không được để trống sau khi strip.",
+            "Query khÃ´ng Ä‘Æ°á»£c Ä‘á»ƒ trá»‘ng sau khi strip.",
             {"field": "q"},
         )
 

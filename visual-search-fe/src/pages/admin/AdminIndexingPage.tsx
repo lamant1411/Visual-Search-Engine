@@ -278,7 +278,7 @@ export default function AdminIndexingPage() {
             imageId: item.image_id,
             url: item.image_url,
             filename: item.filename,
-            error_message: item.error_message ?? 'Trích xuất CLIP embedding thất bại hoặc tệp tin bị hỏng.',
+            error_message: item.error_message ?? 'CLIP embedding extraction failed or the file is corrupted.',
           }))
         )
       } else {
@@ -286,7 +286,7 @@ export default function AdminIndexingPage() {
       }
 
     } catch (err) {
-      console.error('Lỗi khi kiểm tra tiến độ batch:', err)
+      console.error('Failed to poll batch progress:', err)
     }
   }
 
@@ -295,15 +295,15 @@ export default function AdminIndexingPage() {
     if (selectedFiles.length === 0) return
 
     const filesToUpload = [...selectedFiles]
-    setSelectedFiles([]) // Xóa danh sách lựa chọn lập tức
+    setSelectedFiles([]) // Clear the selected file list immediately
 
-    // Lưu thông tin file để hiển thị ảnh lỗi nếu cần
+    // Keep file info so failed images can be displayed if needed
     uploadedFilesRef.current = filesToUpload.map(f => ({
       name: f.name,
       url: URL.createObjectURL(f)
     }))
 
-    // Reset các trạng thái tiến độ
+    // Reset progress state
     setIsUploading(true)
     setIsBackgroundIndexing(true)
     setUploadProgress(0)
@@ -315,7 +315,7 @@ export default function AdminIndexingPage() {
     setMessage(null)
     setFailedImages([])
 
-    // Reset trạng thái index
+    // Reset indexing state
     setIndexProgress(0)
     setIndexedCount(0)
     setFailedIndexCount(0)
@@ -344,7 +344,7 @@ export default function AdminIndexingPage() {
     let uploadCompleted = false
 
     try {
-      // Upload theo chunk; mỗi chunk được AI queue ngay, không phải chờ toàn bộ ảnh tải xong.
+      // Upload by chunk; each chunk is queued by AI immediately instead of waiting for the full upload.
       const batch = await adminApi.createIndexingBatch()
       const createdBatchId = batch.batch_id
       batchId = createdBatchId
@@ -392,7 +392,7 @@ export default function AdminIndexingPage() {
               imageId: item.image_id,
               url: item.image_url,
               filename: item.filename,
-              error_message: item.error_message ?? 'Tr?ch xu?t CLIP embedding th?t b?i ho?c t?p tin b? h?ng.',
+              error_message: item.error_message ?? 'CLIP embedding extraction failed or the file is corrupted.',
             })))
           } else {
             setFailedImages([])
@@ -410,7 +410,7 @@ export default function AdminIndexingPage() {
             activeBatchIdRef.current = null
             setStalledSeconds(0)
             if (statusRes.status === 'failed') {
-              const errorMessage = statusRes.error_message || 'Đợt tối ưu hóa tìm kiếm bị thất bại trên server.'
+              const errorMessage = statusRes.error_message || 'Search optimization failed on the server.'
               setIndexError(errorMessage)
             }
 
@@ -425,29 +425,29 @@ export default function AdminIndexingPage() {
 
             if (statusRes.status === 'failed') {
               setMessage({
-                text: statusRes.error_message || 'Đợt tối ưu hóa tìm kiếm bị thất bại trên server.',
+                text: statusRes.error_message || 'Search optimization failed on the server.',
                 type: 'error'
               })
             } else if (statusRes.status === 'cancelled') {
-              setMessage({ text: 'Đợt xử lý đã được dừng.', type: 'info' })
+              setMessage({ text: 'Indexing batch was stopped.', type: 'info' })
             } else if (statusRes.failed_images > 0) {
               setMessage({
-                text: `Tải lên hoàn tất! Phát hiện ${statusRes.failed_images} ảnh gặp sự cố tối ưu tìm kiếm (lỗi trích xuất vector).`,
+                text: `Upload completed. ${statusRes.failed_images} image(s) had search optimization issues.`,
                 type: 'info'
               })
             } else {
               setMessage({
-                text: `Tuyệt vời! Đã tải lên và hoàn thành cấu hình tìm kiếm thành công cho toàn bộ ${statusRes.total_images} ảnh.`,
+                text: `Upload and search optimization completed for all ${statusRes.total_images} image(s).`,
                 type: 'success'
               })
             }
           }
         } catch (pollErr) {
-          console.error('Lỗi khi kiểm tra tiến độ indexing:', pollErr)
+          console.error('Failed to poll indexing progress:', pollErr)
         }
       }
 
-      // Theo dõi ngay từ chunk đầu tiên để thấy upload và AI xử lý song song.
+      // Start polling from the first chunk so upload and AI processing can be tracked together.
       if (pollingRef.current) clearInterval(pollingRef.current)
       pollingRef.current = window.setInterval(pollStatus, 2000)
 
@@ -476,23 +476,23 @@ export default function AdminIndexingPage() {
         try {
           await adminApi.completeIndexingBatch(batchId)
         } catch (completeErr) {
-          console.error('Không thể đóng batch upload sau lỗi:', completeErr)
+          console.error('Failed to complete batch upload after error:', completeErr)
         }
       }
-      console.error('Lỗi khi tải hoặc tối ưu ảnh:', err)
+      console.error('Failed to upload or optimize images:', err)
       setIsUploading(false)
       setIsBackgroundIndexing(false)
       setActiveBatchStatus('failed')
       const errorObj = err as { code?: string; message?: string }
       const isTimeout = errorObj.code === 'ECONNABORTED' || errorObj.message?.includes('timeout')
       const errorMessage = isTimeout
-        ? 'Tải ảnh lên quá thời gian. Server có thể vẫn đang xử lý các ảnh đã nhận; hãy kiểm tra lịch sử batch.'
-        : (errorObj.message || 'Lỗi hệ thống xảy ra khi tải hoặc tối ưu ảnh.')
+        ? 'Image upload timed out. The server may still be processing received images; check batch history.'
+        : (errorObj.message || 'System error occurred while uploading or optimizing images.')
       if (uploadCompleted) {
         setIndexError(errorMessage)
       } else {
         setUploadError(errorMessage)
-        setIndexError('Không thể hoàn tất batch do quá trình tải ảnh bị gián đoạn.')
+        setIndexError('Could not complete the batch because image upload was interrupted.')
       }
       setMessage({
         text: errorMessage,
@@ -511,7 +511,7 @@ export default function AdminIndexingPage() {
       setFailedImages(prev => prev.filter(img => img.url !== url))
       setFailedIndexCount(prev => Math.max(0, prev - 1))
     } catch (err: unknown) {
-      console.error('Lỗi khi lưu ảnh lỗi:', err)
+      console.error('Failed to keep failed image:', err)
     }
   }
 
@@ -519,7 +519,7 @@ export default function AdminIndexingPage() {
     const failedImage = failedImages.find((img) => img.url === url)
     if (!failedImage?.imageId) {
       setMessage({
-        text: 'Không xác định được ảnh cần xóa khỏi server.',
+        text: 'Could not identify the image to delete from the server.',
         type: 'error'
       })
       return
@@ -532,10 +532,10 @@ export default function AdminIndexingPage() {
       setTotalIndexCount(prev => Math.max(0, prev - 1))
       await fetchStatus(false)
     } catch (err: unknown) {
-      console.error('Lỗi khi xóa ảnh lỗi:', err)
+      console.error('Failed to delete failed image:', err)
       const errorObj = err as { message?: string }
       setMessage({
-        text: errorObj.message || 'Không thể xóa ảnh khỏi server.',
+        text: errorObj.message || 'Could not delete image from server.',
         type: 'error'
       })
     }
@@ -545,7 +545,7 @@ export default function AdminIndexingPage() {
     const targetBatchId = selectedFailedModalBatchId || activeBatchId
     if (!targetBatchId) {
       setMessage({
-        text: 'Không xác định được mã batch để thử lại.',
+        text: 'Could not identify the batch to retry.',
         type: 'error'
       })
       return
@@ -562,16 +562,16 @@ export default function AdminIndexingPage() {
       setFailedImages(prev => prev.filter(item => item.id !== img.id))
       setFailedIndexCount(prev => Math.max(0, prev - retryRes.retried_item_ids.length))
       setMessage({
-        text: `Đã đưa ${retryRes.queued_items} ảnh vào hàng đợi thử lại!`,
+        text: `Queued ${retryRes.queued_items} image(s) for retry.`,
         type: 'success'
       })
       fetchStatus(false)
       await pollBatchStatus(targetBatchId)
     } catch (err: unknown) {
-      console.error('Lỗi khi thử lại ảnh:', err)
+      console.error('Failed to retry image:', err)
       const errorObj = err as { message?: string }
       setMessage({
-        text: errorObj.message || 'Không thể thử lại trích xuất ảnh này.',
+        text: errorObj.message || 'Could not retry image extraction.',
         type: 'error'
       })
     } finally {
@@ -590,7 +590,7 @@ export default function AdminIndexingPage() {
   }
 
   const handleDeleteAllFailed = async () => {
-    if (!confirm('Bạn có chắc chắn muốn xóa toàn bộ các ảnh bị lỗi này khỏi hệ thống không?')) return
+    if (!confirm('Are you sure you want to delete all failed images from the system?')) return
     setIsActionInProgress(true)
     const list = [...failedImages]
     for (const img of list) {
@@ -603,7 +603,7 @@ export default function AdminIndexingPage() {
     const targetBatchId = selectedFailedModalBatchId || activeBatchId
     if (!targetBatchId) {
       setMessage({
-        text: 'Không xác định được mã batch để thử lại.',
+        text: 'Could not identify the batch to retry.',
         type: 'error'
       })
       return
@@ -623,16 +623,16 @@ export default function AdminIndexingPage() {
       setFailedIndexCount(0)
       setShowFailedModal(false)
       setMessage({
-        text: `Đã đưa ${retryRes.queued_items} ảnh bị lỗi vào hàng đợi thử lại!`,
+        text: `Queued ${retryRes.queued_items} failed image(s) for retry.`,
         type: 'success'
       })
       fetchStatus(false)
       await pollBatchStatus(targetBatchId)
     } catch (err: unknown) {
-      console.error('Lỗi khi thử lại tất cả các ảnh bị lỗi:', err)
+      console.error('Failed to retry all failed images:', err)
       const errorObj = err as { message?: string }
       setMessage({
-        text: errorObj.message || 'Không thể thử lại toàn bộ các ảnh bị lỗi.',
+        text: errorObj.message || 'Could not retry all failed images.',
         type: 'error'
       })
     } finally {
@@ -657,7 +657,7 @@ export default function AdminIndexingPage() {
             imageId: item.image_id,
             url: item.image_url,
             filename: item.filename,
-            error_message: item.error_message ?? 'Trích xuất CLIP embedding thất bại hoặc tệp tin bị hỏng.',
+            error_message: item.error_message ?? 'CLIP embedding extraction failed or the file is corrupted.',
           }))
         )
       } else {
@@ -667,21 +667,21 @@ export default function AdminIndexingPage() {
             id: `fail_${batchId}_${i}`,
             url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100',
             filename: `anh_loi_${i + 1}.jpg`,
-            error_message: 'Trích xuất CLIP embedding thất bại hoặc tệp tin bị hỏng.',
+            error_message: 'CLIP embedding extraction failed or the file is corrupted.',
           })
         }
         setFailedImages(list)
       }
       setShowFailedModal(true)
     } catch (err) {
-      console.error('Lỗi khi lấy danh sách ảnh lỗi của batch:', err)
+      console.error('Failed to fetch failed images for batch:', err)
       const list: typeof failedImages = []
       for (let i = 0; i < failedCount; i++) {
         list.push({
           id: `fail_${batchId}_${i}`,
           url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100',
           filename: `anh_loi_${i + 1}.jpg`,
-          error_message: 'Trích xuất CLIP embedding thất bại hoặc tệp tin bị hỏng.',
+          error_message: 'CLIP embedding extraction failed or the file is corrupted.',
         })
       }
       setFailedImages(list)
@@ -692,7 +692,7 @@ export default function AdminIndexingPage() {
   }
 
   const handleCancelBatch = async (batchId: string) => {
-    if (!confirm('Dừng đợt xử lý này? Các ảnh còn đang chờ sẽ không được index.')) return
+    if (!confirm('Stop this indexing batch? Queued images will not be indexed.')) return
 
     setIsActionInProgress(true)
     try {
@@ -704,11 +704,11 @@ export default function AdminIndexingPage() {
         setIsBackgroundIndexing(false)
         setStalledSeconds(0)
       }
-      setMessage({ text: `Đã dừng batch ${batchId}.`, type: 'info' })
+      setMessage({ text: `Stopped batch ${batchId}.`, type: 'info' })
       await fetchStatus(false)
     } catch (err: unknown) {
       const errorObj = err as { message?: string }
-      setMessage({ text: errorObj.message || 'Không thể dừng batch.', type: 'error' })
+      setMessage({ text: errorObj.message || 'Could not stop batch.', type: 'error' })
     } finally {
       setIsActionInProgress(false)
     }
@@ -785,7 +785,7 @@ export default function AdminIndexingPage() {
         }
       }
     } catch (err) {
-      console.error('Lỗi khi fetch indexing batches:', err)
+      console.error('Failed to fetch indexing batches:', err)
     } finally {
       if (showLoadingIndicator) setIsLoading(false)
     }
@@ -868,18 +868,18 @@ export default function AdminIndexingPage() {
     : didIndexingComplete ? 0 : null
 
   const currentStage = (() => {
-    if (wasIndexingCancelled) return 'Đợt xử lý đã được dừng'
-    if (didIndexingFail) return 'Đợt xử lý kết thúc do lỗi'
-    if (didIndexingComplete) return 'Đã hoàn tất CLIP và OCR'
-    if (isSemanticComplete && !isOcrComplete) return 'Tìm kiếm ngữ nghĩa đã sẵn sàng; OCR đang chạy nền'
-    if (isUploading && runningIndexCount > 0) return 'Đang tải ảnh và xử lý AI song song'
-    if (isUploading) return 'Đang tải ảnh lên server'
+    if (wasIndexingCancelled) return 'Batch was stopped'
+    if (didIndexingFail) return 'Batch finished with errors'
+    if (didIndexingComplete) return 'CLIP and OCR completed'
+    if (isSemanticComplete && !isOcrComplete) return 'Semantic search is ready; OCR is still running in the background'
+    if (isUploading && runningIndexCount > 0) return 'Uploading images and processing AI in parallel'
+    if (isUploading) return 'Uploading images to server'
     if (isBackgroundIndexing && runningIndexCount > 0) {
-      return 'CLIP và OCR đang chạy song song theo từng ảnh'
+      return 'CLIP and OCR are running in parallel per image'
     }
-    if (isBackgroundIndexing && queuedIndexCount > 0) return 'Đang chờ AI worker nhận ảnh'
-    if (isBackgroundIndexing) return 'Đang đồng bộ trạng thái xử lý'
-    return 'Sẵn sàng'
+    if (isBackgroundIndexing && queuedIndexCount > 0) return 'Waiting for AI workers to pick up images'
+    if (isBackgroundIndexing) return 'Syncing processing status'
+    return 'Ready'
   })()
 
   return (
@@ -892,16 +892,16 @@ export default function AdminIndexingPage() {
           </div>
           <div className="min-w-0">
             <h1 className="font-display text-xl font-bold tracking-tight text-ink-primary sm:text-2xl">
-              Tải ảnh lên
+              Upload images
             </h1>
             <p className="text-sm text-ink-secondary mt-1">
-              Duyệt hoặc kéo thả hình ảnh để tải trực tiếp lên hệ thống và tự động tối ưu hóa tìm kiếm.
+              Browse or drag images to upload them directly to the system and optimize search automatically.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Thông báo kết quả */}
+      {/* Result message */}
       {message && (
         <div className={`flex items-start gap-2.5 rounded-xl border p-3 text-sm sm:p-4 ${message.type === 'success'
           ? 'border-emerald-100 bg-emerald-50/50 text-emerald-800'
@@ -924,7 +924,7 @@ export default function AdminIndexingPage() {
                 onClick={() => setShowFailedModal(true)}
                 className="ml-2 inline-flex items-center gap-1 text-red-600 hover:text-red-800 font-bold underline cursor-pointer"
               >
-                [Xem chi tiết ảnh lỗi ({failedImages.length})]
+                [View failed image details ({failedImages.length})]
               </button>
             )}
           </div>
@@ -943,12 +943,12 @@ export default function AdminIndexingPage() {
         <div className="space-y-4">
           <div>
             <h2 className="text-sm font-bold text-ink-primary uppercase tracking-wide">
-              {showUploader ? 'Chọn tệp ảnh nguồn' : 'Tiến trình tải và xử lý ảnh'}
+              {showUploader ? 'Select source images' : 'Upload and indexing progress'}
             </h2>
             <p className="text-xs text-ink-muted mt-1 leading-relaxed">
               {showUploader
-                ? 'Kéo thả hoặc duyệt ảnh từ thiết bị của bạn. Hệ thống sẽ tự động cấu hình vector tìm kiếm trong nền.'
-                : 'Theo dõi tiến độ upload, hàng đợi AI và kết quả indexing của batch hiện tại.'}
+                ? 'Drag and drop or browse images from your device. The system will create search vectors in the background.'
+                : 'Track upload progress, AI queue, and indexing results for the current batch.'}
             </p>
           </div>
 
@@ -974,8 +974,8 @@ export default function AdminIndexingPage() {
                   className="hidden"
                 />
                 <Upload className="h-10 w-10 text-ink-muted mb-3 animate-bounce" style={{ animationDuration: '3s' }} />
-                <p className="text-sm font-bold text-ink-primary">Kéo & thả ảnh vào đây</p>
-                <p className="text-xs text-ink-muted mt-1">hoặc nhấn để duyệt tệp tin từ máy</p>
+                <p className="text-sm font-bold text-ink-primary">Drag and drop images here</p>
+                <p className="text-xs text-ink-muted mt-1">or click to browse files from your device</p>
               </div>
 
               {/* Files preview list */}
@@ -983,14 +983,14 @@ export default function AdminIndexingPage() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-bold text-ink-secondary">
-                      Đã chọn {selectedFiles.length} ảnh
+                      Selected {selectedFiles.length} image(s)
                     </span>
                     <button
                       type="button"
                       onClick={clearAllFiles}
                       className="text-red-500 hover:text-red-700 font-semibold cursor-pointer"
                     >
-                      Xóa tất cả
+                      Clear all
                     </button>
                   </div>
 
@@ -1031,17 +1031,17 @@ export default function AdminIndexingPage() {
                     {uploadError ? (
                       <>
                         <XCircle className="h-4 w-4 text-red-500 shrink-0" />
-                        <span className="text-red-700">Tải ảnh thất bại: {uploadError}</span>
+                        <span className="text-red-700">Image upload failed: {uploadError}</span>
                       </>
                     ) : isUploading ? (
                       <>
                         <Loader2 className="h-3.5 w-3.5 animate-spin text-accent-600" />
-                        Đang tải ảnh lên server: {uploadedCount} / {totalUploadCount} ảnh
+                        Uploading images to server: {uploadedCount} / {totalUploadCount} images
                       </>
                     ) : (
                       <>
                         <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                        <span className="text-emerald-700">Tải lên server hoàn tất!</span>
+                        <span className="text-emerald-700">Server upload completed.</span>
                       </>
                     )}
                   </span>
@@ -1062,27 +1062,27 @@ export default function AdminIndexingPage() {
                     {indexError ? (
                       <>
                         <XCircle className="h-4 w-4 text-red-500 shrink-0" />
-                        <span className="text-red-700">Tối ưu hóa thất bại: {indexError}</span>
+                        <span className="text-red-700">Optimization failed: {indexError}</span>
                       </>
                     ) : isBackgroundIndexing && !isSemanticComplete ? (
                       <>
                         <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600" />
-                        Đang tạo vector CLIP: {indexedCount + failedIndexCount} / {totalIndexCount} ảnh
+                        Creating CLIP vectors: {indexedCount + failedIndexCount} / {totalIndexCount} images
                       </>
                     ) : isSemanticComplete ? (
                       <>
                         <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                        <span className="text-emerald-700">Tìm kiếm ngữ nghĩa đã sẵn sàng!</span>
+                        <span className="text-emerald-700">Semantic search is ready.</span>
                       </>
                     ) : wasIndexingCancelled ? (
                       <>
                         <XCircle className="h-4 w-4 text-amber-600" />
-                        <span className="text-amber-700">Đã dừng xử lý batch</span>
+                        <span className="text-amber-700">Batch processing was stopped</span>
                       </>
                     ) : (
                       <>
                         <XCircle className="h-4 w-4 text-red-600" />
-                        <span className="text-red-700">Xử lý kết thúc do lỗi</span>
+                        <span className="text-red-700">Processing finished with errors</span>
                       </>
                     )}
                   </span>
@@ -1106,10 +1106,10 @@ export default function AdminIndexingPage() {
 
                 <div className="flex flex-col gap-2 pt-1 text-xs sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex flex-wrap items-center gap-2 text-ink-muted">
-                    <span className="text-emerald-600 font-medium">Thành công: {indexedCount}</span>
+                    <span className="text-emerald-600 font-medium">Success: {indexedCount}</span>
                     <span>|</span>
                     <span className={failedIndexCount > 0 ? "text-red-500 font-bold" : "text-ink-muted"}>
-                      Thất bại: {failedIndexCount}
+                      Failed: {failedIndexCount}
                     </span>
                   </div>
 
@@ -1120,7 +1120,7 @@ export default function AdminIndexingPage() {
                       className="flex items-center gap-1 text-red-500 hover:text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded font-semibold cursor-pointer animate-pulse"
                     >
                       <AlertTriangle className="h-3 w-3" />
-                      Xem chi tiết lỗi ({failedIndexCount})
+                      View error details ({failedIndexCount})
                     </button>
                   )}
                 </div>
@@ -1139,8 +1139,8 @@ export default function AdminIndexingPage() {
                     )}
                     <span>
                       {!isOcrComplete && !wasIndexingCancelled
-                        ? `OCR đang chạy song song: ${ocrFinishedCount} / ${ocrTargetCount} ảnh`
-                        : `OCR đã kết thúc: ${ocrProcessedCount} thành công, ${ocrFailedCount} thất bại`}
+                        ? `OCR is running in parallel: ${ocrFinishedCount} / ${ocrTargetCount} images`
+                        : `OCR completed: ${ocrProcessedCount} successful, ${ocrFailedCount} failed`}
                     </span>
                   </span>
                   <span className="text-ink-muted">{ocrProgress}%</span>
@@ -1157,9 +1157,9 @@ export default function AdminIndexingPage() {
                   />
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-3xs text-ink-muted">
-                  <span>Đang chờ: {ocrQueuedCount} ảnh</span>
-                  <span>Đang xử lý: {ocrRunningCount} ảnh</span>
-                  <span>Tốc độ: {ocrFinishedCount > 0 ? `${ocrRatePerMinute.toFixed(1)} ảnh/phút` : '--'}</span>
+                  <span>Queued: {ocrQueuedCount} images</span>
+                  <span>Processing: {ocrRunningCount} images</span>
+                  <span>Speed: {ocrFinishedCount > 0 ? `${ocrRatePerMinute.toFixed(1)} images/min` : '--'}</span>
                   <span>ETA: {estimatedOcrRemainingSeconds === null ? '--' : formatElapsedTime(estimatedOcrRemainingSeconds)}</span>
                 </div>
               </div>
@@ -1190,7 +1190,7 @@ export default function AdminIndexingPage() {
                         className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-3xs font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
                       >
                         <XCircle className="h-3 w-3" />
-                        Dừng
+                        Stop
                       </button>
                     )}
                   </div>
@@ -1198,7 +1198,7 @@ export default function AdminIndexingPage() {
 
                 <dl className="grid grid-cols-2 overflow-hidden rounded-lg border border-border/60 sm:grid-cols-4">
                   {[
-                    ['Tổng thời gian', elapsedSeconds],
+                    ['Total time', elapsedSeconds],
                     ['Upload', uploadElapsedSeconds],
                     ['CLIP / Qdrant', semanticElapsedSeconds],
                     ['OCR', ocrElapsedSeconds],
@@ -1215,31 +1215,31 @@ export default function AdminIndexingPage() {
 
                 <dl className="grid grid-cols-2 border-y border-border/60 sm:grid-cols-5">
                   <div className="py-3 pr-3 sm:border-r sm:border-border/60">
-                    <dt className="text-3xs font-semibold uppercase text-ink-muted">CLIP đã chạy</dt>
+                    <dt className="text-3xs font-semibold uppercase text-ink-muted">CLIP processed</dt>
                     <dd className="mt-1 flex items-center gap-1.5 text-sm font-bold text-ink-primary">
                       <Clock className="h-3.5 w-3.5 text-ink-muted" />
                       {formatElapsedTime(semanticElapsedSeconds)}
                     </dd>
                   </div>
                   <div className="border-l border-border/60 py-3 pl-3 sm:border-l-0 sm:border-r sm:px-3">
-                    <dt className="text-3xs font-semibold uppercase text-ink-muted">Tốc độ</dt>
+                    <dt className="text-3xs font-semibold uppercase text-ink-muted">Speed</dt>
                     <dd className="mt-1 text-sm font-bold text-ink-primary">
-                      {finishedIndexCount > 0 ? `${indexRatePerMinute.toFixed(1)} ảnh/phút` : '--'}
+                      {finishedIndexCount > 0 ? `${indexRatePerMinute.toFixed(1)} images/min` : '--'}
                     </dd>
                   </div>
                   <div className="border-t border-border/60 py-3 pr-3 sm:border-r sm:border-t-0 sm:px-3">
-                    <dt className="text-3xs font-semibold uppercase text-ink-muted">Còn lại ước tính</dt>
+                    <dt className="text-3xs font-semibold uppercase text-ink-muted">Estimated remaining</dt>
                     <dd className="mt-1 text-sm font-bold text-ink-primary">
                       {displayedRemainingSeconds === null ? '--' : formatElapsedTime(displayedRemainingSeconds)}
                     </dd>
                   </div>
                   <div className="border-l border-t border-border/60 py-3 pl-3 sm:border-l-0 sm:border-r sm:border-t-0 sm:px-3">
-                    <dt className="text-3xs font-semibold uppercase text-ink-muted">Đang chờ</dt>
-                    <dd className="mt-1 text-sm font-bold text-ink-primary">{queuedIndexCount} ảnh</dd>
+                    <dt className="text-3xs font-semibold uppercase text-ink-muted">Queued</dt>
+                    <dd className="mt-1 text-sm font-bold text-ink-primary">{queuedIndexCount} images</dd>
                   </div>
                   <div className="col-span-2 border-t border-border/60 py-3 sm:col-span-1 sm:border-t-0 sm:pl-3">
-                    <dt className="text-3xs font-semibold uppercase text-ink-muted">Đang xử lý</dt>
-                    <dd className="mt-1 text-sm font-bold text-ink-primary">{runningIndexCount} ảnh</dd>
+                    <dt className="text-3xs font-semibold uppercase text-ink-muted">Processing</dt>
+                    <dd className="mt-1 text-sm font-bold text-ink-primary">{runningIndexCount} images</dd>
                   </div>
                 </dl>
 
@@ -1247,9 +1247,9 @@ export default function AdminIndexingPage() {
                   <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
                     <div>
-                      <p className="font-semibold">Không có ảnh hoàn thành trong {formatElapsedTime(stalledSeconds)}.</p>
+                      <p className="font-semibold">No images completed in {formatElapsedTime(stalledSeconds)}.</p>
                       <p className="mt-0.5 text-3xs leading-relaxed text-amber-800">
-                        AI có thể đang đọc OCR trên ảnh phức tạp hoặc worker bị nghẽn. Kiểm tra log AI nếu thời gian tiếp tục tăng.
+                        AI may be running OCR on complex images or workers may be blocked. Check AI logs if the time keeps increasing.
                       </p>
                     </div>
                   </div>
@@ -1257,7 +1257,7 @@ export default function AdminIndexingPage() {
 
                 <p className="flex items-start gap-1.5 text-3xs leading-relaxed text-ink-muted">
                   <Info className="mt-0.5 h-3 w-3 shrink-0" />
-                  Tốc độ và thời gian còn lại được ước tính từ toàn bộ thời gian đã chạy; số liệu sẽ ổn định hơn sau vài ảnh đầu tiên.
+                  Speed and remaining time are estimated from total elapsed time. Values become more stable after the first few images.
                 </p>
               </div>
             </div>
@@ -1272,7 +1272,7 @@ export default function AdminIndexingPage() {
               className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold text-ink-primary border border-border bg-surface-1 hover:bg-surface-0 transition-colors shadow-xs cursor-pointer"
             >
               <Upload className="h-4 w-4" />
-              <span>Tải đợt ảnh mới</span>
+              <span>Upload another batch</span>
             </button>
           ) : (
             <button
@@ -1284,17 +1284,17 @@ export default function AdminIndexingPage() {
               {isUploading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Đang tải lên server...</span>
+                  <span>Uploading to server...</span>
                 </>
               ) : isBackgroundIndexing ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Đang xử lý tối ưu...</span>
+                  <span>Optimizing...</span>
                 </>
               ) : (
                 <>
                   <Upload className="h-4 w-4" />
-                  <span>Tải ảnh lên Server</span>
+                  <span>Upload images to server</span>
                 </>
               )}
             </button>
@@ -1302,17 +1302,17 @@ export default function AdminIndexingPage() {
         </div>
       </div>
 
-      {/* LỊCH SỬ CÁC ĐỢT TẢI ẢNH */}
+      {/* Upload batch history */}
       <div className="space-y-4 rounded-xl border border-border bg-surface-2 p-4 shadow-2xs sm:p-5">
         <div className="flex flex-col gap-2 border-b border-border pb-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-ink-muted" />
             <h2 className="text-sm font-bold text-ink-primary uppercase tracking-wide">
-              Lịch sử các đợt tải ảnh lên hệ thống
+              Upload batch history
             </h2>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-3xs text-ink-muted">Cập nhật tự động mỗi 5 giây</span>
+            <span className="text-3xs text-ink-muted">Auto refreshes every 5 seconds</span>
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
           </div>
         </div>
@@ -1321,13 +1321,13 @@ export default function AdminIndexingPage() {
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-surface-1/40 border-b border-border text-ink-muted uppercase font-bold tracking-wider">
-                <th className="px-6 py-3 font-semibold">Mã Đợt</th>
-                <th className="px-6 py-3 font-semibold">Trạng thái xử lý</th>
-                <th className="px-6 py-3 font-semibold">Tổng số ảnh</th>
-                <th className="px-6 py-3 font-semibold">Đã tối ưu tìm kiếm</th>
-                <th className="px-6 py-3 font-semibold">Bị lỗi</th>
-                <th className="px-6 py-3 font-semibold">Thời gian tải</th>
-                <th className="px-6 py-3 font-semibold">Thông tin thêm</th>
+                <th className="px-6 py-3 font-semibold">Batch ID</th>
+                <th className="px-6 py-3 font-semibold">Processing status</th>
+                <th className="px-6 py-3 font-semibold">Total images</th>
+                <th className="px-6 py-3 font-semibold">Search optimized</th>
+                <th className="px-6 py-3 font-semibold">Failed</th>
+                <th className="px-6 py-3 font-semibold">Upload time</th>
+                <th className="px-6 py-3 font-semibold">Details</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60 text-ink-secondary">
@@ -1346,7 +1346,7 @@ export default function AdminIndexingPage() {
               ) : batches.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-6 py-8 text-center text-ink-muted italic">
-                    Chưa có lịch sử đợt tải ảnh nào.
+                    No upload batch history yet.
                   </td>
                 </tr>
               ) : (
@@ -1362,10 +1362,10 @@ export default function AdminIndexingPage() {
                         {(b.status === 'running' || b.status === 'queued') && (
                           <Loader2 className="h-3 w-3 animate-spin" />
                         )}
-                        {b.status === 'queued' ? 'ĐANG CHỜ' :
-                          b.status === 'running' ? 'ĐANG CHẠY' :
-                            b.status === 'completed' ? 'HOÀN THÀNH' :
-                              b.status === 'cancelled' ? 'ĐÃ HỦY' : 'THẤT BẠI'}
+                        {b.status === 'queued' ? 'QUEUED' :
+                          b.status === 'running' ? 'RUNNING' :
+                            b.status === 'completed' ? 'COMPLETED' :
+                              b.status === 'cancelled' ? 'CANCELLED' : 'FAILED'}
                       </span>
                     </td>
                     <td className="px-6 py-4 font-bold text-ink-primary">{b.total_images}</td>
@@ -1385,7 +1385,7 @@ export default function AdminIndexingPage() {
                           type="button"
                           onClick={() => handleOpenFailedModalForBatch(b.batch_id, b.failed_images)}
                           className="text-red-600 font-bold hover:text-red-800 hover:underline cursor-pointer transition-colors inline-flex items-center gap-1"
-                          title="Nhấn để xem chi tiết ảnh bị lỗi"
+                          title="Click to view failed image details"
                         >
                           <span>{b.failed_images}</span>
                         </button>
@@ -1405,7 +1405,7 @@ export default function AdminIndexingPage() {
                           className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
                         >
                           <XCircle className="h-3.5 w-3.5" />
-                          Dừng
+                          Stop
                         </button>
                       ) : (
                         <span className="block truncate">{b.error_message || '-'}</span>
@@ -1428,7 +1428,7 @@ export default function AdminIndexingPage() {
             ))
           ) : batches.length === 0 ? (
             <p className="py-8 text-center text-sm italic text-ink-muted">
-              Chưa có lịch sử đợt tải ảnh nào.
+              No upload batch history yet.
             </p>
           ) : (
             displayedBatches.map((batch) => (
@@ -1450,24 +1450,24 @@ export default function AdminIndexingPage() {
                     {(batch.status === 'running' || batch.status === 'queued') && (
                       <Loader2 className="h-3 w-3 animate-spin" />
                     )}
-                    {batch.status === 'queued' ? 'Đang chờ' :
-                      batch.status === 'running' ? 'Đang chạy' :
-                        batch.status === 'completed' ? 'Hoàn thành' :
-                          batch.status === 'cancelled' ? 'Đã hủy' : 'Thất bại'}
+                    {batch.status === 'queued' ? 'Queued' :
+                      batch.status === 'running' ? 'Running' :
+                        batch.status === 'completed' ? 'Completed' :
+                          batch.status === 'cancelled' ? 'Cancelled' : 'Failed'}
                   </span>
                 </div>
 
                 <dl className="grid grid-cols-3 gap-2 text-xs">
                   <div>
-                    <dt className="font-semibold text-ink-muted">Tổng</dt>
+                    <dt className="font-semibold text-ink-muted">Total</dt>
                     <dd className="mt-1 font-bold text-ink-primary">{batch.total_images}</dd>
                   </div>
                   <div>
-                    <dt className="font-semibold text-ink-muted">Đã xử lý</dt>
+                    <dt className="font-semibold text-ink-muted">Processed</dt>
                     <dd className="mt-1 font-bold text-emerald-700">{batch.processed_images}</dd>
                   </div>
                   <div>
-                    <dt className="font-semibold text-ink-muted">Lỗi</dt>
+                    <dt className="font-semibold text-ink-muted">Failed</dt>
                     <dd className="mt-1 font-bold text-red-700">{batch.failed_images}</dd>
                   </div>
                 </dl>
@@ -1479,7 +1479,7 @@ export default function AdminIndexingPage() {
                       onClick={() => handleOpenFailedModalForBatch(batch.batch_id, batch.failed_images)}
                       className="inline-flex min-h-11 items-center text-xs font-semibold text-red-700 underline underline-offset-2"
                     >
-                      Xem {batch.failed_images} ảnh lỗi
+                      View {batch.failed_images} failed images
                     </button>
                   )}
                   {(batch.status === 'running' || batch.status === 'queued') && (
@@ -1490,7 +1490,7 @@ export default function AdminIndexingPage() {
                       className="ml-auto inline-flex min-h-11 items-center gap-1 rounded-md border border-red-200 px-3 text-xs font-semibold text-red-600 disabled:opacity-50"
                     >
                       <XCircle className="h-4 w-4" />
-                      Dừng
+                      Stop
                     </button>
                   )}
                   {batch.error_message && batch.status !== 'running' && batch.status !== 'queued' && (
@@ -1505,8 +1505,8 @@ export default function AdminIndexingPage() {
         {!isLoading && batches.length > 0 && (
           <div className="border-t border-border pt-4 text-center">
             <p className="mb-3 text-xs text-ink-muted">
-              Hiển thị <span className="font-semibold text-ink-secondary">{displayedBatches.length}</span> trên{' '}
-              <span className="font-semibold text-ink-secondary">{batches.length}</span> đợt tải ảnh
+              Showing <span className="font-semibold text-ink-secondary">{displayedBatches.length}</span> of{' '}
+              <span className="font-semibold text-ink-secondary">{batches.length}</span> upload batches
             </p>
 
             {hasMoreBatchHistory ? (
@@ -1515,11 +1515,11 @@ export default function AdminIndexingPage() {
                 onClick={() => setVisibleBatchHistoryCount((current) => current + BATCH_HISTORY_PAGE_LIMIT)}
                 className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-border bg-white px-4 text-sm font-bold text-ink-secondary shadow-sm shadow-slate-200/50 transition-colors hover:bg-surface-1 hover:text-ink-primary sm:w-auto"
               >
-                Tải thêm lịch sử
+                Load more history
               </button>
             ) : (
               <p className="text-xs font-medium text-ink-muted">
-                Đã hiển thị toàn bộ lịch sử tải ảnh.
+                All upload history is displayed.
               </p>
             )}
 
@@ -1537,7 +1537,7 @@ export default function AdminIndexingPage() {
               <div className="flex items-center gap-2 text-red-600">
                 <AlertCircle className="h-5 w-5" />
                 <h3 className="font-display font-bold text-base text-ink-primary">
-                  Sự cố tối ưu tìm kiếm ({failedImages.length})
+                  Search optimization issues ({failedImages.length})
                 </h3>
               </div>
               <button
@@ -1553,14 +1553,14 @@ export default function AdminIndexingPage() {
             <div className="p-4 bg-amber-50/50 border-b border-amber-100 text-amber-800 text-3xs leading-relaxed flex items-start gap-2">
               <Info className="h-4.5 w-4.5 text-amber-600 shrink-0 mt-0.5" />
               <div>
-                <span className="font-bold">Lưu ý:</span> Các ảnh này đã lưu trên máy chủ nhưng trích xuất vector đặc trưng (CLIP) bị lỗi. Chúng sẽ không thể tìm thấy bằng hình ảnh hoặc từ khóa. Vui lòng xử lý:
+                <span className="font-bold">Note:</span> These images are saved on the server, but CLIP vector extraction failed. They cannot be found by image or text search until fixed.
               </div>
             </div>
 
             {/* Bulk Control Bar */}
             {failedImages.length > 0 && (
               <div className="flex flex-col gap-2 border-b border-border/80 bg-surface-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <span className="text-3xs font-semibold text-ink-muted">Tác vụ hàng loạt:</span>
+                <span className="text-3xs font-semibold text-ink-muted">Bulk actions:</span>
                 <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center">
                   <button
                     type="button"
@@ -1569,7 +1569,7 @@ export default function AdminIndexingPage() {
                     className="flex items-center gap-1 px-2.5 py-1 rounded bg-accent-50 hover:bg-accent-100 text-accent-700 text-3xs font-semibold transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     <RefreshCw className={`h-3 w-3 ${isActionInProgress ? 'animate-spin' : ''}`} />
-                    Thử lại tất cả
+                    Retry all
                   </button>
                   <button
                     type="button"
@@ -1578,7 +1578,7 @@ export default function AdminIndexingPage() {
                     className="flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-3xs font-semibold transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     <Save className="h-3 w-3" />
-                    Lưu tất cả
+                    Keep all
                   </button>
                   <button
                     type="button"
@@ -1587,7 +1587,7 @@ export default function AdminIndexingPage() {
                     className="flex items-center gap-1 px-2.5 py-1 rounded bg-red-50 hover:bg-red-100 text-red-700 text-3xs font-semibold transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     <Trash2 className="h-3 w-3" />
-                    Xóa tất cả
+                    Delete all
                   </button>
                 </div>
               </div>
@@ -1598,8 +1598,8 @@ export default function AdminIndexingPage() {
               {failedImages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 text-center text-ink-muted">
                   <CheckCircle2 className="h-10 w-10 text-emerald-600 mb-2" />
-                  <p className="text-xs font-bold text-ink-primary">Đã giải quyết xong tất cả các ảnh lỗi!</p>
-                  <p className="text-3xs mt-1">Bạn có thể đóng modal.</p>
+                  <p className="text-xs font-bold text-ink-primary">All failed images have been resolved.</p>
+                  <p className="text-3xs mt-1">You can close this modal.</p>
                 </div>
               ) : (
                 failedImages.map((img) => (
@@ -1624,7 +1624,7 @@ export default function AdminIndexingPage() {
                         </p>
                         <p className="text-3xs text-red-500 mt-1 font-semibold flex items-center gap-1">
                           <AlertTriangle className="h-3 w-3 shrink-0" />
-                          <span>{img.error_message || 'Trích xuất CLIP embedding thất bại'}</span>
+                          <span>{img.error_message || 'CLIP embedding extraction failed'}</span>
                         </p>
                       </div>
                     </div>
@@ -1635,7 +1635,7 @@ export default function AdminIndexingPage() {
                         type="button"
                         onClick={() => handleRetryFailedImage(img)}
                         disabled={isActionInProgress}
-                        title="Thử lại"
+                        title="Retry"
                         className="flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-surface-1 text-ink-secondary transition-colors hover:bg-accent-50 hover:text-accent-700 disabled:opacity-50"
                       >
                         <RefreshCw className={`h-3.5 w-3.5 ${isActionInProgress ? 'animate-spin' : ''}`} />
@@ -1643,7 +1643,7 @@ export default function AdminIndexingPage() {
                       <button
                         type="button"
                         onClick={() => handleSaveFailedImage(img.url)}
-                        title="Chấp nhận lưu"
+                        title="Keep"
                         className="flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-surface-1 text-ink-secondary transition-colors hover:bg-emerald-50 hover:text-emerald-700"
                       >
                         <Save className="h-3.5 w-3.5" />
@@ -1651,7 +1651,7 @@ export default function AdminIndexingPage() {
                       <button
                         type="button"
                         onClick={() => handleDeleteFailedImage(img.url)}
-                        title="Xóa khỏi Server"
+                        title="Delete from server"
                         className="flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-surface-1 text-ink-secondary transition-colors hover:bg-red-50 hover:text-red-700"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -1669,7 +1669,7 @@ export default function AdminIndexingPage() {
                 onClick={() => setShowFailedModal(false)}
                 className="px-4 py-1.5 text-xs font-semibold text-ink-primary bg-surface-2 border border-border rounded-lg hover:bg-surface-3 transition-colors cursor-pointer"
               >
-                Đóng
+                Close
               </button>
             </div>
           </div>
