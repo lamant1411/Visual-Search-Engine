@@ -519,7 +519,7 @@
     {
       "id": "ocr-01",
       "mode": "ocr",
-      "query": "STOP",
+      "query": "ảnh có chữ STOP",
       "notes": "Independent blind second-review sample.",
       "candidate_image_ids": [
         11696,
@@ -546,7 +546,7 @@
     {
       "id": "ocr-02",
       "mode": "ocr",
-      "query": "OPEN",
+      "query": "ảnh có chữ OPEN",
       "notes": "Independent blind second-review sample.",
       "candidate_image_ids": [
         40770,
@@ -573,7 +573,7 @@
     {
       "id": "ocr-03",
       "mode": "ocr",
-      "query": "SCHOOL",
+      "query": "tìm chữ SCHOOL",
       "notes": "Independent blind second-review sample.",
       "candidate_image_ids": [
         32843,
@@ -597,7 +597,7 @@
     {
       "id": "ocr-04",
       "mode": "ocr",
-      "query": "COFFEE",
+      "query": "tìm chữ COFFEE",
       "notes": "Independent blind second-review sample.",
       "candidate_image_ids": [
         3002,
@@ -619,7 +619,7 @@
     {
       "id": "ocr-05",
       "mode": "ocr",
-      "query": "SALE",
+      "query": "ảnh có chữ SALE",
       "notes": "Independent blind second-review sample.",
       "candidate_image_ids": [
         28550,
@@ -641,7 +641,7 @@
     {
       "id": "ocr-06",
       "mode": "ocr",
-      "query": "HOTEL",
+      "query": "tìm chữ HOTEL",
       "notes": "Independent blind second-review sample.",
       "candidate_image_ids": [
         50291,
@@ -663,7 +663,7 @@
     {
       "id": "ocr-07",
       "mode": "ocr",
-      "query": "CAFE",
+      "query": "tìm chữ CAFE",
       "notes": "Independent blind second-review sample.",
       "candidate_image_ids": [
         45686,
@@ -685,7 +685,7 @@
     {
       "id": "ocr-08",
       "mode": "ocr",
-      "query": "BEER",
+      "query": "tìm chữ BEER",
       "notes": "Independent blind second-review sample.",
       "candidate_image_ids": [
         42228,
@@ -707,7 +707,7 @@
     {
       "id": "ocr-09",
       "mode": "ocr",
-      "query": "FOOD",
+      "query": "tìm chữ FOOD",
       "notes": "Independent blind second-review sample.",
       "candidate_image_ids": [
         77612,
@@ -729,7 +729,7 @@
     {
       "id": "ocr-10",
       "mode": "ocr",
-      "query": "POLICE",
+      "query": "tìm chữ POLICE",
       "notes": "Independent blind second-review sample.",
       "candidate_image_ids": [
         48939,
@@ -754,7 +754,7 @@
     {
       "id": "ocr-11",
       "mode": "ocr",
-      "query": "STREET",
+      "query": "tìm chữ STREET",
       "notes": "Independent blind second-review sample.",
       "candidate_image_ids": [
         74448,
@@ -778,7 +778,7 @@
     {
       "id": "ocr-12",
       "mode": "ocr",
-      "query": "Nhím",
+      "query": "ảnh có chữ Nhím",
       "notes": "Independent blind second-review sample.",
       "candidate_image_ids": [
         69653,
@@ -800,7 +800,7 @@
     {
       "id": "ocr-13",
       "mode": "ocr",
-      "query": "ĐƯỜNG",
+      "query": "ảnh có chữ ĐƯỜNG",
       "notes": "Independent blind second-review sample.",
       "candidate_image_ids": [
         29024,
@@ -817,7 +817,7 @@
     {
       "id": "ocr-14",
       "mode": "ocr",
-      "query": "SÀI GÒN",
+      "query": "ảnh chứa text SÀI GÒN",
       "notes": "Independent blind second-review sample.",
       "candidate_image_ids": [
         85499,
@@ -839,7 +839,7 @@
     {
       "id": "ocr-15",
       "mode": "ocr",
-      "query": "HUẾ",
+      "query": "ảnh chứa text HUẾ",
       "notes": "Independent blind second-review sample.",
       "candidate_image_ids": [
         29821,

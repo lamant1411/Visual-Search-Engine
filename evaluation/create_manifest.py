@@ -32,21 +32,21 @@ SEMANTIC_QUERIES = [
 ]
 
 OCR_QUERIES = [
-    "STOP",
-    "Nhím",
-    "coffee",
-    "hotel",
-    "school",
-    "restaurant",
-    "open",
-    "exit",
-    "warning",
-    "sale",
-    "Việt Nam",
-    "đường",
-    "cấm",
-    "pharmacy",
-    "market",
+    "ảnh có chữ STOP",
+    "ảnh có chữ Nhím",
+    "tìm chữ coffee",
+    "tìm chữ hotel",
+    "tìm chữ school",
+    "tìm chữ restaurant",
+    "ảnh có chữ open",
+    "ảnh có chữ exit",
+    "tìm chữ warning",
+    "ảnh có chữ sale",
+    "tìm chữ Việt Nam",
+    "ảnh có chữ đường",
+    "ảnh có chữ cấm",
+    "tìm chữ pharmacy",
+    "tìm chữ market",
 ]
 
 
@@ -119,7 +119,7 @@ def build_manifest() -> dict:
             },
             {
                 "id": "three-modes-ui",
-                "description": "Semantic, OCR and image search are accessible from the UI.",
+                "description": "Unified text search bar correctly handles both Semantic and explicit OCR queries, alongside Image search.",
                 "status": "not_tested",
                 "evidence": "",
             },
