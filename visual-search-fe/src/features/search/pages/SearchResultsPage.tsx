@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { CheckCircle2, ImageUp, Loader2, RotateCcw, Sparkles } from "lucide-react";
 
@@ -35,6 +35,7 @@ export function SearchResultsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const state = (location.state ?? {}) as SearchLocationState;
 
   const mode = parseSearchMode(searchParams.get("mode"));
@@ -50,6 +51,7 @@ export function SearchResultsPage() {
   const [longSearchKey, setLongSearchKey] = useState<string | null>(null);
   const [bookmarkToast, setBookmarkToast] = useState<BookmarkToast | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const invalidatedHistorySearchRef = useRef<string | null>(null);
   const { isBookmarked, toggleBookmark } = useBookmarks();
   const searchFile = state.file ?? restoredImageFile ?? undefined;
   const searchFileName = state.fileName ?? restoredImageFile?.name ?? query;
@@ -123,6 +125,29 @@ export function SearchResultsPage() {
   const searchError = getSearchErrorMessage(searchQuery.error);
   const total = searchQuery.data?.pages[0]?.total ?? 0;
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = searchQuery;
+
+  useEffect(() => {
+    if (!searchQuery.data?.pages[0]) {
+      return;
+    }
+
+    const searchIdentity = [mode, query, imageId, imageUrl, historyKey, imageSearchKey].join("|");
+    if (invalidatedHistorySearchRef.current === searchIdentity) {
+      return;
+    }
+
+    invalidatedHistorySearchRef.current = searchIdentity;
+    void queryClient.invalidateQueries({ queryKey: ["search-history"] });
+  }, [
+    historyKey,
+    imageId,
+    imageSearchKey,
+    imageUrl,
+    mode,
+    query,
+    queryClient,
+    searchQuery.data,
+  ]);
   const searchStateKey = `${mode}-${query}-${imageId ?? "no-id"}-${imageUrl ?? "no-url"}-${historyKey ?? "no-history"}-${imageSearchKey}`;
   const isSearchTakingLong =
     searchQuery.isLoading && longSearchKey === searchStateKey;

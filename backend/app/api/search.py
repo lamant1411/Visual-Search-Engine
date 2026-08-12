@@ -1,6 +1,7 @@
 """Endpoint tÃ¬m kiáº¿m báº±ng áº£nh."""
 
 import hashlib
+import logging
 import uuid
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -34,6 +35,7 @@ from app.services.search import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
@@ -409,8 +411,18 @@ async def _save_search_history_once(db: AsyncSession, history: SearchHistory) ->
     db.add(history)
     try:
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
+        sqlstate = getattr(exc.orig, "sqlstate", None)
+        if sqlstate == "23505":
+            return
+
+        logger.exception(
+            "Failed to save search history for user_id=%s query_type=%s",
+            history.user_id,
+            history.query_type.value,
+        )
+        raise
 
 
 def _build_image_history_key(
