@@ -10,7 +10,7 @@ from app.schemas.common import UserRole
 
 
 async def ensure_seed_admin(db: AsyncSession) -> None:
-    """T?o t?i kho?n admin t? env n?u ch?a t?n t?i."""
+    """Create the default admin account from environment variables if it does not exist."""
     if not settings.seed_admin_email or not settings.seed_admin_password:
         return
 

@@ -25,7 +25,7 @@ export async function saveImageSearchFile(historyKey: string, file: File) {
     }
     sessionStorage.setItem(`${storagePrefix}${historyKey}`, JSON.stringify(payload))
   } catch {
-    // Tr?nh duy?t c? th? ch?n sessionStorage ho?c file qu? l?n v??t quota.
+    // Some browsers may block sessionStorage, or the file may exceed quota.
   }
 }
 

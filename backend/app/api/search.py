@@ -1,4 +1,4 @@
-"""Endpoint tÃ¬m kiáº¿m báº±ng áº£nh."""
+"""Search endpoints for image, semantic text, and OCR text queries."""
 
 import hashlib
 import uuid
@@ -69,7 +69,7 @@ async def search_by_image(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SearchResponse:
-    """Nháº­n áº£nh tá»« frontend vÃ  tráº£ káº¿t quáº£ tÃ¬m kiáº¿m theo contract Ä‘Ã£ thá»‘ng nháº¥t."""
+    """Receive a query image and return image-search results."""
     _validate_pagination(page, limit)
 
     if file is None and image_id is None and not image_url:
@@ -221,7 +221,7 @@ async def search_by_image(
     summary="Unified semantic and OCR text search",
     description=(
         "Search the shared catalogue and the current user's images using CLIP semantic retrieval "
-        "plus OCR text retrieval. Explicit requests such as 'áº£nh cÃ³ chá»¯ NhÃ­m' are routed to OCR; "
+        "plus OCR text retrieval. Explicit text-in-image requests are routed to OCR; "
         "other text queries are routed to CLIP semantic search. Requires Bearer access_token."
     ),
     responses={
@@ -239,20 +239,20 @@ async def search_by_text(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SearchResponse:
-    """Cháº¡y text query qua cáº£ semantic CLIP vÃ  OCR pipeline Ä‘á»“ng thá»i, merge báº±ng RRF."""
+    """Run text query through semantic CLIP and OCR retrieval, then merge with RRF."""
     query = q.strip()
     if not query:
         raise api_error(
             status.HTTP_400_BAD_REQUEST,
             "VALIDATION_ERROR",
-            "Query khÃ´ng Ä‘Æ°á»£c Ä‘á»ƒ trá»‘ng sau khi strip.",
+            "Query cannot be empty after trimming.",
             {"field": "q"},
         )
 
     # Detect user intent
     explicit_ocr = extract_explicit_ocr_query(query)
     if explicit_ocr:
-        # User explicitly asked for text: e.g., "áº£nh cÃ³ chá»¯ X"
+        # User explicitly asked for text inside an image.
         semantic_w = 0.2
         ocr_w = 1.0
         ocr_query_str = explicit_ocr
@@ -264,7 +264,7 @@ async def search_by_text(
 
     max_results = max(page * limit, settings.image_search_max_results)
 
-    # --- Semantic search (CLIP â†’ Qdrant) ---
+    # --- Semantic search (CLIP -> Qdrant) ---
     try:
         vector = await ai_embedding_client.embed_text(query)
         semantic_hits = QdrantSearchService().search(
@@ -300,8 +300,8 @@ async def search_by_text(
     )
 
     # --- CLIP Re-ranking (top-20) ---
-    # Re-sort top-20 theo CLIP cosine score thực sự; phần còn lại giữ nguyên thứ tự RRF.
-    # OCR-only results trong top-20 sẽ được query Qdrant thêm để lấy CLIP score.
+    # Re-sort the top 20 by real CLIP cosine score; keep the rest in RRF order.
+    # OCR-only results in the top 20 query Qdrant again to fetch CLIP scores.
     ordered_ids = rerank_by_clip(ordered_ids, vector, semantic_hits)
 
     # RRF scores cho OCR-only fallback display
@@ -311,7 +311,7 @@ async def search_by_text(
     for rank, item in enumerate(ocr_response.items, start=1):
         rrf_scores[item.id] = rrf_scores.get(item.id, 0.0) + ocr_w * (1.0 / (_RRF_K + rank))
 
-    # CLIP scores tuyệt đối cho top-20 (sau rerank đã được bổ sung bởi search_by_ids)
+    # Absolute CLIP scores for the top 20 after reranking.
     clip_score_map: dict[int, float] = {hit.image_id: hit.score for hit in semantic_hits}
 
     response = await build_search_response_from_ids(
@@ -360,17 +360,13 @@ async def search_by_ocr(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SearchResponse:
-    """TÃ¬m áº£nh cÃ³ chá»©a text Ä‘Æ°á»£c nháº­n diá»‡n báº±ng OCR khá»›p vá»›i query.
-
-    DÃ¹ng PostgreSQL full-text search (plainto_tsquery) káº¿t há»£p ILIKE fallback.
-    Káº¿t quáº£ Ä‘Æ°á»£c sáº¯p xáº¿p theo Ä‘á»™ liÃªn quan (ts_rank) giáº£m dáº§n.
-    """
+    """Search images whose recognized OCR text matches the query."""
     query = q.strip()
     if not query:
         raise api_error(
             status.HTTP_400_BAD_REQUEST,
             "VALIDATION_ERROR",
-            "Query khÃ´ng Ä‘Æ°á»£c Ä‘á»ƒ trá»‘ng sau khi strip.",
+            "Query cannot be empty after trimming.",
             {"field": "q"},
         )
 

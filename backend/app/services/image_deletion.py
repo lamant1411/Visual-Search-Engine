@@ -1,4 +1,4 @@
-﻿"""Service xóa m?m, khôi ph?c và xóa vinh vi?n ?nh trong kho ?nh."""
+"""Image deletion, restore, and permanent removal service."""
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -43,7 +43,7 @@ async def delete_image_from_library(
     requester_id: int,
     requester_role: UserRole | str,
 ) -> ImageDeleteResult:
-    """Xóa m?m ?nh d? ?nh bi?n m?t kh?i search/kho ?nh nhung v?n có th? khôi ph?c."""
+    """Soft delete an image so it is hidden from search/library but can be restored."""
     image = await _get_mutable_image(
         db,
         image_id=image_id,
@@ -72,7 +72,7 @@ async def restore_deleted_image(
     requester_id: int,
     requester_role: UserRole | str,
 ) -> ImageRestoreResult:
-    """Khôi ph?c ?nh dã xóa m?m v? tr?ng thái tru?c khi xóa."""
+    """Restore a soft-deleted image to its previous status."""
     image = await _get_mutable_image(
         db,
         image_id=image_id,
@@ -105,7 +105,7 @@ async def permanently_delete_image_from_library(
     requester_id: int,
     requester_role: UserRole | str,
 ) -> ImageDeleteResult:
-    """Xóa vinh vi?n ?nh dã b? xóa m?m kh?i DB, Qdrant và file local."""
+    """Permanently delete a soft-deleted image from DB, Qdrant, and local storage."""
     image = await _get_mutable_image(
         db,
         image_id=image_id,
@@ -249,7 +249,7 @@ def _delete_qdrant_vector(point_id: str | None, image_id: int) -> bool:
     try:
         return QdrantSearchService().delete_image_vector(point_id=point_id, image_id=image_id)
     except Exception:
-        # N?u Qdrant l?i, v?n xóa DB/file d? ?nh không còn t?n t?i trong h? th?ng.
+        # If Qdrant deletion fails, still delete DB/file so the image no longer exists in the system.
         return False
 
 
