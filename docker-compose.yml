@@ -15,6 +15,8 @@ services:
       - ./backend/.env
     environment:
       - AI_SERVICE_URL=http://ai_service:8001 # Báo cho BE biết chỗ gọi AI
+      - IMAGE_BASE_URL=http://98.88.36.118:8000
+      - BACKEND_CORS_ORIGINS=["http://localhost:5173","http://127.0.0.1:5173","http://98.88.36.118:5173","http://98.88.36.118:8000","http://98.88.36.118"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -77,7 +79,7 @@ services:
       - ./visual-search-fe:/app
       - frontend_node_modules:/app/node_modules
     environment:
-      VITE_API_BASE_URL: http://localhost:8000/api/v1
+      VITE_API_BASE_URL: http://98.88.36.118:8000/api/v1
       VITE_DEV_PROXY_TARGET: http://backend:8000
       VITE_ENABLE_MOCK: "false"
     depends_on:
