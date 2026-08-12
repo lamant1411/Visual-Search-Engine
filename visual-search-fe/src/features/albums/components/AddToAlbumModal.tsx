@@ -29,6 +29,7 @@ export function AddToAlbumModal({ imageIds, onClose, onSuccess }: AddToAlbumModa
 
   const invalidateAlbumQueries = (albumId?: number) => {
     void queryClient.invalidateQueries({ queryKey: ['albums'] })
+    void queryClient.invalidateQueries({ queryKey: ['albums-count'] })
     void queryClient.invalidateQueries({ queryKey: ['albums', 'picker'] })
     if (albumId) {
       void queryClient.invalidateQueries({ queryKey: ['album-images', albumId] })

@@ -88,17 +88,17 @@ export default function LoginPage() {
     const newErrors: LoginErrors = {}
 
     if (!form.email.trim()) {
-      newErrors.email = 'Email không được để trống.'
+      newErrors.email = 'Email is required.'
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      newErrors.email = 'Email không hợp lệ.'
+      newErrors.email = 'Invalid email address.'
     }
 
     const pwdRules = [
-      { test: !form.password,                       msg: 'Mật khẩu không được để trống.' },
-      { test: form.password.length < 8,             msg: 'Mật khẩu phải có ít nhất 8 ký tự.' },
-      { test: !/[A-Z]/.test(form.password),         msg: 'Mật khẩu phải chứa ít nhất 1 chữ in hoa.' },
-      { test: !/[0-9]/.test(form.password),         msg: 'Mật khẩu phải chứa ít nhất 1 chữ số.' },
-      { test: !/[^A-Za-z0-9]/.test(form.password), msg: 'Mật khẩu phải chứa ít nhất 1 ký tự đặc biệt.' },
+      { test: !form.password,                       msg: 'Password is required.' },
+      { test: form.password.length < 8,             msg: 'Password must be at least 8 characters.' },
+      { test: !/[A-Z]/.test(form.password),         msg: 'Password must contain at least 1 uppercase letter.' },
+      { test: !/[0-9]/.test(form.password),         msg: 'Password must contain at least 1 number.' },
+      { test: !/[^A-Za-z0-9]/.test(form.password), msg: 'Password must contain at least 1 special character.' },
     ]
     const firstPwdError = pwdRules.find(r => r.test)
     if (firstPwdError) newErrors.password = firstPwdError.msg
@@ -113,16 +113,16 @@ export default function LoginPage() {
 
     setLoading(true)
     try {
-      // Bước 1: lấy token
+      // Step 1: get token
       const tokenRes = await authApi.login({ email: form.email, password: form.password })
 
-      // Bước 2: lưu token vào localStorage → axios interceptor tự gắn header
+      // Step 2: save token to localStorage
       saveTokens(tokenRes.access_token, tokenRes.refresh_token)
 
-      // Bước 3: lấy thông tin user (đã có token trong header)
+      // Step 3: get user profile
       const meRes = await authApi.me()
 
-      // Bước 4: lưu vào context (1 lần duy nhất, không render thừa)
+      // Step 4: save to auth context
       login({
         accessToken: tokenRes.access_token,
         refreshToken: tokenRes.refresh_token,
@@ -135,14 +135,14 @@ export default function LoginPage() {
       if (axios.isAxiosError(err)) {
         const status = err.response?.status
         if (status === 401) {
-          setErrors({ general: 'Email hoặc mật khẩu không đúng.' })
+          setErrors({ general: 'Invalid email or password.' })
         } else if (status === 422) {
-          setErrors({ general: 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại.' })
+          setErrors({ general: 'Invalid data. Please check and try again.' })
         } else {
-          setErrors({ general: 'Đăng nhập thất bại. Vui lòng thử lại.' })
+          setErrors({ general: 'Login failed. Please try again.' })
         }
       } else {
-        setErrors({ general: 'Lỗi kết nối. Vui lòng thử lại.' })
+        setErrors({ general: 'Connection error. Please try again.' })
       }
     } finally {
       setLoading(false)
@@ -152,16 +152,16 @@ export default function LoginPage() {
   return (
     <AuthCard
       logo={<AppLogo />}
-      title="Chào mừng trở lại"
-      subtitle="Đăng nhập để tiếp tục khám phá hình ảnh"
+      title="Welcome back"
+      subtitle="Sign in to continue exploring images"
       footer={
         <>
-          Chưa có tài khoản?{' '}
+          Don't have an account?{' '}
           <Link
             to="/register"
             className="font-semibold text-[#7c3aed] hover:text-[#6d28d9] transition-colors"
           >
-            Đăng ký ngay
+            Register now
           </Link>
         </>
       }
@@ -192,7 +192,7 @@ export default function LoginPage() {
         />
 
         <Input
-          label="Mật khẩu"
+          label="Password"
           id="login-password"
           name="password"
           type={showPassword ? 'text' : 'password'}
@@ -204,7 +204,7 @@ export default function LoginPage() {
           rightIcon={
             <button
               type="button"
-              aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
               onClick={() => setShowPassword(v => !v)}
               className="pointer-events-auto text-[#9ca3af] hover:text-[#6d28d9] transition-colors"
             >
@@ -221,7 +221,7 @@ export default function LoginPage() {
             to="/forgot-password"
             className="text-xs text-[#7c3aed] hover:text-[#6d28d9] font-medium transition-colors"
           >
-            Quên mật khẩu?
+            Forgot password?
           </Link>
         </div>
 
@@ -233,7 +233,7 @@ export default function LoginPage() {
           loading={loading}
           className="mt-1 bg-gradient-to-r from-[#7c3aed] to-[#4f46e5] hover:from-[#6d28d9] hover:to-[#4338ca] shadow-lg shadow-[#7c3aed]/30 border-0"
         >
-          Đăng nhập
+          Sign in
         </Button>
 
         {/* Divider */}

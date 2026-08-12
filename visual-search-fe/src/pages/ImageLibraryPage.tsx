@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, CheckSquare, FolderPlus, Images, Loader2, RefreshCw, RotateCcw, Trash2, Undo2, Upload, X } from 'lucide-react'
 import { useNavigate } from 'react-router'
 
@@ -15,6 +15,9 @@ import {
   createImageSearchHistoryKey,
   saveImageSearchFile,
 } from '@/features/search/utils/imageSearchSession'
+import { LibrarySidebar, type LibraryTab } from '@/components/layout/LibrarySidebar'
+import { AlbumsContent } from './AlbumsPage'
+import { albumsApi } from '@/lib/api/albums'
 import { adminApi, type AdminIndexingItem } from '@/lib/api/admin'
 import { imageLibraryApi } from '@/lib/api/images'
 
@@ -56,18 +59,60 @@ function isSupportedImageFile(file: File) {
 type LibraryViewMode = 'indexed' | 'deleted'
 type BatchItemStatusFilter = 'all' | AdminIndexingItem['status']
 
-const batchStatusFilters: Array<{ label: string; value: BatchItemStatusFilter }> = [
-  { label: 'All', value: 'all' },
-  { label: 'Indexed', value: 'indexed' },
-  { label: 'Failed', value: 'failed' },
-  { label: 'Queued', value: 'queued' },
-  { label: 'Running', value: 'running' },
-]
-
 export default function ImageLibraryPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const loadMoreRef = useRef<HTMLDivElement | null>(null)
+
+  const invalidateLibraryQueries = async (imageIdsToRemove?: number[]) => {
+    if (imageIdsToRemove && imageIdsToRemove.length > 0) {
+      const targetIds = new Set(imageIdsToRemove)
+
+      queryClient.setQueriesData<{ pages: Array<{ items: SearchResult[]; total: number }>; pageParams: number[] }>(
+        { queryKey: ['image-library'] },
+        (oldData) => {
+          if (!oldData || !oldData.pages) return oldData
+          return {
+            ...oldData,
+            pages: oldData.pages.map((page) => {
+              const newItems = page.items.filter((item) => !targetIds.has(item.id))
+              const removedCount = page.items.length - newItems.length
+              return {
+                ...page,
+                items: newItems,
+                total: Math.max(0, page.total - removedCount),
+              }
+            }),
+          }
+        }
+      )
+
+      queryClient.setQueriesData<{ items: SearchResult[]; total: number }>(
+        { queryKey: ['album-images'] },
+        (oldData) => {
+          if (!oldData || !oldData.items) return oldData
+          const newItems = oldData.items.filter((item) => !targetIds.has(item.id))
+          return {
+            ...oldData,
+            items: newItems,
+            total: Math.max(0, oldData.total - (oldData.items.length - newItems.length)),
+          }
+        }
+      )
+    }
+
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['image-library'] }),
+      queryClient.invalidateQueries({ queryKey: ['home-count'] }),
+      queryClient.invalidateQueries({ queryKey: ['trash-count'] }),
+      queryClient.invalidateQueries({ queryKey: ['albums-count'] }),
+      queryClient.invalidateQueries({ queryKey: ['albums'] }),
+      queryClient.invalidateQueries({ queryKey: ['album-images'] }),
+      queryClient.invalidateQueries({ queryKey: ['image-library-batches'] }),
+    ])
+  }
   const uploadInputRef = useRef<HTMLInputElement | null>(null)
+  const [activeTab, setActiveTab] = useState<LibraryTab>('home')
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null)
   const [viewMode, setViewMode] = useState<LibraryViewMode>('indexed')
   const [selectedBatchId, setSelectedBatchId] = useState('')
@@ -86,6 +131,39 @@ export default function ImageLibraryPage() {
   const canManageImages = Boolean(user)
   const isDeletedView = viewMode === 'deleted'
   const isBatchView = canManageImages && !isDeletedView && Boolean(selectedBatchId)
+
+  const albumsCountQuery = useQuery({
+    queryKey: ['albums-count'],
+    queryFn: () => albumsApi.list({ page: 1, limit: 1 }),
+  })
+
+  const homeCountQuery = useQuery({
+    queryKey: ['home-count'],
+    queryFn: () => imageLibraryApi.list({ page: 1, limit: 1 }),
+  })
+
+  const trashCountQuery = useQuery({
+    queryKey: ['trash-count'],
+    queryFn: () => imageLibraryApi.listDeleted({ page: 1, limit: 1 }),
+  })
+
+  function handleSelectTab(tab: LibraryTab) {
+    setActiveTab(tab)
+    setSelectedResult(null)
+    handleClearSelectedImages()
+    if (tab === 'home') {
+      setViewMode('indexed')
+      setSelectedBatchId('')
+      setBatchStatusFilter('all')
+    } else if (tab === 'trash') {
+      setViewMode('deleted')
+      setSelectedBatchId('')
+      setBatchStatusFilter('all')
+    } else if (tab === 'albums') {
+      setSelectedBatchId('')
+      setBatchStatusFilter('all')
+    }
+  }
 
   const batchesQuery = useQuery({
     queryKey: ['image-library-batches'],
@@ -266,7 +344,7 @@ export default function ImageLibraryPage() {
         setUploadStatusMessage(null)
       }
 
-      await Promise.all([listQuery.refetch(), batchesQuery.refetch()])
+      await invalidateLibraryQueries()
     } catch (error) {
       if (batchId) {
         try {
@@ -289,34 +367,6 @@ export default function ImageLibraryPage() {
     const filesToRetry = failedUploads.map((item) => item.file)
     setFailedUploads([])
     void handleUploadFilesList(filesToRetry)
-  }
-
-  function handleChangeViewMode(nextMode: LibraryViewMode) {
-    setViewMode(nextMode)
-    setSelectedResult(null)
-    setSelectedBatchId('')
-    setBatchStatusFilter('all')
-    handleClearSelectedImages()
-  }
-
-  function handleSelectBatch(batchId: string) {
-    setViewMode('indexed')
-    setSelectedBatchId(batchId)
-    setBatchStatusFilter('all')
-    setSelectedResult(null)
-    handleClearSelectedImages()
-  }
-
-  function handleClearBatch() {
-    setSelectedBatchId('')
-    setBatchStatusFilter('all')
-    handleClearSelectedImages()
-  }
-
-  function handleChangeBatchStatus(nextStatus: BatchItemStatusFilter) {
-    setBatchStatusFilter(nextStatus)
-    setSelectedResult(null)
-    handleClearSelectedImages()
   }
 
   function handleToggleSelect(result: SearchResult) {
@@ -353,8 +403,9 @@ export default function ImageLibraryPage() {
     setIsBulkMutating(true)
     try {
       const result = await imageLibraryApi.bulkDelete(imageIds)
-      removeSelectedIds(result.deleted_items.map((item) => item.image_id))
-      await listQuery.refetch()
+      const deletedIds = result.deleted_items.map((item) => item.image_id)
+      removeSelectedIds(deletedIds)
+      await invalidateLibraryQueries(deletedIds)
       if (result.failed_count > 0) {
         alert(`Moved ${result.deleted_count} image(s). Failed to move ${result.failed_count} image(s).`)
       }
@@ -373,8 +424,9 @@ export default function ImageLibraryPage() {
     setIsBulkMutating(true)
     try {
       const result = await imageLibraryApi.bulkRestore(imageIds)
-      removeSelectedIds(result.restored_items.map((item) => item.image_id))
-      await listQuery.refetch()
+      const restoredIds = result.restored_items.map((item) => item.image_id)
+      removeSelectedIds(restoredIds)
+      await invalidateLibraryQueries(restoredIds)
       if (result.failed_count > 0) {
         alert(`Restored ${result.restored_count} image(s). Failed to restore ${result.failed_count} image(s).`)
       }
@@ -394,8 +446,9 @@ export default function ImageLibraryPage() {
     setIsBulkMutating(true)
     try {
       const result = await imageLibraryApi.bulkPermanentDelete(imageIds)
-      removeSelectedIds(result.deleted_items.map((item) => item.image_id))
-      await listQuery.refetch()
+      const deletedIds = result.deleted_items.map((item) => item.image_id)
+      removeSelectedIds(deletedIds)
+      await invalidateLibraryQueries(deletedIds)
       if (result.failed_count > 0) {
         alert(`Deleted ${result.deleted_count} image(s). Failed to delete ${result.failed_count} image(s).`)
       }
@@ -430,11 +483,12 @@ export default function ImageLibraryPage() {
     if (!selectedResult || mutatingImageId) return
     if (!confirm('Move this image to deleted images? You can restore it later.')) return
 
-    setMutatingImageId(selectedResult.id)
+    const targetId = selectedResult.id
+    setMutatingImageId(targetId)
     try {
-      await imageLibraryApi.delete(selectedResult.id)
+      await imageLibraryApi.delete(targetId)
       setSelectedResult(null)
-      await listQuery.refetch()
+      await invalidateLibraryQueries([targetId])
     } catch (error) {
       console.error('[ImageLibraryPage] Soft delete image failed', error)
       alert('Unable to move this image to deleted images. Check the API response or backend logs.')
@@ -446,11 +500,12 @@ export default function ImageLibraryPage() {
   async function handleRestoreSelectedImage() {
     if (!selectedResult || mutatingImageId) return
 
-    setMutatingImageId(selectedResult.id)
+    const targetId = selectedResult.id
+    setMutatingImageId(targetId)
     try {
-      await imageLibraryApi.restore(selectedResult.id)
+      await imageLibraryApi.restore(targetId)
       setSelectedResult(null)
-      await listQuery.refetch()
+      await invalidateLibraryQueries([targetId])
     } catch (error) {
       console.error('[ImageLibraryPage] Restore image failed', error)
       alert('Unable to restore this image. Check the API response or backend logs.')
@@ -463,11 +518,12 @@ export default function ImageLibraryPage() {
     if (!selectedResult || mutatingImageId) return
     if (!confirm('Permanently delete this image? This cannot be undone.')) return
 
-    setMutatingImageId(selectedResult.id)
+    const targetId = selectedResult.id
+    setMutatingImageId(targetId)
     try {
-      await imageLibraryApi.permanentDelete(selectedResult.id)
+      await imageLibraryApi.permanentDelete(targetId)
       setSelectedResult(null)
-      await listQuery.refetch()
+      await invalidateLibraryQueries([targetId])
     } catch (error) {
       console.error('[ImageLibraryPage] Permanently delete image failed', error)
       alert('Unable to permanently delete this image. Check the API response or backend logs.')
@@ -497,7 +553,6 @@ export default function ImageLibraryPage() {
   const loadedCount = results.length
   const selectedVisibleCount = rawResults.filter((result) => selectedImageIds.has(result.id)).length
   const batches = batchesQuery.data ?? []
-  const batchesWithImages = batches.filter((batch) => batch.total_images > 0)
   const selectedBatch = batches.find((batch) => batch.batch_id === selectedBatchId)
   const hasPendingIndexing =
     isUploadingImages ||
@@ -509,7 +564,13 @@ export default function ImageLibraryPage() {
     [rawResults]
   )
 
-  const modeTitle = isBatchView ? 'Batch images' : isDeletedView ? 'Deleted images' : 'Indexed images'
+  const modeTitle = isBatchView
+    ? 'Batch images'
+    : activeTab === 'trash'
+      ? 'Trash'
+      : activeTab === 'albums'
+        ? 'Albums'
+        : 'Home'
   const modeDescription = isBatchView && selectedBatch
     ? `Review images from batch ${selectedBatch.batch_id}.`
     : isDeletedView
@@ -559,6 +620,10 @@ export default function ImageLibraryPage() {
     )
   }
 
+  const totalHome = !isDeletedView ? total : (homeCountQuery.data?.total ?? 0)
+  const totalAlbums = albumsCountQuery.data?.total ?? 0
+  const totalTrash = isDeletedView ? total : (trashCountQuery.data?.total ?? 0)
+
   return (
     <>
       <PageContainer size="wide" className="space-y-6 py-5 sm:py-8">
@@ -578,11 +643,13 @@ export default function ImageLibraryPage() {
                     'inline-flex min-h-8 items-center rounded-full border px-3 text-xs font-bold shadow-sm',
                     isBatchView
                       ? 'border-violet-100 bg-violet-50 text-violet-700'
-                      : isDeletedView
+                      : activeTab === 'trash'
                         ? 'border-red-100 bg-red-50 text-red-700'
-                        : 'border-blue-100 bg-blue-50 text-blue-700',
+                        : activeTab === 'albums'
+                          ? 'border-violet-100 bg-violet-50 text-violet-700'
+                          : 'border-blue-100 bg-blue-50 text-blue-700',
                   ].join(' ')}>
-                    {isBatchView ? 'Batch view' : isDeletedView ? 'Trash view' : 'Search ready'}
+                    {isBatchView ? 'Batch view' : activeTab === 'trash' ? 'Deleted images' : activeTab === 'albums' ? 'Personal collections' : 'Search ready'}
                   </span>
 
                   {hasPendingIndexing && (
@@ -593,18 +660,37 @@ export default function ImageLibraryPage() {
                   )}
                 </div>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-secondary">
-                  {modeDescription}
+                  {activeTab === 'albums'
+                    ? 'Manage personal image collections, organize photos into albums, or restore removed items.'
+                    : modeDescription}
                 </p>
               </div>
             </div>
 
             <div className="grid grid-cols-3 overflow-hidden rounded-2xl border border-border bg-surface-1/40 lg:min-w-[420px]">
-              <LibraryMetric label="Total" value={isInitialLoading ? '...' : total.toLocaleString('vi-VN')} />
-              <LibraryMetric label="Loaded" value={loadedCount.toLocaleString('vi-VN')} />
-              <LibraryMetric label="Selected" value={selectedCount.toLocaleString('vi-VN')} />
+              <LibraryMetric label="Total images" value={totalHome.toLocaleString('en-US')} />
+              <LibraryMetric label="Albums" value={totalAlbums.toLocaleString('en-US')} />
+              <LibraryMetric label="Trash" value={totalTrash.toLocaleString('en-US')} />
             </div>
           </div>
         </header>
+
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+          <LibrarySidebar
+            activeTab={activeTab}
+            onSelectTab={handleSelectTab}
+            counts={{
+              home: totalHome,
+              albums: totalAlbums,
+              trash: totalTrash,
+            }}
+          />
+
+          <main className="min-w-0 flex-1 space-y-6">
+            {activeTab === 'albums' ? (
+              <AlbumsContent embedded />
+            ) : (
+              <>
 
         {!isDeletedView && failedResults.length > 0 && (
           <section className="rounded-2xl border border-red-200 bg-red-50 p-4 shadow-sm shadow-red-100/50 sm:p-5">
@@ -629,13 +715,13 @@ export default function ImageLibraryPage() {
 
         <section className="rounded-2xl border border-border bg-white p-4 shadow-sm shadow-slate-200/60 sm:p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-bold text-ink-primary">Upload to your library</p>
               <p className="mt-1 text-xs leading-5 text-ink-secondary">
                 Add JPG, PNG, or WebP images to your private library. Each image must be 10MB or less; large selections are uploaded in 100MB chunks.
               </p>
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
               <input
                 ref={uploadInputRef}
                 type="file"
@@ -647,7 +733,7 @@ export default function ImageLibraryPage() {
               <Button
                 type="button"
                 variant="outline"
-                className="min-h-11 rounded-xl"
+                className="min-h-11 rounded-xl shrink-0 whitespace-nowrap"
                 leftIcon={<Upload className="h-4 w-4" />}
                 disabled={isUploadingImages}
                 onClick={() => uploadInputRef.current?.click()}
@@ -656,7 +742,7 @@ export default function ImageLibraryPage() {
               </Button>
               <Button
                 type="button"
-                className="min-h-11 rounded-xl"
+                className="min-h-11 rounded-xl shrink-0 whitespace-nowrap"
                 leftIcon={isUploadingImages ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                 disabled={selectedUploadFiles.length === 0 || isUploadingImages}
                 onClick={handleUploadSelectedFiles}
@@ -670,7 +756,7 @@ export default function ImageLibraryPage() {
             <div className="mt-4 space-y-3 rounded-2xl border border-border bg-surface-1/40 p-4">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm font-bold text-ink-primary">
-                  {selectedUploadFiles.length.toLocaleString('vi-VN')} selected image(s)
+                  {selectedUploadFiles.length.toLocaleString('en-US')} selected image(s)
                 </p>
                 {selectedUploadFiles.length > 0 && !isUploadingImages && (
                   <button
@@ -772,123 +858,13 @@ export default function ImageLibraryPage() {
           )}
         </section>
 
-        {canManageImages && (
-          <section className="rounded-2xl border border-border bg-white p-4 shadow-sm shadow-slate-200/60 sm:p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <p className="text-sm font-bold text-ink-primary">Indexing batches</p>
-                <p className="mt-1 text-xs leading-5 text-ink-secondary">
-                  Select one upload batch to review only the images created in that indexing run.
-                </p>
-              </div>
-
-              <div className="flex min-w-0 flex-col gap-2 sm:flex-row lg:min-w-[520px]">
-                <label className="min-w-0 flex-1">
-                  <span className="sr-only">Select indexing batch</span>
-                  <select
-                    className="h-12 w-full rounded-xl border border-border bg-white px-4 text-sm font-bold text-ink-primary outline-none transition focus:border-accent-600 focus:ring-4 focus:ring-accent-100"
-                    value={selectedBatchId}
-                    onChange={(event) => handleSelectBatch(event.target.value)}
-                  >
-                    <option value="">All indexed images</option>
-                    {batchesWithImages.map((batch) => (
-                      <option key={batch.batch_id} value={batch.batch_id}>
-                        {batch.batch_id} - {batch.processed_images}/{batch.total_images} indexed
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                {isBatchView && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-12 rounded-xl"
-                    leftIcon={<X className="h-4 w-4" />}
-                    onClick={handleClearBatch}
-                  >
-                    Clear batch
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {batchesQuery.isLoading && (
-              <p className="mt-4 rounded-xl bg-surface-1 px-4 py-3 text-sm font-semibold text-ink-secondary">
-                Loading indexing batches...
-              </p>
-            )}
-
-            {batchesQuery.isError && (
-              <p className="mt-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-                Unable to load indexing batches.
-              </p>
-            )}
-
-            {isBatchView && selectedBatch && (
-              <div className="mt-4 space-y-4">
-                <div className="grid overflow-hidden rounded-2xl border border-border bg-surface-1/40 sm:grid-cols-4">
-                  <LibraryMetric label="Batch status" value={selectedBatch.status.toUpperCase()} />
-                  <LibraryMetric label="Total" value={selectedBatch.total_images.toLocaleString('vi-VN')} />
-                  <LibraryMetric label="Indexed" value={selectedBatch.processed_images.toLocaleString('vi-VN')} />
-                  <LibraryMetric label="Failed" value={selectedBatch.failed_images.toLocaleString('vi-VN')} />
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {batchStatusFilters.map((filter) => (
-                    <button
-                      key={filter.value}
-                      type="button"
-                      aria-pressed={batchStatusFilter === filter.value}
-                      className={[
-                        'inline-flex min-h-10 items-center rounded-full border px-4 text-xs font-bold transition',
-                        batchStatusFilter === filter.value
-                          ? 'border-slate-950 bg-slate-950 text-white shadow-sm'
-                          : 'border-border bg-white text-ink-secondary hover:bg-surface-1 hover:text-ink-primary',
-                      ].join(' ')}
-                      onClick={() => handleChangeBatchStatus(filter.value)}
-                    >
-                      {filter.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
-        )}
-
         <section className="sticky top-16 z-30 -mx-4 border-y border-border bg-surface-0/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:rounded-2xl sm:border sm:bg-white sm:p-3 sm:shadow-sm sm:shadow-slate-200/60">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="grid grid-cols-2 gap-2 rounded-xl bg-surface-1 p-1 sm:inline-grid sm:w-fit">
-              <button
-                type="button"
-                aria-pressed={!isDeletedView}
-                className={[
-                  'inline-flex min-h-11 items-center justify-center rounded-lg px-4 text-sm font-bold transition',
-                  !isDeletedView
-                    ? 'bg-white text-ink-primary shadow-sm ring-1 ring-border'
-                    : 'text-ink-secondary hover:bg-white/70 hover:text-ink-primary',
-                ].join(' ')}
-                onClick={() => handleChangeViewMode('indexed')}
-              >
-                Indexed
-              </button>
-              <button
-                type="button"
-                aria-pressed={isDeletedView}
-                className={[
-                  'inline-flex min-h-11 items-center justify-center rounded-lg px-4 text-sm font-bold transition',
-                  isDeletedView
-                    ? 'bg-white text-ink-primary shadow-sm ring-1 ring-border'
-                    : 'text-ink-secondary hover:bg-white/70 hover:text-ink-primary',
-                ].join(' ')}
-                onClick={() => handleChangeViewMode('deleted')}
-              >
-                Deleted
-              </button>
-            </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm font-bold text-ink-primary">
+              {isDeletedView ? 'Trash images' : 'Library images'}
+            </p>
 
-            <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 aria-label="Refresh image library"
                 type="button"
@@ -1030,21 +1006,25 @@ export default function ImageLibraryPage() {
                 </Button>
               </div>
             )}
+
+            {hasResults && (
+              <div
+                ref={loadMoreRef}
+                className="flex min-h-16 items-center justify-center rounded-2xl border border-border bg-white px-4 py-5 text-center text-sm font-semibold text-ink-muted shadow-sm shadow-slate-200/50"
+              >
+                {listQuery.hasNextPage
+                  ? listQuery.isFetchingNextPage
+                    ? 'Loading more images...'
+                    : 'Scroll to load more images'
+                  : `All ${loadedCount.toLocaleString('en-US')} images are loaded`}
+              </div>
+            )}
           </>
         )}
-
-        {hasResults && (
-          <div
-            ref={loadMoreRef}
-            className="flex min-h-16 items-center justify-center rounded-2xl border border-border bg-white px-4 py-5 text-center text-sm font-semibold text-ink-muted shadow-sm shadow-slate-200/50"
-          >
-            {listQuery.hasNextPage
-              ? listQuery.isFetchingNextPage
-                ? 'Loading more images...'
-                : 'Scroll to load more images'
-              : `All ${loadedCount.toLocaleString('vi-VN')} images are loaded`}
-          </div>
-        )}
+            </>
+          )}
+          </main>
+        </div>
       </PageContainer>
 
       {isAddSelectedToAlbumOpen && (
@@ -1082,14 +1062,14 @@ function LibraryMetric({
   helper?: ReactNode
 }) {
   return (
-    <div className="border-r border-border px-4 py-3 last:border-r-0 sm:px-5">
-      <p className="text-[11px] font-bold uppercase tracking-wide text-ink-muted">
+    <div className="min-w-0 border-r border-border px-3 py-3 last:border-r-0 sm:px-5">
+      <p className="truncate text-[11px] font-bold uppercase tracking-wide text-ink-muted">
         {label}
       </p>
-      <p className="mt-1 text-xl font-black tracking-tight text-ink-primary sm:text-2xl">
+      <p className="mt-1 truncate text-xl font-black tracking-tight text-ink-primary sm:text-2xl">
         {value}
       </p>
-      {helper && <p className="mt-1 text-xs text-ink-secondary">{helper}</p>}
+      {helper && <p className="mt-1 truncate text-xs text-ink-secondary">{helper}</p>}
     </div>
   )
 }
