@@ -1,16 +1,16 @@
-# Visual Search Engine Frontend
+# Frontend Visual Search Engine
 
-React application for Visual Search Engine. It provides user search flows,
-bookmarks, history, an indexed image library, and administrator tools.
+Ứng dụng React của Visual Search Engine, cung cấp luồng tìm kiếm, bookmark,
+lịch sử, thư viện ảnh đã index và các công cụ quản trị.
 
-## Stack
+## Công nghệ
 
-- React 19, TypeScript, Vite, and Tailwind CSS.
-- React Router 8 for public, authenticated, and admin routes.
-- Axios and TanStack Query 5 for API calls, caching, and async states.
-- Lucide React for icons and React Easy Crop for crop-to-search.
+- React 19, TypeScript, Vite và Tailwind CSS.
+- React Router 8 cho route công khai, route cần xác thực và route Admin.
+- Axios và TanStack Query 5 để gọi API, cache và quản lý trạng thái bất đồng bộ.
+- Lucide React cho icon và React Easy Crop cho chức năng crop-to-search.
 
-## Setup
+## Cài đặt
 
 ```bash
 cp .env.example .env
@@ -18,17 +18,17 @@ npm install
 npm run dev
 ```
 
-The development server starts at http://localhost:5173.
+Development server chạy tại http://localhost:5173.
 
-## Environment variables
+## Biến môi trường
 
-| Variable | Description |
+| Biến | Mô tả |
 | --- | --- |
-| `VITE_API_BASE_URL` | Backend API base URL, normally `http://localhost:8000/api/v1`. |
-| `VITE_ENABLE_MOCK` | Set to `false` for real API integration; set to `true` for local search mock data. |
-| `VITE_DEV_PROXY_TARGET` | Backend origin used by Vite to proxy `/static` images for crop support. |
+| `VITE_API_BASE_URL` | Base URL của Backend API, thường là `http://localhost:8000/api/v1`. |
+| `VITE_ENABLE_MOCK` | Đặt `false` để dùng API thật; đặt `true` để dùng mock data Search trên local. |
+| `VITE_DEV_PROXY_TARGET` | Origin Backend để Vite proxy ảnh `/static`, phục vụ chức năng crop. |
 
-## Useful commands
+## Lệnh thường dùng
 
 ```bash
 npm run dev
@@ -37,25 +37,24 @@ npm run build
 npm run preview
 ```
 
-## Project structure
+## Cấu trúc dự án
 
 ```text
 src/
-├── app/          # Router and global providers
-├── components/   # Shared UI, layouts, and reusable feature components
-├── contexts/     # Authentication context
-├── features/     # Search, crop, result and bookmark logic
-├── lib/          # Axios client, API services, auth, and UI utilities
-├── mocks/        # Local mock search data, enabled by VITE_ENABLE_MOCK
-├── pages/        # Route pages including admin pages
-└── styles/       # Global styles and design tokens
+├── app/          # Router và provider toàn cục
+├── components/   # UI dùng chung, layout và component tái sử dụng
+├── contexts/     # Context xác thực
+├── features/     # Logic Search, crop, kết quả và bookmark
+├── lib/          # Axios client, API service, auth và tiện ích UI
+├── mocks/        # Mock data Search trên local, bật bằng VITE_ENABLE_MOCK
+├── pages/        # Các trang route, gồm cả trang Admin
+└── styles/       # Style toàn cục và design token
 ```
 
-## User-facing flows
+## Luồng dành cho người dùng
 
-- Search by text or reference image.
-- Browse results with infinite scroll, open details, zoom, crop, and find
-  similar images.
-- Save or remove bookmarks and review search history.
-- Browse the indexed image library.
-- Upload and index images, monitor batches, and manage users as an admin.
+- Tìm kiếm bằng văn bản hoặc ảnh tham chiếu.
+- Xem kết quả bằng infinite scroll, mở chi tiết, zoom, crop và tìm ảnh tương tự.
+- Lưu/xóa bookmark và xem lịch sử tìm kiếm.
+- Duyệt thư viện ảnh đã index.
+- Với Admin: tải và index ảnh, theo dõi batch và quản lý người dùng.

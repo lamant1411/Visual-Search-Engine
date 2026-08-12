@@ -33,6 +33,7 @@ from app.services.search import (
     image_visible_to_user,
     rerank_by_clip,
     search_images_by_ocr_text,
+    should_prioritize_ocr,
 )
 
 router = APIRouter()
@@ -253,16 +254,7 @@ async def search_by_text(
 
     # Detect user intent
     explicit_ocr = extract_explicit_ocr_query(query)
-    if explicit_ocr:
-        # User explicitly asked for text: e.g., "áº£nh cÃ³ chá»¯ X"
-        semantic_w = 0.2
-        ocr_w = 1.0
-        ocr_query_str = explicit_ocr
-    else:
-        # General search: semantic is primary, OCR is a fallback/bonus
-        semantic_w = 1.0
-        ocr_w = 0.15
-        ocr_query_str = query
+    ocr_query_str = explicit_ocr or query
 
     max_results = max(page * limit, settings.image_search_max_results)
 
@@ -296,6 +288,19 @@ async def search_by_text(
         owner_user_id=current_user.id,
     )
 
+    # Explicit OCR requests and specific near-exact text matches are OCR-first.
+    # Ordinary descriptions remain semantic-first.
+    ocr_priority = bool(explicit_ocr) or should_prioritize_ocr(
+        ocr_query_str,
+        [item.similarity_score for item in ocr_response.items],
+    )
+    if ocr_priority:
+        semantic_w = 0.2
+        ocr_w = 1.0
+    else:
+        semantic_w = 1.0
+        ocr_w = 0.15
+
     # --- Reciprocal Rank Fusion ---
     ordered_ids = fuse_search_hits(
         semantic_hits, ocr_response.items, semantic_weight=semantic_w, ocr_weight=ocr_w
@@ -304,7 +309,8 @@ async def search_by_text(
     # --- CLIP Re-ranking (top-20) ---
     # Re-sort top-20 theo CLIP cosine score thực sự; phần còn lại giữ nguyên thứ tự RRF.
     # OCR-only results trong top-20 sẽ được query Qdrant thêm để lấy CLIP score.
-    ordered_ids = rerank_by_clip(ordered_ids, vector, semantic_hits)
+    if not ocr_priority:
+        ordered_ids = rerank_by_clip(ordered_ids, vector, semantic_hits)
 
     # RRF scores cho OCR-only fallback display
     rrf_scores: dict[int, float] = {}
@@ -314,7 +320,9 @@ async def search_by_text(
         rrf_scores[item.id] = rrf_scores.get(item.id, 0.0) + ocr_w * (1.0 / (_RRF_K + rank))
 
     # CLIP scores tuyệt đối cho top-20 (sau rerank đã được bổ sung bởi search_by_ids)
-    clip_score_map: dict[int, float] = {hit.image_id: hit.score for hit in semantic_hits}
+    clip_score_map: dict[int, float] = (
+        {} if ocr_priority else {hit.image_id: hit.score for hit in semantic_hits}
+    )
 
     response = await build_search_response_from_ids(
         db,

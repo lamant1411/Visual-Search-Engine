@@ -1,27 +1,25 @@
 # Visual Search Engine
-Visual Search Engine is a full-stack image search system that lets users upload,
-index, search, organize, bookmark, and manage private image collections. The
-system combines a FastAPI backend, React frontend, PostgreSQL relational data,
-Qdrant vector search, and an AI service for CLIP embedding and OCR extraction.
+Visual Search Engine là hệ thống tìm kiếm hình ảnh full-stack, cho phép người
+dùng tải lên, đánh chỉ mục, tìm kiếm, sắp xếp, đánh dấu và quản lý bộ sưu tập ảnh
+cá nhân. Hệ thống kết hợp Backend FastAPI, Frontend React, cơ sở dữ liệu quan hệ
+PostgreSQL, tìm kiếm vector Qdrant và dịch vụ AI để tạo embedding CLIP, trích
+xuất văn bản OCR.
 
-## Main features
+## Tính năng chính
 
-- User authentication with registration, login, refresh token, logout, and
-  role-based access control.
-- Image-to-image search using uploaded reference images.
-- Semantic text search and OCR text search.
-- User-owned image library with upload, soft delete, restore, permanent delete,
-  and deleted-image filtering.
-- Album management with create, update, soft delete, restore, permanent delete,
-  add images, remove images, and view album images.
-- Bookmark management for saved images.
-- Search history for image, semantic, and OCR searches.
-- Batch image indexing with progress tracking, failed-item retry, and item-level
-  status.
-- Admin dashboard APIs for system stats, users, images, and indexing workflows.
-- Swagger/OpenAPI documentation for backend API testing.
+- Xác thực người dùng: đăng ký, đăng nhập, refresh token, đăng xuất và phân quyền
+  theo vai trò.
+- Tìm ảnh tương tự từ một ảnh tham chiếu được tải lên.
+- Tìm kiếm văn bản hợp nhất bằng Semantic Search và OCR Search.
+- Thư viện ảnh cá nhân: tải lên, xóa mềm, khôi phục, xóa vĩnh viễn và lọc ảnh đã xóa.
+- Quản lý album: tạo, cập nhật, xóa mềm, khôi phục, xóa vĩnh viễn, thêm/bớt và xem ảnh.
+- Quản lý ảnh đã đánh dấu.
+- Lịch sử tìm kiếm bằng ảnh và văn bản.
+- Đánh chỉ mục ảnh theo batch, theo dõi tiến trình, thử lại ảnh lỗi và trạng thái từng ảnh.
+- API trang quản trị cho thống kê hệ thống, người dùng, ảnh và quy trình indexing.
+- Tài liệu Swagger/OpenAPI để kiểm thử API Backend.
 
-## Architecture
+## Kiến trúc
 
 ```text
 Frontend (React + Vite)
@@ -30,95 +28,95 @@ Frontend (React + Vite)
         v
 Backend (FastAPI)
         |
-        | PostgreSQL: users, images, albums, bookmarks, history, indexing jobs
-        | Qdrant: CLIP vectors for similarity search
-        | Static files: uploaded image storage
+        | PostgreSQL: người dùng, ảnh, album, bookmark, lịch sử, batch indexing
+        | Qdrant: vector CLIP phục vụ tìm kiếm tương đồng
+        | Static files: lưu ảnh đã tải lên
         v
-AI Service (FastAPI)
+Dịch vụ AI (FastAPI)
         |
-        | CLIP embedding
-        | OCR extraction
-        | Item-level indexing workers
+        | Tạo embedding CLIP
+        | Trích xuất OCR
+        | Worker đánh chỉ mục từng ảnh
 ```
 
-## Tech stack
+## Công nghệ sử dụng
 
 - **Frontend:** TypeScript, React, Vite
 - **Backend:** Python, FastAPI, SQLAlchemy, Alembic
-- **Database:** PostgreSQL
-- **Vector database:** Qdrant
-- **AI:** CLIP embedding, OCR, item-level indexing workers
-- **Auth:** JWT, refresh token, bcrypt-sha256, role-based access control
-- **Infrastructure:** Docker, Docker Compose
-- **Documentation:** Swagger/OpenAPI
+- **Cơ sở dữ liệu:** PostgreSQL
+- **Cơ sở dữ liệu vector:** Qdrant
+- **AI:** CLIP embedding, OCR, worker đánh chỉ mục từng ảnh
+- **Xác thực:** JWT, refresh token, bcrypt-sha256, phân quyền theo vai trò
+- **Hạ tầng:** Docker, Docker Compose
+- **Tài liệu:** Swagger/OpenAPI
 
-## Repository structure
+## Cấu trúc repository
 
 ```text
 .
-|-- AI/                # AI service, CLIP/OCR modules, indexing pipeline
-|-- backend/           # FastAPI backend, database models, schemas, migrations
-|-- db/                # Database notes and project documentation
-|-- evaluation/        # Evaluation-related files
-|-- visual-search-fe/  # React frontend
-|-- docker-compose.yml # Local full-stack Docker setup
+|-- AI/                # Dịch vụ AI, module CLIP/OCR và pipeline indexing
+|-- backend/           # Backend FastAPI, model, schema và migration database
+|-- db/                # Ghi chú database và tài liệu dự án
+|-- evaluation/        # Công cụ và kết quả đánh giá
+|-- visual-search-fe/  # Frontend React
+|-- docker-compose.yml # Cấu hình chạy full-stack trên local
 `-- README.md
 ```
 
-## Run with Docker Compose
+## Chạy bằng Docker Compose
 
-Create the required environment files first:
+Trước tiên, tạo các file biến môi trường cần thiết:
 
 - `backend/.env`
 - `visual-search-fe/.env`
 
-Then start the full stack from the project root:
+Sau đó khởi động toàn bộ hệ thống từ thư mục gốc:
 
 ```bash
 docker compose up --build
 ```
 
-For later runs, if Docker images do not need to be rebuilt:
+Ở những lần chạy sau, nếu không cần build lại Docker image:
 
 ```bash
 docker compose up
 ```
 
-Run database migrations manually if needed:
+Chạy migration database khi cần:
 
 ```bash
 docker compose exec backend alembic upgrade head
 ```
 
-Stop containers:
+Dừng các container:
 
 ```bash
 docker compose down
 ```
 
-Do not use `docker compose down -v` unless you intentionally want to remove
-PostgreSQL and Qdrant volumes.
+Không dùng `docker compose down -v` trừ khi chủ động muốn xóa volume PostgreSQL
+và Qdrant.
 
-## Service URLs
+## Địa chỉ dịch vụ
 
 - Frontend: `http://localhost:5173`
 - Backend API: `http://localhost:8000`
 - Swagger UI: `http://localhost:8000/docs`
-- Backend health: `http://localhost:8000/health`
-- API health: `http://localhost:8000/api/v1/health`
-- AI service: `http://localhost:8001`
+- Kiểm tra Backend: `http://localhost:8000/health`
+- Kiểm tra API: `http://localhost:8000/api/v1/health`
+- Dịch vụ AI: `http://localhost:8001`
 - Qdrant: `http://localhost:6333`
 - pgAdmin: `http://localhost:5050`
 
-## Backend API groups
+## Các nhóm API Backend
 
-All versioned backend APIs are mounted under:
+Tất cả API có version được đặt dưới prefix:
 
 ```text
 /api/v1
 ```
 
-Main API groups:
+Các nhóm API chính:
 
 - `GET /api/v1/health`
 - `POST /api/v1/auth/register`
@@ -147,48 +145,45 @@ Main API groups:
 - `GET /api/v1/admin/dashboard`
 - `GET /api/v1/admin/users`
 
-Use Swagger UI for the complete endpoint list, request schemas, response
-schemas, and error responses.
+Dùng Swagger UI để xem đầy đủ endpoint, request schema, response schema và
+định dạng lỗi.
 
-## Indexing flow
+## Luồng đánh chỉ mục
 
-1. A user or admin creates an indexing batch.
-2. Images are uploaded to the backend and saved under the static image storage.
-3. The backend creates image and indexing item records in PostgreSQL.
-4. The backend sends uploaded items to the AI service.
-5. The AI service runs CLIP embedding and writes vectors to Qdrant.
-6. OCR extraction runs separately so OCR failure does not block semantic image
-   search.
-7. Item status is updated in PostgreSQL for progress tracking, retry, and error
-   handling.
+1. Người dùng hoặc Admin tạo một batch indexing.
+2. Ảnh được tải lên Backend và lưu trong vùng lưu trữ static.
+3. Backend tạo bản ghi ảnh và indexing item trong PostgreSQL.
+4. Backend gửi các item đã tải lên sang dịch vụ AI.
+5. Dịch vụ AI tạo embedding CLIP và ghi vector vào Qdrant.
+6. OCR chạy riêng để lỗi OCR không chặn Semantic Search.
+7. Trạng thái từng item được cập nhật vào PostgreSQL để theo dõi, thử lại và xử lý lỗi.
 
-## Image ownership and deletion
+## Quyền sở hữu và xóa ảnh
 
-- User-uploaded images are owned by the uploading user.
-- Users can manage their own image library.
-- Soft-deleted images are hidden from normal library, search, bookmark, and
-  album workflows.
-- Deleted images can be restored or permanently deleted.
-- Dataset images without a user owner can be treated as public indexed images.
+- Ảnh do người dùng tải lên thuộc sở hữu của người đó.
+- Người dùng quản lý thư viện ảnh cá nhân của mình.
+- Ảnh xóa mềm bị ẩn khỏi thư viện, tìm kiếm, bookmark và album thông thường.
+- Ảnh đã xóa có thể được khôi phục hoặc xóa vĩnh viễn.
+- Ảnh dataset không có chủ sở hữu được xem là ảnh công khai đã index.
 
-## AI tuning
+## Tinh chỉnh AI
 
-CPU and worker tuning details for indexing are documented in:
+Chi tiết tinh chỉnh CPU và worker được ghi tại:
 
 ```text
 AI_INDEXING_TUNING.md
 ```
 
-The AI service uses one shared CLIP model and one shared OCR model. CPU usage
-is controlled by `AI_CPU_THREADS`, `MAX_INDEX_WORKERS`,
+AI service dùng chung một model CLIP và một model OCR. Mức sử dụng CPU được
+điều khiển bởi `AI_CPU_THREADS`, `MAX_INDEX_WORKERS`,
 `AI_INFERENCE_THREADS`, `CLIP_IMAGE_BATCH_SIZE`,
-`OCR_MAX_CONCURRENT_INFERENCE`, and `OCR_MAX_INPUT_DIMENSION`.
+`OCR_MAX_CONCURRENT_INFERENCE` và `OCR_MAX_INPUT_DIMENSION`.
 
-For a smaller machine, start with `AI_CPU_THREADS=4`,
-`AI_INFERENCE_THREADS=4`, `MAX_INDEX_WORKERS=1`, and
+Với máy cấu hình thấp, nên bắt đầu bằng `AI_CPU_THREADS=4`,
+`AI_INFERENCE_THREADS=4`, `MAX_INDEX_WORKERS=1` và
 `OCR_RECOGNITION_BATCH_SIZE=1`.
 
-## Run Frontend without Docker
+## Chạy Frontend không dùng Docker
 
 ```bash
 cd visual-search-fe
@@ -197,10 +192,10 @@ npm install
 npm run dev
 ```
 
-Set `VITE_ENABLE_MOCK=false` to call the Backend. Use `true` only when
-developing the Search interface without a running API.
+Đặt `VITE_ENABLE_MOCK=false` để gọi Backend thật. Chỉ dùng `true` khi phát
+triển giao diện Search mà không chạy API.
 
-## Verification
+## Kiểm tra chất lượng
 
 ```bash
 cd visual-search-fe
@@ -208,4 +203,4 @@ npm run lint
 npm run build
 ```
 
-See [TESTING.md](TESTING.md) for the manual end-to-end checklist.
+Xem [TESTING.md](TESTING.md) để thực hiện checklist kiểm thử end-to-end thủ công.

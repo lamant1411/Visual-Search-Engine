@@ -1,31 +1,31 @@
-# Final project evaluation
+# Đánh giá dự án cuối kỳ
 
-This folder provides a repeatable, read-only-by-default evaluation for the
-final Visual Search Engine demo. It measures the requirements that can be
-verified through the existing API and keeps the remaining UI/deployment checks
-as an evidence-based checklist.
+Thư mục này cung cấp quy trình đánh giá có thể lặp lại, mặc định chỉ đọc, dành
+cho buổi demo cuối của Visual Search Engine. Quy trình đo các yêu cầu có thể xác
+minh qua API hiện tại và giữ các kiểm tra UI/deploy còn lại dưới dạng checklist
+có minh chứng.
 
-## What is evaluated
+## Nội dung đánh giá
 
-- Exactly 50 labelled queries across semantic text, OCR text, and image search.
-- Top-20 response contract, judged coverage@10, Precision@10, Hit@10, MRR,
-  Recall@10, and nDCG@10. Final quality metrics are withheld when any returned
-  Top-10 item has not been judged. Query-level percentile-bootstrap 95%
-  confidence intervals are reported for every final quality metric.
-- Mean, P50, P95, and maximum response time. Strict compliance requires every
-  semantic/OCR request to be below 2 seconds and every image request below 3
-  seconds.
-- At least 50,000 successfully indexed **dataset** images. User uploads are
-  reported separately and do not inflate this requirement.
-- Average full CLIP+OCR indexing time below 5 seconds per successful image,
-  read from a completed batch containing at least 50 successful images. Upload time is reported separately by
-  the product UI and is intentionally excluded from model indexing time.
-- Manual evidence for authentication, UX states, image crop/preview, progress
-  persistence, responsive Top-20 results, and Docker Compose startup.
+- Chính xác 50 truy vấn đã gán nhãn, gồm Semantic Text Search, OCR Text Search
+  và Image Search.
+- Contract response Top-20, coverage@10 đã đánh giá, Precision@10, Hit@10, MRR,
+  Recall@10 và nDCG@10. Chỉ công bố chỉ số chất lượng cuối khi mọi item Top-10
+  trả về đã được đánh giá. Mỗi chỉ số chất lượng cuối có khoảng tin cậy 95% theo
+  percentile bootstrap ở cấp truy vấn.
+- Thời gian phản hồi trung bình, P50, P95 và tối đa. Đạt yêu cầu nghiêm ngặt khi
+  mọi request Semantic/OCR dưới 2 giây và mọi request Image dưới 3 giây.
+- Ít nhất 50.000 ảnh **dataset** được index thành công. Ảnh người dùng tải lên
+  được báo cáo riêng và không tính vào yêu cầu này.
+- Thời gian CLIP+OCR đầy đủ trung bình dưới 5 giây cho mỗi ảnh thành công, lấy
+  từ một batch hoàn thành có ít nhất 50 ảnh thành công. Thời gian upload được UI
+  sản phẩm báo cáo riêng và không tính vào thời gian model indexing.
+- Minh chứng thủ công cho xác thực, trạng thái UX, crop/preview ảnh, lưu tiến
+  trình, kết quả Top-20 responsive và khởi động Docker Compose.
 
-The project brief asks for a Precision@10 report but does not define a minimum
-acceptable value. The evaluator therefore reports P@10 without inventing a
-pass threshold. To add a team-agreed quality gate, set for example:
+Đề bài yêu cầu báo cáo Precision@10 nhưng không quy định ngưỡng đạt tối thiểu.
+Vì vậy evaluator chỉ báo cáo P@10, không tự đặt ngưỡng. Để thêm ngưỡng chất
+lượng do nhóm thống nhất, có thể cấu hình ví dụ:
 
 ```json
 "min_mean_precision_at_10": {
@@ -35,49 +35,47 @@ pass threshold. To add a team-agreed quality gate, set for example:
 }
 ```
 
-These values are examples, not official project thresholds.
+Các giá trị trên chỉ là ví dụ, không phải ngưỡng chính thức của dự án.
 
-## 1. Prepare the 50-query ground truth
+## 1. Chuẩn bị ground truth gồm 50 truy vấn
 
-From the repository root:
+Từ thư mục gốc repository:
 
 ```powershell
 python evaluation/create_manifest.py
 ```
 
-This creates `evaluation/ground-truth.json` with 20 semantic, 15 OCR, and 15
-image-query slots. Then:
+Lệnh tạo `evaluation/ground-truth.json` với 20 vị trí Semantic, 15 vị trí OCR
+và 15 vị trí truy vấn ảnh. Sau đó:
 
-1. Replace unsuitable example text with queries representative of the indexed
-   Open Images and Unsplash Lite data.
-2. Copy 15 query images into `evaluation/query-images/` or set an indexed
-   `image_id` instead of `image_path`.
-3. Fill `relevant_image_ids` using human judgement. Label at least 10 relevant
-   images per query where the dataset permits; fewer labels cap the maximum
-   possible Precision@10.
-4. For an uploaded query image already present in the index, set
-   `exclude_image_id` so the exact source does not receive trivial relevance
-   credit.
-5. Change each manual check to `pass` or `fail` and add a screenshot, test log,
-   or demo note in `evidence`.
+1. Thay nội dung ví dụ chưa phù hợp bằng truy vấn đại diện cho dữ liệu Open Images
+   và Unsplash Lite đã index.
+2. Chép 15 ảnh truy vấn vào `evaluation/query-images/`, hoặc đặt `image_id` của
+   ảnh đã index thay cho `image_path`.
+3. Điền `relevant_image_ids` bằng đánh giá của con người. Nếu dataset cho phép,
+   gán ít nhất 10 ảnh liên quan cho mỗi truy vấn; ít nhãn hơn sẽ giới hạn
+   Precision@10 tối đa có thể đạt.
+4. Với ảnh truy vấn đã có sẵn trong index, đặt `exclude_image_id` để ảnh nguồn
+   chính xác không được tính điểm liên quan một cách hiển nhiên.
+5. Đổi từng kiểm tra thủ công thành `pass` hoặc `fail`, rồi thêm ảnh chụp, log
+   kiểm thử hoặc ghi chú demo vào `evidence`.
 
-Search rankings may be used to build a candidate pool, but retrieved items must
-never be marked relevant automatically. Combine candidates from metadata and,
-where possible, more than one model/configuration. Use at least two reviewers
-for ambiguous semantic/image relevance and resolve disagreements before the
-final run.
+Có thể dùng xếp hạng tìm kiếm để tạo candidate pool nhưng tuyệt đối không tự
+động đánh dấu item trả về là liên quan. Hãy kết hợp ứng viên từ metadata và, nếu
+có thể, nhiều model/cấu hình. Dùng ít nhất hai người đánh giá với mức liên quan
+Semantic/Image chưa rõ và giải quyết bất đồng trước lần chạy cuối.
 
-For the current local Unsplash Lite + PostgreSQL dataset, a reproducible draft
-can be generated automatically while all Docker Compose services are running:
+Với dữ liệu Unsplash Lite + PostgreSQL hiện tại trên local, có thể tạo bản nháp
+có thể tái lập khi toàn bộ dịch vụ Docker Compose đang chạy.
 
-First generate a metadata/OCR-fixture draft:
+Đầu tiên, tạo bản nháp từ metadata/OCR fixture:
 
 ```powershell
 python -X utf8 evaluation/prepare_ground_truth.py --force
 ```
 
-Run one provisional search pass to collect retrieved candidates. Draft labels
-produce provisional fields only; the official P@10/nDCG fields remain `N/A`:
+Chạy một lượt tìm kiếm tạm để thu thập ứng viên. Nhãn nháp chỉ sinh trường tạm;
+P@10/nDCG chính thức vẫn là `N/A`:
 
 ```powershell
 python -X utf8 evaluation/evaluate.py `
@@ -89,7 +87,7 @@ python -X utf8 evaluation/evaluate.py `
   --output-dir evaluation/results/candidate-pool
 ```
 
-Merge those Top-20 IDs with independent metadata/OCR candidates:
+Gộp các ID Top-20 với ứng viên metadata/OCR độc lập:
 
 ```powershell
 python -X utf8 evaluation/prepare_ground_truth.py `
@@ -97,31 +95,30 @@ python -X utf8 evaluation/prepare_ground_truth.py `
   --candidate-report evaluation/results/candidate-pool/evaluation-report.json
 ```
 
-`--candidate-report` can be repeated for reports from another prompt strategy
-or model. Open `evaluation/ground-truth-review.html`, judge every card as not
-relevant, relevant, or highly relevant, and export the reviewed JSON. Replace
-`evaluation/ground-truth.json` with that exported file. The browser stores
-in-progress judgements in localStorage.
+Có thể lặp lại `--candidate-report` với báo cáo từ prompt hoặc model khác. Mở
+`evaluation/ground-truth-review.html`, đánh giá từng thẻ là không liên quan,
+liên quan hoặc rất liên quan rồi export JSON đã review. Thay
+`evaluation/ground-truth.json` bằng file được export. Trình duyệt lưu đánh giá
+đang làm trong localStorage.
 
-The Vietnamese OCR fixtures in `evaluation/ocr-fixtures.json` are based on
-visible text, not on OCR output. This means a missed recognition such as
-`Nhím` is counted as a real failure rather than disappearing from ground truth.
+Các OCR fixture tiếng Việt trong `evaluation/ocr-fixtures.json` dựa trên chữ
+nhìn thấy trong ảnh, không dựa trên output OCR. Do đó lỗi nhận diện như bỏ sót
+`Nhím` được tính là lỗi thực thay vì biến mất khỏi ground truth.
 
-Validate without contacting the server:
+Validate mà không liên hệ server:
 
 ```powershell
 python evaluation/evaluate.py --manifest evaluation/ground-truth.json --validate-only
 ```
 
-## 1b. Measure human-label reliability
+## 1b. Đo độ tin cậy giữa người gán nhãn
 
-A single reviewer is acceptable for a draft, but it is weak evidence for a
-final technical report. Keep the existing 1,980 judgements and ask a different
-person to review a deterministic 30% sample independently. The sample is
-stratified by query, contains every search mode, and copies neither the primary
-grades nor the primary reviewer name.
+Một người review có thể chấp nhận cho bản nháp nhưng là minh chứng yếu với báo
+cáo kỹ thuật cuối. Giữ 1.980 nhận định hiện có và nhờ một người khác review độc
+lập mẫu 30% cố định. Mẫu được phân tầng theo truy vấn, chứa mọi chế độ tìm kiếm
+và không sao chép điểm hay tên người review chính.
 
-Create the sample:
+Tạo mẫu:
 
 ```powershell
 python -X utf8 evaluation/create_reliability_sample.py `
@@ -131,8 +128,8 @@ python -X utf8 evaluation/create_reliability_sample.py `
   --seed 2026
 ```
 
-With PostgreSQL/backend image paths available through Docker Compose, generate
-a blind gallery. Metadata/OCR hints and the first review's labels are hidden:
+Khi đường dẫn ảnh PostgreSQL/Backend khả dụng qua Docker Compose, tạo gallery
+review ẩn danh. Gợi ý metadata/OCR và nhãn của lần review đầu sẽ bị ẩn:
 
 ```powershell
 python -X utf8 evaluation/prepare_ground_truth.py `
@@ -141,9 +138,9 @@ python -X utf8 evaluation/prepare_ground_truth.py `
   --blind-review
 ```
 
-Give `second-review.html` to a different reviewer. They must use the same written
-grading protocol, work independently, and export `second-review.reviewed.json`.
-Place the export in `evaluation/reliability/`, then calculate agreement:
+Gửi `second-review.html` cho người đánh giá khác. Người này phải dùng cùng quy
+tắc chấm, làm độc lập và export `second-review.reviewed.json`. Đặt file export
+vào `evaluation/reliability/`, sau đó tính mức đồng thuận:
 
 ```powershell
 python -X utf8 evaluation/reviewer_agreement.py `
@@ -152,13 +149,13 @@ python -X utf8 evaluation/reviewer_agreement.py `
   --output-dir evaluation/reliability/agreement-final
 ```
 
-The output includes exact agreement with a Wilson 95% interval, unweighted
-Cohen's kappa, quadratic-weighted kappa for grades 0/1/2, binary relevance
-kappa, a confusion matrix, and a disagreement CSV. Do not silently choose the
-first reviewer's grade when labels differ.
+Output gồm đồng thuận chính xác với khoảng Wilson 95%, Cohen's kappa không trọng
+số, kappa trọng số bậc hai cho mức 0/1/2, kappa liên quan nhị phân, confusion
+matrix và CSV bất đồng. Không được âm thầm chọn nhãn của người review đầu khi
+hai bên khác nhau.
 
-The evidence can be embedded directly in the main evaluation report while
-adjudication is still pending:
+Có thể nhúng minh chứng trực tiếp vào báo cáo đánh giá chính trong khi vẫn đang
+chờ phân xử:
 
 ```powershell
 python -X utf8 evaluation/evaluate.py `
@@ -170,7 +167,7 @@ python -X utf8 evaluation/evaluate.py `
   --shuffle
 ```
 
-For stronger evidence, let a third person blindly adjudicate disagreements:
+Để có minh chứng mạnh hơn, nhờ người thứ ba phân xử ẩn danh các bất đồng:
 
 ```powershell
 python -X utf8 evaluation/prepare_ground_truth.py `
@@ -186,19 +183,19 @@ python -X utf8 evaluation/reviewer_agreement.py `
   --merged-output evaluation/ground-truth.consensus.json
 ```
 
-Use `ground-truth.consensus.json` for the final evaluator run. None of these
-steps changes Qdrant, PostgreSQL, stored OCR, or the already indexed 85K images.
+Dùng `ground-truth.consensus.json` cho lần chạy evaluator cuối. Không bước nào
+trong số này thay đổi Qdrant, PostgreSQL, OCR đã lưu hoặc 85K ảnh đã index.
 
-## 2. Run the system and evaluate
+## 2. Chạy hệ thống và đánh giá
 
-Start the current application normally:
+Khởi động ứng dụng theo cách thông thường:
 
 ```powershell
 docker compose up -d
 ```
 
-Set credentials in the current PowerShell session. The account must have the
-admin role so dataset and indexing evidence can be read:
+Đặt thông tin đăng nhập trong phiên PowerShell hiện tại. Tài khoản phải có role
+Admin để đọc minh chứng dataset và indexing:
 
 ```powershell
 $env:EVAL_EMAIL="admin@example.com"
@@ -206,12 +203,12 @@ $env:EVAL_PASSWORD="your-password"
 python evaluation/evaluate.py --manifest evaluation/ground-truth.json
 ```
 
-You can instead copy `.env.example` to an ignored local file and pass
-`--env-file`, or provide `EVAL_ACCESS_TOKEN`. Passing `--env-file backend/.env`
-also recognizes the existing `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`
-variables. Credentials and tokens are never written to reports.
+Cũng có thể chép `.env.example` sang file local đã ignore rồi truyền
+`--env-file`, hoặc cung cấp `EVAL_ACCESS_TOKEN`. Khi truyền
+`--env-file backend/.env`, công cụ cũng nhận các biến `SEED_ADMIN_EMAIL` và
+`SEED_ADMIN_PASSWORD`. Thông tin đăng nhập và token không được ghi vào báo cáo.
 
-Therefore, with the current local setup the shortest complete command is:
+Với cấu hình local hiện tại, lệnh đầy đủ ngắn nhất là:
 
 ```powershell
 python evaluation/evaluate.py `
@@ -220,9 +217,8 @@ python evaluation/evaluate.py `
   --shuffle
 ```
 
-By default, the evaluator uses the most recent completed indexing batch with at
-least 50 successfully processed images. Pinning a fixed batch is still better
-for reproducibility:
+Mặc định, evaluator dùng batch indexing hoàn thành gần nhất có ít nhất 50 ảnh
+xử lý thành công. Chỉ định batch cố định vẫn tốt hơn cho khả năng tái lập:
 
 ```powershell
 python evaluation/evaluate.py `
@@ -230,30 +226,30 @@ python evaluation/evaluate.py `
   --batch-id idx_39634fb15e1a
 ```
 
-The evaluator only performs authenticated searches and GET requests for admin
-metrics. It does not upload, delete, re-index, or modify the 60K/85K dataset.
-Search history rows are created by the existing search endpoints.
+Evaluator chỉ thực hiện tìm kiếm đã xác thực và GET request cho số liệu Admin.
+Công cụ không upload, xóa, re-index hoặc sửa dataset 60K/85K. Các bản ghi lịch
+sử tìm kiếm được tạo bởi endpoint Search hiện có.
 
-## 3. Use the results
+## 3. Sử dụng kết quả
 
-Each run creates a timestamped folder under `evaluation/results/` containing:
+Mỗi lần chạy tạo một thư mục có timestamp trong `evaluation/results/`, gồm:
 
-- `evaluation-report.md`: presentation-ready requirement summary.
-- `evaluation-report.json`: complete machine-readable evidence.
-- `query-results.csv`: per-query repeated latency, label coverage, official and
-  provisional quality metrics, result IDs, and errors.
+- `evaluation-report.md`: tóm tắt yêu cầu sẵn sàng để trình bày.
+- `evaluation-report.json`: toàn bộ minh chứng ở định dạng máy đọc được.
+- `query-results.csv`: độ trễ lặp lại theo truy vấn, độ phủ nhãn, chỉ số chất
+  lượng chính thức và tạm thời, ID kết quả và lỗi.
 
-The Markdown and JSON reports also contain 95% bootstrap confidence intervals.
-Wide intervals mean the query set is still too small or heterogeneous; they are
-not fixed by repeating the same API request more times. Add independently chosen
-holdout queries if narrower generalization evidence is required.
+Báo cáo Markdown và JSON cũng chứa khoảng tin cậy bootstrap 95%. Khoảng rộng
+cho thấy tập truy vấn còn nhỏ hoặc không đồng nhất; lặp lại cùng request API
+không giải quyết được vấn đề này. Hãy thêm truy vấn holdout được chọn độc lập
+nếu cần minh chứng tổng quát hóa hẹp hơn.
 
-Exit code `0` means every configured requirement passed. Exit code `2` means
-the run completed but at least one requirement failed or a manual check is
-still `not_tested`. Exit code `1` means the evaluation could not run.
+Exit code `0` nghĩa là mọi yêu cầu cấu hình đều đạt. Exit code `2` nghĩa là lần
+chạy hoàn tất nhưng có ít nhất một yêu cầu không đạt hoặc kiểm tra thủ công vẫn
+là `not_tested`. Exit code `1` nghĩa là không thể chạy đánh giá.
 
-For the final report, keep the manifest, exact commit hash, Docker configuration,
-machine CPU/RAM, dataset counts, and one timestamped result folder together.
-The CLI defaults to three full runs after one discarded warm-up request per
-mode. Per-query latency uses the median while the mode summary reports every
-measured request, including strict maximum-threshold compliance.
+Trong báo cáo cuối, lưu cùng nhau manifest, commit hash chính xác, cấu hình
+Docker, CPU/RAM máy, số lượng dataset và một thư mục kết quả có timestamp. CLI
+mặc định chạy ba lượt đầy đủ sau một request warm-up bị loại cho mỗi chế độ. Độ
+trễ theo truy vấn dùng median, còn phần tổng hợp chế độ báo cáo mọi request đã
+đo, bao gồm kiểm tra nghiêm ngặt ngưỡng tối đa.
