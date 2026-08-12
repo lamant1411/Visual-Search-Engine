@@ -1,49 +1,44 @@
-# Manual verification checklist
+# Checklist kiểm thử thủ công
 
-Latest recorded run: [`docs/TEST_REPORT_2026-08-12.md`](docs/TEST_REPORT_2026-08-12.md).
+Lần kiểm thử được ghi nhận gần nhất: [`docs/TEST_REPORT_2026-08-12.md`](docs/TEST_REPORT_2026-08-12.md).
 
-Run the stack with `docker compose up --build`, then use the Frontend at
-http://localhost:5173. Use the API documentation at http://localhost:8000/docs
-to inspect the available endpoints when diagnosing an integration issue.
+Chạy hệ thống bằng `docker compose up --build`, sau đó truy cập Frontend tại
+http://localhost:5173. Khi chẩn đoán lỗi tích hợp, dùng tài liệu API tại
+http://localhost:8000/docs để kiểm tra các endpoint hiện có.
 
-## Authentication
+## Xác thực
 
-- Register a new account with a valid email and a password that meets the UI
-  rules.
-- Log in, refresh the page, and confirm the session remains available.
-- Log out and confirm protected pages redirect to Login.
-- Sign in as an admin and confirm `/admin` is accessible; a normal user must
-  not be able to access it.
+- Đăng ký tài khoản mới bằng email hợp lệ và mật khẩu đáp ứng quy tắc giao diện.
+- Đăng nhập, tải lại trang và xác nhận phiên đăng nhập vẫn còn.
+- Đăng xuất và xác nhận trang được bảo vệ chuyển về Login.
+- Đăng nhập bằng Admin và xác nhận truy cập được `/admin`; user thường không được truy cập.
 
-## Search
+## Tìm kiếm
 
-- Submit a text search and confirm results, similarity scores, loading, empty,
-  and error states behave correctly.
-- Upload a valid image and confirm image search opens Results.
-- Reject unsupported formats and oversized files with a clear message.
-- Scroll Results to load the next page without duplicate cards.
-- Open an image, zoom it, save/remove a bookmark, and use “find similar”.
-- Crop an image area, apply the crop, and confirm a new similar-image search is
-  created. Test the full-image fallback if a remote image cannot be cropped.
+- Tìm bằng văn bản và kiểm tra kết quả, điểm tương đồng, trạng thái loading, rỗng và lỗi.
+- Tải ảnh hợp lệ và xác nhận Image Search mở trang Results.
+- Kiểm tra định dạng không hỗ trợ và file quá lớn bị từ chối với thông báo rõ ràng.
+- Cuộn Results để tải trang tiếp theo mà không lặp thẻ ảnh.
+- Mở ảnh, zoom, thêm/xóa bookmark và dùng chức năng tìm ảnh tương tự.
+- Crop một vùng ảnh, áp dụng và xác nhận tạo lượt tìm tương tự mới. Kiểm tra fallback
+  dùng toàn bộ ảnh nếu ảnh từ xa không thể crop.
 
-## Personal data
+## Dữ liệu cá nhân
 
-- Save an image, check it in Bookmarks, then remove it and use Undo.
-- Open History, run a search again from an entry, and confirm its query/mode is
-  restored.
-- Open Image Library and check image fallback behavior if the source cannot be
-  loaded.
+- Lưu ảnh, kiểm tra trong Bookmark, sau đó xóa và dùng Undo.
+- Mở History, tìm lại từ một bản ghi và xác nhận query/chế độ được khôi phục.
+- Mở Image Library và kiểm tra fallback khi nguồn ảnh không tải được.
 
 ## Admin indexing
 
-- Upload a small set of valid images and start an indexing batch.
-- Confirm upload and indexing progress update independently.
-- Confirm processed, successful, failed, and duplicate counts are plausible.
-- Cancel a running batch and confirm the UI shows the cancelled status.
-- Open the completed batch in Image Library and verify indexed images appear.
+- Tải một nhóm nhỏ ảnh hợp lệ và bắt đầu batch indexing.
+- Xác nhận tiến trình upload và indexing cập nhật độc lập.
+- Kiểm tra số ảnh đã xử lý, thành công, thất bại và trùng lặp hợp lý.
+- Hủy batch đang chạy và xác nhận giao diện hiển thị trạng thái đã hủy.
+- Mở batch hoàn thành trong Image Library và xác nhận ảnh đã index xuất hiện.
 
-## Responsive and release checks
+## Kiểm tra responsive và phát hành
 
-- Repeat Search, image detail, and account-menu interactions at mobile width.
-- Confirm keyboard focus is visible and dialogs close with Escape.
-- Run `npm run lint` and `npm run build` in `visual-search-fe` before release.
+- Lặp lại thao tác Search, chi tiết ảnh và menu tài khoản ở kích thước mobile.
+- Xác nhận focus bàn phím nhìn thấy được và dialog đóng bằng phím Escape.
+- Chạy `npm run lint` và `npm run build` trong `visual-search-fe` trước khi phát hành.

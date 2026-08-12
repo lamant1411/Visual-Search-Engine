@@ -1,4 +1,4 @@
-# DB Design Notes
+# Ghi chú thiết kế Database
 
 Tài liệu này ghi lại phân tích yêu cầu dữ liệu cho dự án **Visual Search Engine** và đề xuất schema database tương ứng.
 
@@ -20,7 +20,7 @@ Kiến trúc lưu trữ dữ liệu đề xuất:
 
 ## 1. Phân tích yêu cầu dự án
 
-### 1.1. Authentication
+### 1.1. Xác thực
 
 Hệ thống cần hỗ trợ:
 
@@ -30,7 +30,7 @@ Hệ thống cần hỗ trợ:
 - Phân biệt vai trò người dùng bằng `role`
 - Access token hết hạn sau 24 giờ
 
-### 1.2. Search by Image
+### 1.2. Tìm kiếm bằng ảnh
 
 Người dùng upload một ảnh để tìm các ảnh tương tự về nội dung hoặc hình dạng.
 
@@ -40,7 +40,7 @@ Yêu cầu liên quan tới dữ liệu:
 - Lưu trạng thái xử lý ảnh
 - Lưu định danh để đồng bộ ảnh với điểm vector trong Qdrant
 
-### 1.3. Search by Text
+### 1.3. Tìm kiếm bằng văn bản
 
 Hệ thống hỗ trợ 2 kiểu tìm kiếm bằng text:
 
@@ -62,7 +62,7 @@ Yêu cầu liên quan tới dữ liệu:
 - Lưu metadata cơ bản của ảnh như kích thước, định dạng, tên file, đường dẫn lưu trữ
 - Có thể lưu thêm dữ liệu phục vụ preview hoặc hiển thị chi tiết
 
-### 1.5. Admin Dashboard
+### 1.5. Trang tổng quan Admin
 
 Admin cần theo dõi:
 
@@ -82,7 +82,7 @@ Yêu cầu liên quan tới dữ liệu:
 
 Chia schema thành 2 nhóm:
 
-- **Bảng bắt buộc**: cần có để đáp ứng core requirement của dự án
+- **Bảng bắt buộc**: cần có để đáp ứng yêu cầu cốt lõi của dự án
 - **Bảng mở rộng**: không bắt buộc ở giai đoạn đầu, nhưng hữu ích nếu team có thời gian
 
 ---
@@ -244,7 +244,7 @@ Các cột đề xuất:
 Mục đích:
 
 - Xem lại lịch sử tìm kiếm
-- Hỗ trợ analytics
+- Hỗ trợ phân tích dữ liệu
 
 ---
 
@@ -310,7 +310,7 @@ Mục đích:
 4. `ocr_texts`
 5. `indexing_batches`
 
-Các bảng như `refresh_tokens`, `search_history`, `bookmarks` được xem là mở rộng và có thể bổ sung sau khi core system đã chạy ổn định.
+Các bảng như `refresh_tokens`, `search_history`, `bookmarks` được xem là mở rộng và có thể bổ sung sau khi hệ thống cốt lõi đã chạy ổn định.
 
 Thiết kế này để:
 
