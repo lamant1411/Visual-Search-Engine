@@ -7,7 +7,6 @@ import {
   Minus,
   Plus,
   RotateCcw,
-  ScanText,
   X,
 } from 'lucide-react'
 import { Button } from '@/components/base/button'
@@ -25,8 +24,9 @@ const typeConfig: Record<
   { label: string; icon: typeof ImageIcon; iconClass: string }
 > = {
   image: { label: 'Image Search', icon: ImageIcon, iconClass: 'text-sky-700' },
-  semantic: { label: 'Description Search', icon: FileText, iconClass: 'text-accent-700' },
-  ocr: { label: 'Text-in-image Search', icon: ScanText, iconClass: 'text-amber-700' },
+  semantic: { label: 'Text Search', icon: FileText, iconClass: 'text-accent-700' },
+  ocr: { label: 'Text Search', icon: FileText, iconClass: 'text-accent-700' },
+  hybrid: { label: 'Text Search', icon: FileText, iconClass: 'text-accent-700' },
 }
 
 function formatDate(value: string) {

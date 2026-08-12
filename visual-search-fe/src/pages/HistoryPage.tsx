@@ -7,16 +7,13 @@ import { HistoryImageModal } from '@/components/feature/history/HistoryImageModa
 import { HistoryList } from '@/components/feature/history/HistoryList'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { useHistory } from '@/features/history/useHistory'
-import type { HistoryItem, SearchQueryType } from '@/lib/api/history'
-
-type FilterType = 'all' | SearchQueryType
+import type { HistoryFilterType, HistoryItem } from '@/lib/api/history'
 
 export default function HistoryPage() {
   const navigate = useNavigate()
   const loadMoreRef = useRef<HTMLDivElement | null>(null)
-  const [activeFilter, setActiveFilter] = useState<FilterType>('all')
+  const [activeFilter, setActiveFilter] = useState<HistoryFilterType>('all')
   const [previewImageItem, setPreviewImageItem] = useState<HistoryItem | null>(null)
-  const queryType = activeFilter === 'all' ? undefined : activeFilter
   const {
     items,
     total,
@@ -28,7 +25,7 @@ export default function HistoryPage() {
     fetchNextPage,
     error,
     refetch,
-  } = useHistory(queryType)
+  } = useHistory(activeFilter)
 
   useEffect(() => {
     const target = loadMoreRef.current
@@ -62,11 +59,11 @@ export default function HistoryPage() {
     }
 
     navigate(
-      `/search/results?mode=${item.query_type}&q=${encodeURIComponent(item.query_value)}&page=1&limit=20`,
+      `/search/results?mode=text&q=${encodeURIComponent(item.query_value)}&page=1&limit=20`,
     )
   }
 
-  function handleFilterChange(filter: FilterType) {
+  function handleFilterChange(filter: HistoryFilterType) {
     setActiveFilter(filter)
   }
 

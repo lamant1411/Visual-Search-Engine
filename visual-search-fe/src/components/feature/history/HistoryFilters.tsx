@@ -1,19 +1,16 @@
-import { FileText, Image, Layers3, ScanText } from 'lucide-react'
-import type { SearchQueryType } from '@/lib/api/history'
-
-type FilterType = 'all' | SearchQueryType
+import { FileText, Image, Layers3 } from 'lucide-react'
+import type { HistoryFilterType } from '@/lib/api/history'
 
 interface HistoryFiltersProps {
-  activeFilter: FilterType
-  onChange: (filter: FilterType) => void
+  activeFilter: HistoryFilterType
+  onChange: (filter: HistoryFilterType) => void
 }
 
 const filters = [
   { value: 'all', label: 'All', icon: Layers3 },
+  { value: 'text', label: 'Text', icon: FileText },
   { value: 'image', label: 'Image', icon: Image },
-  { value: 'semantic', label: 'Description', icon: FileText },
-  { value: 'ocr', label: 'Text in image', icon: ScanText },
-] satisfies Array<{ value: FilterType; label: string; icon: typeof Image }>
+] satisfies Array<{ value: HistoryFilterType; label: string; icon: typeof Image }>
 
 export function HistoryFilters({ activeFilter, onChange }: HistoryFiltersProps) {
   return (

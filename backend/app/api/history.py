@@ -1,5 +1,7 @@
 """Search history API for the current user."""
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +22,7 @@ router = APIRouter()
     response_model=SearchHistoryResponse,
     summary="List search history",
     description=(
-        "Return search history for the current user, including image, semantic, and OCR searches. "
+        "Return search history for the current user, grouped as image or text searches. "
         "Requires Bearer access_token."
     ),
     responses={
@@ -33,14 +35,24 @@ async def get_search_history(
     limit: int = Query(20, ge=1, le=100, description="Number of items per page."),
     query_type: SearchQueryType | None = Query(
         None,
-        description="Optional search type filter: image, semantic, or ocr.",
+        description="Optional legacy search type filter.",
+    ),
+    query_group: Literal["text"] | None = Query(
+        None,
+        description="Use text to include semantic, OCR, and hybrid text searches.",
     ),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SearchHistoryResponse:
     """Return search history of the current authenticated user."""
     filters = [SearchHistory.user_id == current_user.id]
-    if query_type is not None:
+    if query_group == "text":
+        filters.append(
+            SearchHistory.query_type.in_(
+                [SearchQueryType.semantic, SearchQueryType.ocr, SearchQueryType.hybrid]
+            )
+        )
+    elif query_type is not None:
         filters.append(SearchHistory.query_type == query_type)
 
     total = int(
