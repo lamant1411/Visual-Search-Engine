@@ -31,6 +31,7 @@ from app.services.search import (
     extract_explicit_ocr_query,
     fuse_search_hits,
     image_visible_to_user,
+    rerank_by_clip,
     search_images_by_ocr_text,
 )
 
@@ -300,12 +301,20 @@ async def search_by_text(
         semantic_hits, ocr_response.items, semantic_weight=semantic_w, ocr_weight=ocr_w
     )
 
-    # TÃ­nh láº¡i rrf_scores Ä‘á»ƒ hiá»ƒn thá»‹
+    # --- CLIP Re-ranking (top-20) ---
+    # Re-sort top-20 theo CLIP cosine score thực sự; phần còn lại giữ nguyên thứ tự RRF.
+    # OCR-only results trong top-20 sẽ được query Qdrant thêm để lấy CLIP score.
+    ordered_ids = rerank_by_clip(ordered_ids, vector, semantic_hits)
+
+    # RRF scores cho OCR-only fallback display
     rrf_scores: dict[int, float] = {}
     for rank, hit in enumerate(semantic_hits, start=1):
         rrf_scores[hit.image_id] = rrf_scores.get(hit.image_id, 0.0) + semantic_w * (1.0 / (_RRF_K + rank))
     for rank, item in enumerate(ocr_response.items, start=1):
         rrf_scores[item.id] = rrf_scores.get(item.id, 0.0) + ocr_w * (1.0 / (_RRF_K + rank))
+
+    # CLIP scores tuyệt đối cho top-20 (sau rerank đã được bổ sung bởi search_by_ids)
+    clip_score_map: dict[int, float] = {hit.image_id: hit.score for hit in semantic_hits}
 
     response = await build_search_response_from_ids(
         db,
@@ -313,8 +322,10 @@ async def search_by_text(
         page=page,
         limit=limit,
         rrf_scores=rrf_scores,
+        clip_scores=clip_score_map,
         owner_user_id=current_user.id,
     )
+
 
     if page == 1:
         await _save_search_history_once(

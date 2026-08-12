@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FolderOpen, Loader2, Pencil, Plus, RefreshCw, RotateCcw, Trash2, X } from 'lucide-react'
+import { ArrowLeft, FolderOpen, Loader2, Pencil, Plus, RefreshCw, RotateCcw, Trash2, X } from 'lucide-react'
 import { useNavigate } from 'react-router'
 
 import { Button } from '@/components/base/button'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { SearchResultDetailModal } from '@/features/search/components/SearchResultDetailModal'
+import { ResultGrid } from '@/features/search/components/ResultGrid'
 import { useBookmarks } from '@/features/search/hooks/useBookmarks'
 import type { SearchResult } from '@/features/search/types'
 import {
@@ -30,13 +31,14 @@ const emptyForm: AlbumFormState = {
   description: '',
 }
 
-export default function AlbumsPage() {
+export function AlbumsContent({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { isBookmarked, toggleBookmark, isToggling } = useBookmarks()
   const [viewMode, setViewMode] = useState<AlbumViewMode>('active')
   const [selectedAlbumId, setSelectedAlbumId] = useState<number | null>(null)
   const [selectedImage, setSelectedImage] = useState<AlbumImage | null>(null)
+  const [showFormModal, setShowFormModal] = useState(false)
   const [editingAlbum, setEditingAlbum] = useState<Album | null>(null)
   const [form, setForm] = useState<AlbumFormState>(emptyForm)
   const [formError, setFormError] = useState<string | null>(null)
@@ -61,7 +63,7 @@ export default function AlbumsPage() {
     ? albumsQuery.data?.total ?? displayedAlbums.length
     : deletedAlbumsQuery.data?.total ?? displayedAlbums.length
   const selectedAlbum = useMemo(
-    () => displayedAlbums.find((album) => album.id === selectedAlbumId) ?? displayedAlbums[0] ?? null,
+    () => (selectedAlbumId !== null ? displayedAlbums.find((album) => album.id === selectedAlbumId) ?? null : null),
     [displayedAlbums, selectedAlbumId],
   )
   const activeAlbumId = selectedAlbum?.id ?? null
@@ -72,85 +74,116 @@ export default function AlbumsPage() {
     enabled: activeAlbumId !== null,
   })
 
-  const invalidateAlbums = () => {
-    void queryClient.invalidateQueries({ queryKey: ['albums'] })
-    void queryClient.invalidateQueries({ queryKey: ['albums', 'deleted'] })
-    if (activeAlbumId !== null) {
-      void queryClient.invalidateQueries({ queryKey: ['album-images', activeAlbumId] })
-    }
+  const invalidateAlbums = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['albums'] }),
+      queryClient.invalidateQueries({ queryKey: ['albums-count'] }),
+      queryClient.invalidateQueries({ queryKey: ['home-count'] }),
+      queryClient.invalidateQueries({ queryKey: ['trash-count'] }),
+      queryClient.invalidateQueries({ queryKey: ['image-library'] }),
+      queryClient.invalidateQueries({ queryKey: ['album-images'] }),
+    ])
   }
 
   const createMutation = useMutation({
     mutationFn: (payload: AlbumCreatePayload) => albumsApi.create(payload),
-    onSuccess: (album) => {
-      setViewMode('active')
-      setSelectedAlbumId(album.id)
+    onSuccess: async (album) => {
       setForm(emptyForm)
       setFormError(null)
-      invalidateAlbums()
+      setShowFormModal(false)
+      await invalidateAlbums()
+      setViewMode('active')
+      setSelectedAlbumId(album.id)
     },
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ albumId, payload }: { albumId: number; payload: AlbumCreatePayload }) =>
       albumsApi.update(albumId, payload),
-    onSuccess: (album) => {
+    onSuccess: async (album) => {
       setEditingAlbum(null)
-      setSelectedAlbumId(album.id)
       setForm(emptyForm)
       setFormError(null)
-      invalidateAlbums()
+      setShowFormModal(false)
+      await invalidateAlbums()
+      setSelectedAlbumId(album.id)
     },
   })
 
   const deleteMutation = useMutation({
     mutationFn: (albumId: number) => albumsApi.delete(albumId),
-    onSuccess: () => {
+    onSuccess: async () => {
       setSelectedAlbumId(null)
       setSelectedImage(null)
       setSelectedImageIds(new Set())
       setEditingAlbum(null)
-      invalidateAlbums()
+      setShowFormModal(false)
+      await invalidateAlbums()
     },
   })
 
   const restoreMutation = useMutation({
     mutationFn: (albumId: number) => albumsApi.restore(albumId),
-    onSuccess: (album) => {
+    onSuccess: async (album) => {
+      await invalidateAlbums()
       setViewMode('active')
       setSelectedAlbumId(album.id)
-      invalidateAlbums()
     },
   })
 
   const permanentDeleteMutation = useMutation({
     mutationFn: (albumId: number) => albumsApi.permanentDelete(albumId),
-    onSuccess: () => {
+    onSuccess: async () => {
       setSelectedAlbumId(null)
-      invalidateAlbums()
+      await invalidateAlbums()
     },
   })
 
   const removeImageMutation = useMutation({
     mutationFn: ({ albumId, imageId }: { albumId: number; imageId: number }) =>
       albumsApi.removeImage(albumId, imageId),
-    onSuccess: (_response, variables) => {
+    onSuccess: async (_response, variables) => {
       setSelectedImage(null)
       setSelectedImageIds((current) => {
         const next = new Set(current)
         next.delete(variables.imageId)
         return next
       })
-      invalidateAlbums()
+      queryClient.setQueriesData<{ items: SearchResult[]; total: number }>(
+        { queryKey: ['album-images', variables.albumId] },
+        (oldData) => {
+          if (!oldData || !oldData.items) return oldData
+          const newItems = oldData.items.filter((item) => item.id !== variables.imageId)
+          return {
+            ...oldData,
+            items: newItems,
+            total: Math.max(0, oldData.total - 1),
+          }
+        }
+      )
+      await invalidateAlbums()
     },
   })
 
   const bulkRemoveImagesMutation = useMutation({
     mutationFn: ({ albumId, imageIds }: { albumId: number; imageIds: number[] }) =>
       albumsApi.removeImages(albumId, imageIds),
-    onSuccess: () => {
+    onSuccess: async (_response, variables) => {
+      const removedSet = new Set(variables.imageIds)
       setSelectedImageIds(new Set())
-      invalidateAlbums()
+      queryClient.setQueriesData<{ items: SearchResult[]; total: number }>(
+        { queryKey: ['album-images', variables.albumId] },
+        (oldData) => {
+          if (!oldData || !oldData.items) return oldData
+          const newItems = oldData.items.filter((item) => !removedSet.has(item.id))
+          return {
+            ...oldData,
+            items: newItems,
+            total: Math.max(0, oldData.total - (oldData.items.length - newItems.length)),
+          }
+        }
+      )
+      await invalidateAlbums()
     },
   })
 
@@ -169,6 +202,7 @@ export default function AlbumsPage() {
     setEditingAlbum(null)
     setForm(emptyForm)
     setFormError(null)
+    setShowFormModal(false)
   }
 
   function startEdit(album: Album) {
@@ -178,12 +212,14 @@ export default function AlbumsPage() {
       description: album.description ?? '',
     })
     setFormError(null)
+    setShowFormModal(true)
   }
 
   function cancelEdit() {
     setEditingAlbum(null)
     setForm(emptyForm)
     setFormError(null)
+    setShowFormModal(false)
   }
 
   function handleSubmitAlbum(event: React.FormEvent<HTMLFormElement>) {
@@ -226,12 +262,25 @@ export default function AlbumsPage() {
     if (!selectedImage || mutatingImageId) return
     if (!window.confirm('Move this image to deleted images? It will be hidden from this album until restored.')) return
 
-    setMutatingImageId(selectedImage.id)
+    const deletedId = selectedImage.id
+    setMutatingImageId(deletedId)
     try {
-      await imageLibraryApi.delete(selectedImage.id)
+      await imageLibraryApi.delete(deletedId)
       setSelectedImage(null)
-      await imagesQuery.refetch()
-      invalidateAlbums()
+      if (activeAlbumId !== null) {
+        queryClient.setQueriesData<{ items: SearchResult[]; total: number }>(
+          { queryKey: ['album-images', activeAlbumId] },
+          (oldData) => {
+            if (!oldData || !oldData.items) return oldData
+            return {
+              ...oldData,
+              items: oldData.items.filter((item) => item.id !== deletedId),
+              total: Math.max(0, oldData.total - 1),
+            }
+          }
+        )
+      }
+      await invalidateAlbums()
     } catch (error) {
       console.error('[AlbumsPage] Soft delete image failed', error)
       alert('Unable to move this image to deleted images. Check the API response or backend logs.')
@@ -301,27 +350,30 @@ export default function AlbumsPage() {
     )
   }
 
-  return (
-    <>
-      <PageContainer size="wide" className="space-y-7 py-8 sm:py-10">
+  const content = (
+    <div className="space-y-6">
+      {!embedded && (
         <header className="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-xs font-bold uppercase text-accent-600">Image organization</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-accent-600">Image organization</p>
             <div className="mt-2 flex flex-wrap items-center gap-3">
               <h1 className="font-display text-3xl font-bold text-ink-primary sm:text-4xl">Albums</h1>
-              <span className="inline-flex min-h-8 items-center rounded-full border border-border bg-white px-3 text-sm font-semibold text-ink-secondary shadow-sm">
+              <span className="inline-flex min-h-8 items-center rounded-full border border-border bg-white px-3.5 text-sm font-semibold text-ink-secondary shadow-sm">
                 {displayedTotal}
               </span>
             </div>
             <p className="mt-2 max-w-2xl text-sm text-ink-secondary sm:text-base">
-              Manage private albums, restore deleted albums, or permanently remove albums that are no longer needed.
+              Organize your photo collection into albums. Click any album to open its full detail view.
             </p>
           </div>
           <Button type="button" variant="outline" leftIcon={<RefreshCw className="h-4 w-4" />} onClick={() => invalidateAlbums()}>
             Refresh
           </Button>
         </header>
+      )}
 
+      {/* View mode tabs & Create button */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"
@@ -339,218 +391,361 @@ export default function AlbumsPage() {
           </Button>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
-          <section className="space-y-4">
-            {!isDeletedView && (
-              <form onSubmit={handleSubmitAlbum} className="rounded-3xl border border-border bg-white p-5 shadow-sm shadow-slate-200/70">
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-base font-bold text-ink-primary">{editingAlbum ? 'Edit album' : 'Create album'}</h2>
-                  {editingAlbum && (
-                    <button
-                      type="button"
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-full text-ink-muted hover:bg-surface-1 hover:text-ink-primary"
-                      onClick={cancelEdit}
-                      aria-label="Cancel editing album"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
+        {!isDeletedView && (
+          <Button
+            type="button"
+            variant="primary"
+            leftIcon={<Plus className="h-4 w-4" />}
+            onClick={() => {
+              setEditingAlbum(null)
+              setForm(emptyForm)
+              setFormError(null)
+              setShowFormModal(true)
+            }}
+          >
+            Create album
+          </Button>
+        )}
+      </div>
+
+      {/* IF NO ALBUM IS SELECTED: SHOW THE ALBUM CARDS GRID */}
+      {selectedAlbumId === null ? (
+        <section className="min-h-[420px]">
+          {(viewMode === 'active' ? albumsQuery.isLoading : deletedAlbumsQuery.isLoading) ? (
+            <div className="flex min-h-64 items-center justify-center rounded-3xl border border-border bg-white p-8 text-sm font-semibold text-ink-secondary shadow-sm">
+              <Loader2 className="mr-2 h-5 w-5 animate-spin text-accent-600" /> Loading albums...
+            </div>
+          ) : displayedAlbums.length === 0 ? (
+            <div className="flex min-h-[380px] flex-col items-center justify-center rounded-3xl border border-dashed border-border bg-white p-8 text-center shadow-sm">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-1 text-ink-muted">
+                <FolderOpen className="h-8 w-8" />
+              </div>
+              <p className="mt-4 text-base font-bold text-ink-primary">
+                {isDeletedView ? 'No deleted albums' : 'No albums yet'}
+              </p>
+              <p className="mt-1.5 max-w-md text-sm text-ink-secondary leading-relaxed">
+                {isDeletedView
+                  ? 'Deleted albums will appear here for restore or permanent deletion.'
+                  : 'Create your first album to start organizing your images into custom collections.'}
+              </p>
+              {!isDeletedView && (
+                <Button
+                  type="button"
+                  className="mt-5"
+                  leftIcon={<Plus className="h-4 w-4" />}
+                  onClick={() => {
+                    setEditingAlbum(null)
+                    setForm(emptyForm)
+                    setFormError(null)
+                    setShowFormModal(true)
+                  }}
+                >
+                  Create your first album
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+              {displayedAlbums.map((album) => (
+                <div
+                  key={album.id}
+                  className="group relative flex flex-col justify-between overflow-hidden rounded-3xl border border-border bg-white p-5 shadow-sm shadow-slate-200/60 transition duration-200 hover:-translate-y-1 hover:border-accent-300 hover:shadow-xl hover:shadow-accent-500/10 cursor-pointer"
+                  onClick={() => {
+                    setSelectedAlbumId(album.id)
+                    setSelectedImage(null)
+                    setSelectedImageIds(new Set())
+                  }}
+                >
+                  {/* Card Media Preview */}
+                  <div className="relative aspect-[16/10] w-full overflow-hidden rounded-2xl bg-surface-1">
+                    {album.cover_image_url ? (
+                      <img
+                        src={album.cover_image_url}
+                        alt={album.name}
+                        className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-accent-500/10 via-surface-1 to-surface-2 text-accent-600">
+                        <FolderOpen className="h-12 w-12 stroke-[1.5] transition duration-300 group-hover:scale-110" />
+                      </div>
+                    )}
+                    <span className="absolute top-3 right-3 rounded-full border border-black/5 bg-white/95 px-3 py-1 text-xs font-bold text-ink-primary shadow-sm backdrop-blur-md">
+                      {album.image_count} {album.image_count === 1 ? 'image' : 'images'}
+                    </span>
+                  </div>
+
+                  {/* Card Text Content */}
+                  <div className="mt-4 flex-1">
+                    <h3 className="line-clamp-1 text-lg font-bold text-ink-primary group-hover:text-accent-600 transition">
+                      {album.name}
+                    </h3>
+                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-ink-secondary min-h-[40px]">
+                      {album.description || 'No description provided.'}
+                    </p>
+                  </div>
+
+                  {/* Card Bottom Actions Bar */}
+                  <div
+                    className="mt-4 flex items-center justify-between border-t border-border/60 pt-3"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span className="text-xs font-semibold text-accent-600 group-hover:underline">
+                      View album detail →
+                    </span>
+                    <div className="flex items-center gap-1">
+                      {viewMode === 'active' ? (
+                        <>
+                          <button
+                            type="button"
+                            title="Edit album"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-secondary hover:bg-accent-50 hover:text-accent-600 transition"
+                            onClick={() => startEdit(album)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            title="Delete album"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-secondary hover:bg-red-50 hover:text-red-600 transition"
+                            onClick={() => {
+                              if (window.confirm(`Move album "${album.name}" to deleted albums? Images will not be deleted.`)) {
+                                deleteMutation.mutate(album.id)
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          title="Restore album"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-secondary hover:bg-emerald-50 hover:text-emerald-600 transition"
+                          onClick={() => restoreMutation.mutate(album.id)}
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : (
+        /* IF AN ALBUM IS SELECTED: SHOW DETAILED ALBUM VIEW ONLY */
+        <section className="min-h-[560px] rounded-3xl border border-border bg-white p-6 shadow-sm shadow-slate-200/70 space-y-6">
+          {/* Top navigation back button */}
+          <div className="flex items-center justify-between border-b border-border pb-4">
+            <Button
+              type="button"
+              variant="outline"
+              leftIcon={<ArrowLeft className="h-4 w-4" />}
+              onClick={() => setSelectedAlbumId(null)}
+            >
+              Back to albums
+            </Button>
+            <span className="text-xs font-bold text-ink-muted uppercase tracking-wider">
+              {isDeletedView ? 'Deleted Album View' : 'Album Detail'}
+            </span>
+          </div>
+
+          {isDeletedView && selectedAlbum ? (
+            <DeletedAlbumDetail
+              album={selectedAlbum}
+              images={images}
+              isLoadingImages={imagesQuery.isLoading}
+              isRestoring={restoreMutation.isPending}
+              isDeleting={permanentDeleteMutation.isPending}
+              onRestore={() => restoreMutation.mutate(selectedAlbum.id)}
+              onPermanentDelete={() => {
+                if (window.confirm(`Permanently delete album "${selectedAlbum.name}"? Images will not be deleted, but this album cannot be restored.`)) {
+                  permanentDeleteMutation.mutate(selectedAlbum.id)
+                }
+              }}
+            />
+          ) : selectedAlbum ? (
+            <div className="space-y-6">
+              <div className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-2xl font-black text-ink-primary">{selectedAlbum.name}</h2>
+                    <span className="inline-flex items-center rounded-full border border-border bg-surface-1 px-3 py-0.5 text-xs font-bold text-ink-secondary">
+                      {selectedAlbum.image_count} active images
+                    </span>
+                  </div>
+                  {selectedAlbum.description && (
+                    <p className="mt-2 max-w-3xl text-sm leading-6 text-ink-secondary">{selectedAlbum.description}</p>
                   )}
                 </div>
+                <div className="flex flex-wrap gap-2 shrink-0">
+                  <Button type="button" variant="outline" leftIcon={<Pencil className="h-4 w-4" />} onClick={() => startEdit(selectedAlbum)}>
+                    Edit
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    leftIcon={<Trash2 className="h-4 w-4" />}
+                    disabled={deleteMutation.isPending}
+                    onClick={() => {
+                      if (window.confirm(`Move album "${selectedAlbum.name}" to deleted albums? Images will not be deleted.`)) {
+                        deleteMutation.mutate(selectedAlbum.id)
+                      }
+                    }}
+                  >
+                    Move to deleted
+                  </Button>
+                </div>
+              </div>
 
-                <label className="mt-4 block text-sm font-bold text-ink-primary">
-                  Name
-                  <input
-                    className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm font-semibold outline-none transition focus:border-accent-600 focus:ring-4 focus:ring-accent-100"
-                    value={form.name}
-                    maxLength={255}
-                    onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-                    placeholder="Travel screenshots"
+              {imagesQuery.isLoading ? (
+                <div className="flex min-h-64 items-center justify-center text-sm font-semibold text-ink-secondary">
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin text-accent-600" /> Loading images...
+                </div>
+              ) : images.length === 0 ? (
+                <div className="rounded-2xl border border-border bg-surface-1/40 p-12 text-center">
+                  <FolderOpen className="mx-auto h-10 w-10 text-ink-muted" />
+                  <p className="mt-3 text-base font-bold text-ink-primary">No active images in this album</p>
+                  <p className="mt-1 text-sm text-ink-secondary max-w-sm mx-auto">
+                    Use Add to album from an image detail view in the Image Library.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-3 rounded-2xl border border-border bg-surface-1/60 p-3.5 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm font-semibold text-ink-secondary">
+                      {selectedImageCount} of {images.length} images selected
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" variant="outline" onClick={toggleSelectAllImages}>
+                        {isAllImagesSelected ? 'Clear selection' : 'Select all'}
+                      </Button>
+                      {selectedImageCount > 0 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={bulkRemoveImagesMutation.isPending}
+                          leftIcon={bulkRemoveImagesMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
+                          onClick={handleBulkRemoveImagesFromAlbum}
+                        >
+                          {bulkRemoveImagesMutation.isPending ? 'Removing...' : 'Remove selected'}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <ResultGrid
+                    results={images.map(albumImageToSearchResult)}
+                    showSimilarity={false}
+                    onSelectResult={(result) => {
+                      const found = images.find((img) => img.id === result.id)
+                      if (found) setSelectedImage(found)
+                    }}
+                    selectable={true}
+                    isSelected={(imageId) => selectedImageIds.has(imageId)}
+                    onToggleSelect={(result) => toggleSelectedImage(result.id)}
                   />
-                </label>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </section>
+      )}
 
-                <label className="mt-4 block text-sm font-bold text-ink-primary">
-                  Description
-                  <textarea
-                    className="mt-2 min-h-24 w-full resize-y rounded-xl border border-border bg-white px-3 py-2 text-sm font-medium outline-none transition focus:border-accent-600 focus:ring-4 focus:ring-accent-100"
-                    value={form.description}
-                    maxLength={2000}
-                    onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
-                    placeholder="Optional notes for this album"
-                  />
-                </label>
+      {/* Create / Edit Form Modal */}
+      {(showFormModal || editingAlbum !== null) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-3xl border border-border bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
+              <h2 className="text-lg font-bold text-ink-primary">
+                {editingAlbum ? 'Edit album' : 'Create new album'}
+              </h2>
+              <button
+                type="button"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full text-ink-muted hover:bg-surface-1 hover:text-ink-primary"
+                onClick={cancelEdit}
+                aria-label="Close dialog"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
 
-                {formError && <p className="mt-3 text-sm font-semibold text-red-700">{formError}</p>}
-                {(createMutation.error || updateMutation.error) && (
-                  <p className="mt-3 text-sm font-semibold text-red-700">Unable to save album. Check the data and try again.</p>
-                )}
+            <form onSubmit={handleSubmitAlbum} className="mt-4 space-y-4">
+              <label className="block text-sm font-bold text-ink-primary">
+                Name
+                <input
+                  className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm font-semibold outline-none transition focus:border-accent-600 focus:ring-4 focus:ring-accent-100"
+                  value={form.name}
+                  maxLength={255}
+                  onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                  placeholder="Travel screenshots"
+                  autoFocus
+                />
+              </label>
 
+              <label className="block text-sm font-bold text-ink-primary">
+                Description
+                <textarea
+                  className="mt-2 min-h-24 w-full resize-y rounded-xl border border-border bg-white px-3 py-2 text-sm font-medium outline-none transition focus:border-accent-600 focus:ring-4 focus:ring-accent-100"
+                  value={form.description}
+                  maxLength={2000}
+                  onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+                  placeholder="Optional notes for this album"
+                />
+              </label>
+
+              {formError && <p className="text-sm font-semibold text-red-700">{formError}</p>}
+              {(createMutation.error || updateMutation.error) && (
+                <p className="text-sm font-semibold text-red-700">Unable to save album. Check the data and try again.</p>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={cancelEdit}
+                >
+                  Cancel
+                </Button>
                 <Button
                   type="submit"
-                  className="mt-5 w-full"
                   leftIcon={isSavingAlbum ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                   disabled={isSavingAlbum}
                 >
                   {editingAlbum ? 'Save changes' : 'Create album'}
                 </Button>
-              </form>
-            )}
-
-            <section className="rounded-3xl border border-border bg-white p-3 shadow-sm shadow-slate-200/70">
-              {(viewMode === 'active' ? albumsQuery.isLoading : deletedAlbumsQuery.isLoading) ? (
-                <div className="flex min-h-40 items-center justify-center text-sm font-semibold text-ink-secondary">
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading albums...
-                </div>
-              ) : displayedAlbums.length === 0 ? (
-                <div className="p-6 text-center">
-                  <FolderOpen className="mx-auto h-8 w-8 text-ink-muted" />
-                  <p className="mt-3 text-sm font-bold text-ink-primary">{isDeletedView ? 'No deleted albums' : 'No albums yet'}</p>
-                  <p className="mt-1 text-sm text-ink-secondary">
-                    {isDeletedView ? 'Deleted albums will appear here for restore or permanent deletion.' : 'Create your first album, then add images from the image detail menu.'}
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {displayedAlbums.map((album) => (
-                    <button
-                      key={album.id}
-                      type="button"
-                      className={[
-                        'flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition',
-                        selectedAlbum?.id === album.id
-                          ? 'border-accent-200 bg-accent-50 text-ink-primary'
-                          : 'border-transparent bg-white text-ink-secondary hover:border-border hover:bg-surface-1',
-                      ].join(' ')}
-                      onClick={() => {
-                        setSelectedAlbumId(album.id)
-                        setSelectedImage(null)
-                        setSelectedImageIds(new Set())
-                      }}
-                    >
-                      {album.cover_image_url ? (
-                        <img src={album.cover_image_url} alt="" className="h-14 w-14 rounded-xl object-cover" />
-                      ) : (
-                        <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-surface-1 text-ink-muted">
-                          <FolderOpen className="h-5 w-5" />
-                        </span>
-                      )}
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-bold">{album.name}</span>
-                        <span className="mt-1 block text-xs font-semibold text-ink-muted">{album.image_count} images</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </section>
-          </section>
-
-          <section className="min-h-[560px] rounded-3xl border border-border bg-white p-5 shadow-sm shadow-slate-200/70">
-            {!selectedAlbum ? (
-              <div className="flex min-h-[480px] flex-col items-center justify-center text-center">
-                <FolderOpen className="h-10 w-10 text-ink-muted" />
-                <p className="mt-3 text-base font-bold text-ink-primary">Select an album</p>
-                <p className="mt-1 max-w-sm text-sm text-ink-secondary">Create or select an album to view and manage it.</p>
               </div>
-            ) : isDeletedView ? (
-              <DeletedAlbumDetail
-                album={selectedAlbum}
-                images={images}
-                isLoadingImages={imagesQuery.isLoading}
-                isRestoring={restoreMutation.isPending}
-                isDeleting={permanentDeleteMutation.isPending}
-                onRestore={() => restoreMutation.mutate(selectedAlbum.id)}
-                onPermanentDelete={() => {
-                  if (window.confirm(`Permanently delete album "${selectedAlbum.name}"? Images will not be deleted, but this album cannot be restored.`)) {
-                    permanentDeleteMutation.mutate(selectedAlbum.id)
-                  }
-                }}
-              />
-            ) : (
-              <div className="space-y-5">
-                <div className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className="text-xs font-bold uppercase text-accent-600">Album detail</p>
-                    <h2 className="mt-1 text-2xl font-black text-ink-primary">{selectedAlbum.name}</h2>
-                    {selectedAlbum.description && <p className="mt-2 max-w-2xl text-sm text-ink-secondary">{selectedAlbum.description}</p>}
-                    <p className="mt-2 text-xs font-bold text-ink-muted">{selectedAlbum.image_count} active images</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" leftIcon={<Pencil className="h-4 w-4" />} onClick={() => startEdit(selectedAlbum)}>
-                      Edit
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      leftIcon={<Trash2 className="h-4 w-4" />}
-                      disabled={deleteMutation.isPending}
-                      onClick={() => {
-                        if (window.confirm(`Move album "${selectedAlbum.name}" to deleted albums? Images will not be deleted.`)) {
-                          deleteMutation.mutate(selectedAlbum.id)
-                        }
-                      }}
-                    >
-                      Move to deleted
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-dashed border-border bg-surface-1 p-4">
-                  <p className="text-sm font-bold text-ink-primary">Add images to this album</p>
-                  <p className="mt-1 text-sm text-ink-secondary">
-                    Open an image from Image Library, search results, or bookmarks and choose Add to album. You can also select multiple images in Image Library and add them together.
-                  </p>
-                </div>
-
-                {imagesQuery.isLoading ? (
-                  <div className="flex min-h-64 items-center justify-center text-sm font-semibold text-ink-secondary">
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading images...
-                  </div>
-                ) : images.length === 0 ? (
-                  <div className="rounded-2xl border border-border bg-surface-1 p-10 text-center">
-                    <FolderOpen className="mx-auto h-8 w-8 text-ink-muted" />
-                    <p className="mt-3 text-sm font-bold text-ink-primary">No active images in this album</p>
-                    <p className="mt-1 text-sm text-ink-secondary">Use Add to album from an image detail view. Deleted images are hidden until restored.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex flex-col gap-3 rounded-2xl border border-border bg-surface-1 p-3 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-sm font-semibold text-ink-secondary">{selectedImageCount} selected</p>
-                      <div className="flex flex-wrap gap-2">
-                        <Button type="button" variant="outline" onClick={toggleSelectAllImages}>
-                          {isAllImagesSelected ? 'Clear selection' : 'Select all'}
-                        </Button>
-                        {selectedImageCount > 0 && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            disabled={bulkRemoveImagesMutation.isPending}
-                            leftIcon={bulkRemoveImagesMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
-                            onClick={handleBulkRemoveImagesFromAlbum}
-                          >
-                            {bulkRemoveImagesMutation.isPending ? 'Removing...' : 'Remove selected'}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                      {images.map((image) => (
-                      <AlbumImageCard
-                        key={image.id}
-                        image={image}
-                        isRemoving={removeImageMutation.isPending || bulkRemoveImagesMutation.isPending}
-                        isSelected={selectedImageIds.has(image.id)}
-                        onToggleSelect={() => toggleSelectedImage(image.id)}
-                        onOpen={() => setSelectedImage(image)}
-                        onRemove={() => removeImageMutation.mutate({ albumId: selectedAlbum.id, imageId: image.id })}
-                      />
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
+            </form>
+          </div>
         </div>
+      )}
+    </div>
+  )
+
+  if (embedded) {
+    return (
+      <>
+        {content}
+        {selectedResult && (
+          <SearchResultDetailModal
+            result={selectedResult}
+            footerAction={renderAlbumImageActions()}
+            isBookmarked={isBookmarked(selectedResult.id)}
+            showSimilarity={false}
+            showAddToAlbum={false}
+            onBookmark={handleBookmark}
+            onClose={() => setSelectedImage(null)}
+            onFindSimilar={handleFindSimilar}
+          />
+        )}
+      </>
+    )
+  }
+
+  return (
+    <>
+      <PageContainer size="wide" className="space-y-7 py-8 sm:py-10">
+        {content}
       </PageContainer>
 
       {selectedResult && (
@@ -567,6 +762,10 @@ export default function AlbumsPage() {
       )}
     </>
   )
+}
+
+export default function AlbumsPage() {
+  return <AlbumsContent />
 }
 
 function DeletedAlbumDetail({
@@ -613,10 +812,12 @@ function DeletedAlbumDetail({
               <p className="mt-1 text-sm text-ink-secondary">Deleted images are hidden until restored.</p>
             </div>
           ) : (
-            <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {images.map((image) => (
-                <ReadOnlyAlbumImageCard key={image.id} image={image} />
-              ))}
+            <div className="mt-4">
+              <ResultGrid
+                results={images.map(albumImageToSearchResult)}
+                showSimilarity={false}
+                selectable={false}
+              />
             </div>
           )}
         </div>
@@ -645,73 +846,7 @@ function DeletedAlbumDetail({
   )
 }
 
-function ReadOnlyAlbumImageCard({ image }: { image: AlbumImage }) {
-  return (
-    <article className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm shadow-slate-200/70">
-      <img src={image.thumbnail_url} alt={image.original_filename ?? `Image ${image.id}`} className="h-44 w-full bg-surface-1 object-cover" />
-      <div className="space-y-2 p-3">
-        <p className="truncate text-sm font-bold text-ink-primary">{image.original_filename ?? `Image #${image.id}`}</p>
-        <p className="text-xs font-semibold text-ink-muted">#{image.id} - {image.status}</p>
-      </div>
-    </article>
-  )
-}
-function AlbumImageCard({
-  image,
-  isRemoving,
-  isSelected,
-  onToggleSelect,
-  onOpen,
-  onRemove,
-}: {
-  image: AlbumImage
-  isRemoving: boolean
-  isSelected: boolean
-  onToggleSelect: () => void
-  onOpen: () => void
-  onRemove: () => void
-}) {
-  return (
-    <article className={[
-      'relative overflow-hidden rounded-2xl border bg-white shadow-sm shadow-slate-200/70 transition hover:-translate-y-0.5 hover:shadow-md hover:shadow-slate-200/80',
-      isSelected ? 'border-accent-500 ring-4 ring-accent-100' : 'border-border',
-    ].join(' ')}>
-      <label className="absolute left-3 top-3 z-10 inline-flex h-5 w-5 items-center justify-center" onClick={(event) => event.stopPropagation()}>
-        <input
-          type="checkbox"
-          className="h-4 w-4 accent-accent-600"
-          checked={isSelected}
-          onChange={onToggleSelect}
-          aria-label={`Select image ${image.id}`}
-        />
-      </label>
-      <button type="button" className="block w-full text-left" onClick={onOpen}>
-        <img src={image.thumbnail_url} alt={image.original_filename ?? `Image ${image.id}`} className="h-44 w-full bg-surface-1 object-cover" />
-        <div className="space-y-3 p-3">
-          <div>
-            <p className="truncate text-sm font-bold text-ink-primary">{image.original_filename ?? `Image #${image.id}`}</p>
-            <p className="mt-1 text-xs font-semibold text-ink-muted">#{image.id} - {image.status}</p>
-          </div>
-        </div>
-      </button>
-      <div className="px-3 pb-3">
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full"
-          disabled={isRemoving}
-          leftIcon={<X className="h-4 w-4" />}
-          onClick={(event) => {
-            event.stopPropagation()
-            onRemove()
-          }}
-        >
-          Remove from album
-        </Button>
-      </div>
-    </article>
-  )
-}
+
 
 function albumImageToSearchResult(image: AlbumImage): SearchResult {
   return {

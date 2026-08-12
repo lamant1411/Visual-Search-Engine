@@ -71,10 +71,10 @@ function getPasswordStrength(password: string): { score: number; label: string; 
   if (/[0-9]/.test(password)) score++
   if (/[^A-Za-z0-9]/.test(password)) score++
 
-  if (score <= 1) return { score, label: 'Yếu', color: '#ef4444' }
-  if (score === 2) return { score, label: 'Trung bình', color: '#f59e0b' }
-  if (score === 3) return { score, label: 'Tốt', color: '#10b981' }
-  return { score, label: 'Mạnh', color: '#7c3aed' }
+  if (score <= 1) return { score, label: 'Weak', color: '#ef4444' }
+  if (score === 2) return { score, label: 'Medium', color: '#f59e0b' }
+  if (score === 3) return { score, label: 'Good', color: '#10b981' }
+  return { score, label: 'Strong', color: '#7c3aed' }
 }
 
 // ---- Form types ----
@@ -123,28 +123,28 @@ export default function RegisterPage() {
   const validate = (): boolean => {
     const newErrors: RegisterErrors = {}
 
-    if (!form.fullName.trim()) newErrors.fullName = 'Họ tên không được để trống.'
+    if (!form.fullName.trim()) newErrors.fullName = 'Full name is required.'
 
     if (!form.email.trim()) {
-      newErrors.email = 'Email không được để trống.'
+      newErrors.email = 'Email is required.'
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      newErrors.email = 'Email không hợp lệ.'
+      newErrors.email = 'Invalid email address.'
     }
 
     const pwdRules = [
-      { test: !form.password,                       msg: 'Mật khẩu không được để trống.' },
-      { test: form.password.length < 8,             msg: 'Mật khẩu phải có ít nhất 8 ký tự.' },
-      { test: !/[A-Z]/.test(form.password),         msg: 'Mật khẩu phải chứa ít nhất 1 chữ in hoa.' },
-      { test: !/[0-9]/.test(form.password),         msg: 'Mật khẩu phải chứa ít nhất 1 chữ số.' },
-      { test: !/[^A-Za-z0-9]/.test(form.password), msg: 'Mật khẩu phải chứa ít nhất 1 ký tự đặc biệt.' },
+      { test: !form.password,                       msg: 'Password is required.' },
+      { test: form.password.length < 8,             msg: 'Password must be at least 8 characters.' },
+      { test: !/[A-Z]/.test(form.password),         msg: 'Password must contain at least 1 uppercase letter.' },
+      { test: !/[0-9]/.test(form.password),         msg: 'Password must contain at least 1 number.' },
+      { test: !/[^A-Za-z0-9]/.test(form.password), msg: 'Password must contain at least 1 special character.' },
     ]
     const firstPwdError = pwdRules.find(r => r.test)
     if (firstPwdError) newErrors.password = firstPwdError.msg
 
     if (!form.confirmPassword) {
-      newErrors.confirmPassword = 'Vui lòng xác nhận mật khẩu.'
+      newErrors.confirmPassword = 'Please confirm your password.'
     } else if (form.confirmPassword !== form.password) {
-      newErrors.confirmPassword = 'Mật khẩu xác nhận không khớp.'
+      newErrors.confirmPassword = 'Password confirmation does not match.'
     }
 
     setErrors(newErrors)
@@ -157,23 +157,23 @@ export default function RegisterPage() {
 
     setLoading(true)
     try {
-      // Bước 1: tạo tài khoản
+      // Step 1: create account
       await authApi.register({
         email: form.email,
         password: form.password,
         full_name: form.fullName,
       })
 
-      // Bước 2: tự động login để lấy token
+      // Step 2: auto login
       const tokenRes = await authApi.login({ email: form.email, password: form.password })
 
-      // Bước 3: lưu token vào localStorage → axios interceptor tự gắn header
+      // Step 3: save tokens to localStorage
       saveTokens(tokenRes.access_token, tokenRes.refresh_token)
 
-      // Bước 4: lấy thông tin user (đã có token trong header)
+      // Step 4: get profile
       const meRes = await authApi.me()
 
-      // Bước 5: lưu vào context (1 lần duy nhất)
+      // Step 5: save to context
       login({
         accessToken: tokenRes.access_token,
         refreshToken: tokenRes.refresh_token,
@@ -186,14 +186,14 @@ export default function RegisterPage() {
       if (axios.isAxiosError(err)) {
         const status = err.response?.status
         if (status === 409 || status === 400) {
-          setErrors({ general: 'Đăng ký thất bại. Email có thể đã được sử dụng.' })
+          setErrors({ general: 'Registration failed. Email may already be in use.' })
         } else if (status === 422) {
-          setErrors({ general: 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại.' })
+          setErrors({ general: 'Invalid data. Please check your inputs.' })
         } else {
-          setErrors({ general: 'Đăng ký thất bại. Vui lòng thử lại.' })
+          setErrors({ general: 'Registration failed. Please try again.' })
         }
       } else {
-        setErrors({ general: 'Lỗi kết nối. Vui lòng thử lại.' })
+        setErrors({ general: 'Connection error. Please try again.' })
       }
     } finally {
       setLoading(false)
@@ -203,16 +203,16 @@ export default function RegisterPage() {
   return (
     <AuthCard
       logo={<AppLogo />}
-      title="Tạo tài khoản mới"
-      subtitle="Tham gia ngay để khám phá sức mạnh tìm kiếm bằng hình ảnh"
+      title="Create account"
+      subtitle="Join now to explore AI image search"
       footer={
         <>
-          Đã có tài khoản?{' '}
+          Already have an account?{' '}
           <Link
             to="/login"
             className="font-semibold text-[#7c3aed] hover:text-[#6d28d9] transition-colors"
           >
-            Đăng nhập
+            Sign in
           </Link>
         </>
       }
@@ -229,11 +229,11 @@ export default function RegisterPage() {
         )}
 
         <Input
-          label="Họ và tên"
+          label="Full name"
           id="register-fullname"
           name="fullName"
           type="text"
-          placeholder="Nguyễn Văn A"
+          placeholder="John Doe"
           value={form.fullName}
           onChange={handleChange}
           errorMessage={errors.fullName}
@@ -259,11 +259,11 @@ export default function RegisterPage() {
         {/* Password + strength bar */}
         <div className="flex flex-col gap-1.5">
           <Input
-            label="Mật khẩu"
+            label="Password"
             id="register-password"
             name="password"
             type={showPassword ? 'text' : 'password'}
-            placeholder="Ít nhất 8 ký tự"
+            placeholder="At least 8 characters"
             value={form.password}
             onChange={handleChange}
             errorMessage={errors.password}
@@ -271,7 +271,7 @@ export default function RegisterPage() {
             rightIcon={
               <button
                 type="button"
-                aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
                 onClick={() => setShowPassword(v => !v)}
                 className="pointer-events-auto text-[#9ca3af] hover:text-[#6d28d9] transition-colors"
               >
@@ -306,10 +306,10 @@ export default function RegisterPage() {
           {form.password && (
             <ul className="grid grid-cols-2 gap-x-4 gap-y-1 px-1 mt-1">
               {[
-                { rule: form.password.length >= 8, label: 'Ít nhất 8 ký tự' },
-                { rule: /[A-Z]/.test(form.password), label: 'Chữ hoa (A-Z)' },
-                { rule: /[0-9]/.test(form.password), label: 'Chữ số (0-9)' },
-                { rule: /[^A-Za-z0-9]/.test(form.password), label: 'Ký tự đặc biệt' },
+                { rule: form.password.length >= 8, label: 'At least 8 characters' },
+                { rule: /[A-Z]/.test(form.password), label: 'Uppercase (A-Z)' },
+                { rule: /[0-9]/.test(form.password), label: 'Number (0-9)' },
+                { rule: /[^A-Za-z0-9]/.test(form.password), label: 'Special character' },
               ].map(({ rule, label }) => (
                 <li
                   key={label}
@@ -327,11 +327,11 @@ export default function RegisterPage() {
         </div>
 
         <Input
-          label="Xác nhận mật khẩu"
+          label="Confirm password"
           id="register-confirm"
           name="confirmPassword"
           type={showConfirm ? 'text' : 'password'}
-          placeholder="Nhập lại mật khẩu"
+          placeholder="Re-enter password"
           value={form.confirmPassword}
           onChange={handleChange}
           errorMessage={errors.confirmPassword}
@@ -339,7 +339,7 @@ export default function RegisterPage() {
           rightIcon={
             <button
               type="button"
-              aria-label={showConfirm ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+              aria-label={showConfirm ? 'Hide password' : 'Show password'}
               onClick={() => setShowConfirm(v => !v)}
               className="pointer-events-auto text-[#9ca3af] hover:text-[#6d28d9] transition-colors"
             >
@@ -358,7 +358,7 @@ export default function RegisterPage() {
           loading={loading}
           className="mt-2 bg-gradient-to-r from-[#7c3aed] to-[#4f46e5] hover:from-[#6d28d9] hover:to-[#4338ca] shadow-lg shadow-[#7c3aed]/30 border-0"
         >
-          Tạo tài khoản
+          Create account
         </Button>
       </form>
     </AuthCard>

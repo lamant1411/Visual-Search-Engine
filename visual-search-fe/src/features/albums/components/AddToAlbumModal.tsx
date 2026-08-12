@@ -27,20 +27,21 @@ export function AddToAlbumModal({ imageIds, onClose, onSuccess }: AddToAlbumModa
     queryFn: () => albumsApi.list({ page: 1, limit: ALBUM_PICKER_LIMIT }),
   })
 
-  const invalidateAlbumQueries = (albumId?: number) => {
-    void queryClient.invalidateQueries({ queryKey: ['albums'] })
-    void queryClient.invalidateQueries({ queryKey: ['albums', 'picker'] })
-    if (albumId) {
-      void queryClient.invalidateQueries({ queryKey: ['album-images', albumId] })
-    }
+  const invalidateAlbumQueries = async (albumId?: number) => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['albums'] }),
+      queryClient.invalidateQueries({ queryKey: ['albums-count'] }),
+      queryClient.invalidateQueries({ queryKey: ['albums', 'picker'] }),
+      ...(albumId ? [queryClient.invalidateQueries({ queryKey: ['album-images', albumId] })] : []),
+    ])
   }
 
   const addMutation = useMutation({
     mutationFn: async (album: Album) => {
       return albumsApi.addImages(album.id, uniqueImageIds)
     },
-    onSuccess: (response) => {
-      invalidateAlbumQueries(response.album_id)
+    onSuccess: async (response) => {
+      await invalidateAlbumQueries(response.album_id)
       if (response.failed_count > 0) {
         setErrorMessage(response.failed_items.map((item) => `Image #${item.image_id}: ${item.message}`).join('\n'))
         return
@@ -66,8 +67,8 @@ export function AddToAlbumModal({ imageIds, onClose, onSuccess }: AddToAlbumModa
       const result = await albumsApi.addImages(album.id, uniqueImageIds)
       return { album, result }
     },
-    onSuccess: ({ album, result }) => {
-      invalidateAlbumQueries(album.id)
+    onSuccess: async ({ album, result }) => {
+      await invalidateAlbumQueries(album.id)
       if (result.failed_count > 0) {
         setErrorMessage(result.failed_items.map((item) => `Image #${item.image_id}: ${item.message}`).join('\n'))
         return
