@@ -24,8 +24,11 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/base/button";
+import { useAuth } from "@/contexts/AuthContext";
 import { AddToAlbumModal } from "@/features/albums/components/AddToAlbumModal";
 import { useDialogAccessibility } from "@/lib/ui/useDialogAccessibility";
+
+import { SearchLoginModal } from "./SearchLoginModal";
 
 import type { SearchResult } from "../types";
 import { formatSimilarityScore } from "../utils/formatSimilarityScore";
@@ -64,6 +67,8 @@ export function SearchResultDetailModal({
   const [cropError, setCropError] = useState<string>();
   const [isPreparingCrop, setIsPreparingCrop] = useState(false);
   const [isAddToAlbumOpen, setIsAddToAlbumOpen] = useState(false);
+  const [isLoginPromptOpen, setIsLoginPromptOpen] = useState(false);
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const prepareCropRequestRef = useRef<AbortController | null>(null);
   const isZoomed = zoom > 1;
   const similarityScore = formatSimilarityScore(result.similarityScore);
@@ -317,7 +322,8 @@ export function SearchResultDetailModal({
                 leftIcon={<FolderPlus className="h-4 w-4" />}
                 type="button"
                 variant="outline"
-                onClick={() => setIsAddToAlbumOpen(true)}
+                disabled={isAuthLoading}
+                onClick={handleAddToAlbum}
               >
                 Add to album
               </Button>
@@ -390,6 +396,15 @@ export function SearchResultDetailModal({
         onClose={() => setIsAddToAlbumOpen(false)}
       />
     )}
+    {isLoginPromptOpen && (
+      <SearchLoginModal
+        onClose={() => setIsLoginPromptOpen(false)}
+        onSuccess={() => {
+          setIsLoginPromptOpen(false);
+          setIsAddToAlbumOpen(true);
+        }}
+      />
+    )}
     </>
   );
 
@@ -432,6 +447,19 @@ export function SearchResultDetailModal({
     } catch {
       setCopyStatus("error");
     }
+  }
+
+  function handleAddToAlbum() {
+    if (isAuthLoading) {
+      return;
+    }
+
+    if (!isAuthenticated) {
+      setIsLoginPromptOpen(true);
+      return;
+    }
+
+    setIsAddToAlbumOpen(true);
   }
 
   async function handlePrepareCrop() {
