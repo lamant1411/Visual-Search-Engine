@@ -13,6 +13,7 @@ export type SearchResult = {
   thumbnailUrl: string
   imageUrl: string
   similarityScore: number
+  createdAt?: string | null
   metadata: ImageMetadata
 }
 

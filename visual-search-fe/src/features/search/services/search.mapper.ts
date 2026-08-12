@@ -50,6 +50,7 @@ function mapSearchResult(payload: unknown, index: number): SearchResult {
     thumbnailUrl,
     imageUrl,
     similarityScore: readNumber(item.similarityScore ?? item.similarity_score, 0),
+    createdAt: readString(item.createdAt ?? item.created_at) ?? null,
     metadata: mapMetadata(item.metadata, item),
   }
 }

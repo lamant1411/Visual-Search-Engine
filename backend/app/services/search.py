@@ -171,6 +171,7 @@ async def build_search_response_from_hits(
                 thumbnail_url=image_url,
                 image_url=image_url,
                 similarity_score=round(hit.score * 100, 2),
+                created_at=image.created_at,
                 metadata=SearchResultMetadata(
                     width=image.width,
                     height=image.height,
@@ -249,6 +250,7 @@ async def build_search_response_from_ids(
                 thumbnail_url=image_url,
                 image_url=image_url,
                 similarity_score=display_score,
+                created_at=image.created_at,
                 metadata=SearchResultMetadata(
                     width=image.width,
                     height=image.height,
@@ -457,6 +459,7 @@ async def _build_ocr_search_response(
                 thumbnail_url=image_url,
                 image_url=image_url,
                 similarity_score=display_score,
+                created_at=image.created_at,
                 metadata=SearchResultMetadata(
                     width=image.width,
                     height=image.height,

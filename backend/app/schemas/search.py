@@ -31,6 +31,7 @@ class SearchResultItem(BaseModel):
     thumbnail_url: str = Field(alias="thumbnailUrl")
     image_url: str = Field(alias="imageUrl")
     similarity_score: float = Field(alias="similarityScore")
+    created_at: datetime | None = Field(default=None, alias="createdAt")
     metadata: SearchResultMetadata
 
 

@@ -227,6 +227,7 @@ export default function ImageLibraryPage() {
     [listQuery.data],
   )
   const results = rawResults
+  const groupedResults = useMemo(() => groupResultsByUploadDate(results), [results])
   const total = listQuery.data?.pages[0]?.total ?? 0
   const selectedCount = selectedImageIds.size
 
@@ -976,16 +977,31 @@ export default function ImageLibraryPage() {
           />
         ) : (
           <>
-            <ResultGrid
-              results={results}
-              isBookmarked={isDeletedView ? undefined : isBookmarked}
-              showSimilarity={false}
-              onBookmark={isDeletedView ? undefined : handleBookmark}
-              onSelectResult={setSelectedResult}
-              selectable={canManageImages}
-              isSelected={(imageId) => selectedImageIds.has(imageId)}
-              onToggleSelect={handleToggleSelect}
-            />
+            <div className="space-y-8">
+              {groupedResults.map((group) => (
+                <section key={group.key} className="space-y-3">
+                  <div className="flex items-center justify-between gap-3 border-b border-border pb-2">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wide text-ink-muted">Upload date</p>
+                      <h2 className="font-display text-xl font-bold text-ink-primary">{group.label}</h2>
+                    </div>
+                    <span className="rounded-full border border-border bg-white px-3 py-1 text-xs font-bold text-ink-secondary shadow-sm">
+                      {group.items.length.toLocaleString('en-US')} image(s)
+                    </span>
+                  </div>
+                  <ResultGrid
+                    results={group.items}
+                    isBookmarked={isDeletedView ? undefined : isBookmarked}
+                    showSimilarity={false}
+                    onBookmark={isDeletedView ? undefined : handleBookmark}
+                    onSelectResult={setSelectedResult}
+                    selectable={canManageImages}
+                    isSelected={(imageId) => selectedImageIds.has(imageId)}
+                    onToggleSelect={handleToggleSelect}
+                  />
+                </section>
+              ))}
+            </div>
 
             {listQuery.isFetchingNextPage && (
               <div className="mt-5">
@@ -1080,6 +1096,7 @@ function mapIndexingItemToSearchResult(item: AdminIndexingItem): SearchResult {
     thumbnailUrl: item.image_url,
     imageUrl: item.image_url,
     similarityScore: 0,
+    createdAt: item.created_at,
     metadata: {
       width: null,
       height: null,
@@ -1087,6 +1104,40 @@ function mapIndexingItemToSearchResult(item: AdminIndexingItem): SearchResult {
       status: item.status,
     },
   }
+}
+
+
+type UploadDateGroup = {
+  key: string
+  label: string
+  items: SearchResult[]
+}
+
+function groupResultsByUploadDate(results: SearchResult[]): UploadDateGroup[] {
+  const groups = new Map<string, UploadDateGroup>()
+
+  for (const result of results) {
+    const parsedDate = result.createdAt ? new Date(result.createdAt) : null
+    const hasValidDate = parsedDate !== null && !Number.isNaN(parsedDate.getTime())
+    const key = hasValidDate ? parsedDate.toISOString().slice(0, 10) : 'unknown'
+    const label = hasValidDate
+      ? parsedDate.toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        })
+      : 'Unknown upload date'
+
+    const currentGroup = groups.get(key)
+    if (currentGroup) {
+      currentGroup.items.push(result)
+    } else {
+      groups.set(key, { key, label, items: [result] })
+    }
+  }
+
+  return Array.from(groups.values())
 }
 
 function EmptyState({
