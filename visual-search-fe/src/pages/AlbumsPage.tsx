@@ -53,7 +53,10 @@ export default function AlbumsPage() {
     queryFn: () => albumsApi.listDeleted({ page: 1, limit: ALBUM_PAGE_LIMIT }),
   })
 
-  const displayedAlbums = viewMode === 'active' ? albumsQuery.data?.items ?? [] : deletedAlbumsQuery.data?.items ?? []
+  const displayedAlbums = useMemo(
+    () => (viewMode === 'active' ? albumsQuery.data?.items ?? [] : deletedAlbumsQuery.data?.items ?? []),
+    [albumsQuery.data?.items, deletedAlbumsQuery.data?.items, viewMode],
+  )
   const displayedTotal = viewMode === 'active'
     ? albumsQuery.data?.total ?? displayedAlbums.length
     : deletedAlbumsQuery.data?.total ?? displayedAlbums.length

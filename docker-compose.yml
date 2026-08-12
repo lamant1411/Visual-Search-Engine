@@ -15,6 +15,9 @@ services:
       - ./backend/.env
     environment:
       - AI_SERVICE_URL=http://ai_service:8001 # Báo cho BE biết chỗ gọi AI
+      # Return /static/... URLs so the Frontend proxy serves images correctly
+      # for both localhost and remote server visitors.
+      - IMAGE_BASE_URL=
     depends_on:
       postgres:
         condition: service_healthy
@@ -77,7 +80,9 @@ services:
       - ./visual-search-fe:/app
       - frontend_node_modules:/app/node_modules
     environment:
-      VITE_API_BASE_URL: http://localhost:8000/api/v1
+      # Keep browser requests on the Frontend origin. Vite proxies these paths
+      # to the Backend container, so remote users never call their localhost.
+      VITE_API_BASE_URL: /api/v1
       VITE_DEV_PROXY_TARGET: http://backend:8000
       VITE_ENABLE_MOCK: "false"
     depends_on:

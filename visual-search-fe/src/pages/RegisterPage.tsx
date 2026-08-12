@@ -84,7 +84,6 @@ interface RegisterForm {
   email: string
   password: string
   confirmPassword: string
-  agreeTerms: boolean
 }
 
 interface RegisterErrors {
@@ -92,7 +91,6 @@ interface RegisterErrors {
   email?: string
   password?: string
   confirmPassword?: string
-  agreeTerms?: string
   general?: string
 }
 
@@ -106,7 +104,6 @@ export default function RegisterPage() {
     email: '',
     password: '',
     confirmPassword: '',
-    agreeTerms: false,
   })
   const [errors, setErrors] = useState<RegisterErrors>({})
   const [showPassword, setShowPassword] = useState(false)
@@ -116,8 +113,8 @@ export default function RegisterPage() {
   const strength = getPasswordStrength(form.password)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target
-    setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }))
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
     if (errors[name as keyof RegisterErrors]) {
       setErrors(prev => ({ ...prev, [name]: undefined }))
     }
@@ -352,42 +349,6 @@ export default function RegisterPage() {
           autoComplete="new-password"
           size="lg"
         />
-
-        {/* Terms checkbox */}
-        {/* <div className="flex flex-col gap-1">
-          <label className="flex items-start gap-3 cursor-pointer select-none">
-            <div className="relative mt-0.5 shrink-0">
-              <input
-                type="checkbox"
-                id="register-terms"
-                name="agreeTerms"
-                checked={form.agreeTerms}
-                onChange={handleChange}
-                className="sr-only peer"
-              />
-              <div className="w-4 h-4 rounded-[4px] border-2 border-[rgba(109,40,217,0.35)] bg-white peer-checked:bg-[#7c3aed] peer-checked:border-[#7c3aed] transition-all flex items-center justify-center">
-                {form.agreeTerms && (
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" fill="white" className="w-2.5 h-2.5">
-                    <path fillRule="evenodd" d="M10.543 2.457a.75.75 0 0 1 0 1.086L5 9.086 1.457 5.543a.75.75 0 1 1 1.086-1.086L5 6.914l4.457-4.457a.75.75 0 0 1 1.086 0Z" clipRule="evenodd" />
-                  </svg>
-                )}
-              </div>
-            </div>
-            <span className="text-sm text-[#6b7280] leading-snug">
-              Tôi đồng ý với{' '}
-              <Link to="/terms" className="text-[#7c3aed] font-medium hover:underline">
-                Điều khoản dịch vụ
-              </Link>{' '}
-              và{' '}
-              <Link to="/privacy" className="text-[#7c3aed] font-medium hover:underline">
-                Chính sách bảo mật
-              </Link>
-            </span>
-          </label>
-          {errors.agreeTerms && (
-            <p className="text-xs text-[#dc2626] pl-7">{errors.agreeTerms}</p>
-          )}
-        </div> */}
 
         <Button
           type="submit"
