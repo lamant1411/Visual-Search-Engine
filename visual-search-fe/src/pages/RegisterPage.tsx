@@ -84,7 +84,6 @@ interface RegisterForm {
   email: string
   password: string
   confirmPassword: string
-  agreeTerms: boolean
 }
 
 interface RegisterErrors {
@@ -92,7 +91,6 @@ interface RegisterErrors {
   email?: string
   password?: string
   confirmPassword?: string
-  agreeTerms?: string
   general?: string
 }
 
@@ -106,7 +104,6 @@ export default function RegisterPage() {
     email: '',
     password: '',
     confirmPassword: '',
-    agreeTerms: false,
   })
   const [errors, setErrors] = useState<RegisterErrors>({})
   const [showPassword, setShowPassword] = useState(false)
@@ -116,8 +113,8 @@ export default function RegisterPage() {
   const strength = getPasswordStrength(form.password)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target
-    setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }))
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
     if (errors[name as keyof RegisterErrors]) {
       setErrors(prev => ({ ...prev, [name]: undefined }))
     }

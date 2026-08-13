@@ -1,13 +1,13 @@
 import { useMemo } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 
-import { historyApi, type SearchQueryType } from '@/lib/api/history'
+import { historyApi, type HistoryFilterType } from '@/lib/api/history'
 
 export const HISTORY_PAGE_LIMIT = 20
 
 const historyQueryKeys = {
-  infiniteList: (limit: number, queryType?: SearchQueryType) =>
-    ['search-history', 'infinite-list', limit, queryType ?? 'all'] as const,
+  infiniteList: (limit: number, filter: HistoryFilterType) =>
+    ['search-history', 'infinite-list', limit, filter] as const,
 }
 
 function getErrorMessage(error: unknown) {
@@ -16,11 +16,16 @@ function getErrorMessage(error: unknown) {
     : 'Something went wrong while loading your search history.'
 }
 
-export function useHistory(queryType?: SearchQueryType, limit = HISTORY_PAGE_LIMIT) {
+export function useHistory(filter: HistoryFilterType = 'all', limit = HISTORY_PAGE_LIMIT) {
   const historyQuery = useInfiniteQuery({
-    queryKey: historyQueryKeys.infiniteList(limit, queryType),
+    queryKey: historyQueryKeys.infiniteList(limit, filter),
     queryFn: ({ pageParam = 1 }) =>
-      historyApi.list({ page: pageParam as number, limit, query_type: queryType }),
+      historyApi.list({
+        page: pageParam as number,
+        limit,
+        query_type: filter === 'image' ? 'image' : undefined,
+        query_group: filter === 'text' ? 'text' : undefined,
+      }),
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) => {
       const loadedCount = allPages.reduce((sum, page) => sum + page.items.length, 0)

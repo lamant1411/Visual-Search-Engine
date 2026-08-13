@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
-import { CheckCircle2, ImageUp, Loader2, RotateCcw, Sparkles } from "lucide-react";
+import { CheckCircle2, ImageUp, Loader2, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 
 import { PageContainer } from "@/components/layout/PageContainer";
 import { Button } from "@/components/base/button";
+import { imageLibraryApi } from "@/lib/api/images";
 
 import { ResultGrid, ResultGridSkeleton } from "../components/ResultGrid";
 import { SearchResultDetailModal } from "../components/SearchResultDetailModal";
@@ -35,6 +36,7 @@ export function SearchResultsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const state = (location.state ?? {}) as SearchLocationState;
 
   const mode = parseSearchMode(searchParams.get("mode"));
@@ -49,7 +51,10 @@ export function SearchResultsPage() {
   const [referenceObjectUrl, setReferenceObjectUrl] = useState<string | null>(null);
   const [longSearchKey, setLongSearchKey] = useState<string | null>(null);
   const [bookmarkToast, setBookmarkToast] = useState<BookmarkToast | null>(null);
+  const [selectedImageIds, setSelectedImageIds] = useState<Set<number>>(() => new Set());
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const invalidatedHistorySearchRef = useRef<string | null>(null);
   const { isBookmarked, toggleBookmark } = useBookmarks();
   const searchFile = state.file ?? restoredImageFile ?? undefined;
   const searchFileName = state.fileName ?? restoredImageFile?.name ?? query;
@@ -122,7 +127,44 @@ export function SearchResultsPage() {
   }, [searchQuery.data]);
   const searchError = getSearchErrorMessage(searchQuery.error);
   const total = searchQuery.data?.pages[0]?.total ?? 0;
+  const selectedCount = selectedImageIds.size;
+  const selectedVisibleCount = results.filter((result) => selectedImageIds.has(result.id)).length;
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = searchQuery;
+
+  useEffect(() => {
+    if (results.length === 0) {
+      setSelectedImageIds(new Set());
+      return;
+    }
+
+    const visibleIds = new Set(results.map((result) => result.id));
+    setSelectedImageIds((current) => {
+      const next = new Set(Array.from(current).filter((imageId) => visibleIds.has(imageId)));
+      return next.size === current.size ? current : next;
+    });
+  }, [results]);
+  useEffect(() => {
+    if (!searchQuery.data?.pages[0]) {
+      return;
+    }
+
+    const searchIdentity = [mode, query, imageId, imageUrl, historyKey, imageSearchKey].join("|");
+    if (invalidatedHistorySearchRef.current === searchIdentity) {
+      return;
+    }
+
+    invalidatedHistorySearchRef.current = searchIdentity;
+    void queryClient.invalidateQueries({ queryKey: ["search-history"] });
+  }, [
+    historyKey,
+    imageId,
+    imageSearchKey,
+    imageUrl,
+    mode,
+    query,
+    queryClient,
+    searchQuery.data,
+  ]);
   const searchStateKey = `${mode}-${query}-${imageId ?? "no-id"}-${imageUrl ?? "no-url"}-${historyKey ?? "no-history"}-${imageSearchKey}`;
   const isSearchTakingLong =
     searchQuery.isLoading && longSearchKey === searchStateKey;
@@ -344,11 +386,55 @@ export function SearchResultsPage() {
 
         {queryEnabled && results.length > 0 && (
           <>
+            <section className="flex flex-col gap-3 rounded-2xl border border-border bg-white p-4 shadow-sm shadow-slate-200/50 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-bold text-ink-primary">
+                  {selectedCount > 0 ? `${selectedCount} selected` : "Select results to manage"}
+                </p>
+                <p className="mt-1 text-xs text-ink-secondary">
+                  Move one or more matching images to deleted images directly from search results.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={results.length === 0 || selectedVisibleCount === results.length || isBulkDeleting}
+                  onClick={handleSelectVisibleResults}
+                >
+                  Select visible
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={selectedCount === 0 || isBulkDeleting}
+                  onClick={handleClearSelectedResults}
+                >
+                  Clear
+                </Button>
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  disabled={selectedCount === 0 || isBulkDeleting}
+                  leftIcon={<Trash2 className="h-4 w-4" />}
+                  onClick={handleBulkMoveToDeleted}
+                >
+                  {isBulkDeleting ? "Moving..." : "Move to deleted"}
+                </Button>
+              </div>
+            </section>
+
             <ResultGrid
               results={results}
               isBookmarked={isBookmarked}
               onBookmark={handleToggleBookmark}
               onSelectResult={setSelectedResult}
+              selectable
+              isSelected={(imageId) => selectedImageIds.has(imageId)}
+              onToggleSelect={handleToggleSelectResult}
             />
 
             {searchQuery.isFetchingNextPage && <ResultGridSkeleton limit={8} />}
@@ -389,6 +475,17 @@ export function SearchResultsPage() {
           onClose={() => setSelectedResult(null)}
           onBookmark={handleToggleBookmark}
           onFindSimilar={handleFindSimilarResult}
+          footerAction={
+            <Button
+              fullWidth
+              variant="danger"
+              leftIcon={<Trash2 className="h-4 w-4" />}
+              disabled={isBulkDeleting}
+              onClick={() => void handleMoveSingleResultToDeleted(selectedResult)}
+            >
+              {isBulkDeleting ? "Moving..." : "Move to deleted"}
+            </Button>
+          }
         />
       )}
 
@@ -405,6 +502,83 @@ export function SearchResultsPage() {
     </div>
   );
 
+  function handleToggleSelectResult(result: SearchResult) {
+    setSelectedImageIds((current) => {
+      const next = new Set(current);
+      if (next.has(result.id)) {
+        next.delete(result.id);
+      } else {
+        next.add(result.id);
+      }
+      return next;
+    });
+  }
+
+  function handleSelectVisibleResults() {
+    setSelectedImageIds((current) => {
+      const next = new Set(current);
+      for (const result of results) {
+        next.add(result.id);
+      }
+      return next;
+    });
+  }
+
+  function handleClearSelectedResults() {
+    setSelectedImageIds(new Set());
+  }
+
+  async function handleMoveSingleResultToDeleted(result: SearchResult) {
+    if (isBulkDeleting) {
+      return;
+    }
+
+    if (!window.confirm(`Move image #${result.id} to deleted images?`)) {
+      return;
+    }
+
+    await moveResultsToDeleted([result.id]);
+  }
+  async function handleBulkMoveToDeleted() {
+    const imageIds = Array.from(selectedImageIds);
+    if (imageIds.length === 0 || isBulkDeleting) {
+      return;
+    }
+
+    if (!window.confirm(`Move ${imageIds.length} selected image(s) to deleted images?`)) {
+      return;
+    }
+
+    await moveResultsToDeleted(imageIds);
+  }
+
+  async function moveResultsToDeleted(imageIds: number[]) {
+    if (imageIds.length === 0) {
+      return;
+    }
+
+    setIsBulkDeleting(true);
+    try {
+      const result = await imageLibraryApi.bulkDelete(imageIds);
+      const deletedIds = new Set(result.deleted_items.map((item) => item.image_id));
+      setSelectedImageIds((current) => new Set(Array.from(current).filter((imageId) => !deletedIds.has(imageId))));
+      if (selectedResult && deletedIds.has(selectedResult.id)) {
+        setSelectedResult(null);
+      }
+      await queryClient.invalidateQueries({ queryKey: ["search-results"] });
+      await queryClient.invalidateQueries({ queryKey: ["image-library"] });
+      await queryClient.invalidateQueries({ queryKey: ["bookmarks"] });
+
+      if (result.failed_count > 0) {
+        window.alert(`Moved ${result.deleted_count} image(s). Failed to move ${result.failed_count} image(s).`);
+      }
+    } catch (error) {
+      console.error("[SearchResultsPage] Move to deleted failed", error);
+      window.alert("Unable to move selected images to deleted images. Please try again.");
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  }
   function handleToggleBookmark(result: SearchResult) {
     const wasBookmarked = isBookmarked(result.id);
     toggleBookmark(result.id);

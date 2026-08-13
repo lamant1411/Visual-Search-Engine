@@ -334,6 +334,7 @@ async def _list_images(
                 thumbnail_url=image_url,
                 image_url=image_url,
                 similarity_score=0,
+                created_at=image.created_at,
                 metadata=SearchResultMetadata(
                     width=image.width,
                     height=image.height,

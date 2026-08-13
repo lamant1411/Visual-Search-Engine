@@ -1,7 +1,8 @@
 import { apiClient } from './client'
 import type { PaginatedResponse } from './types'
 
-export type SearchQueryType = 'image' | 'semantic' | 'ocr'
+export type SearchQueryType = 'image' | 'semantic' | 'ocr' | 'hybrid'
+export type HistoryFilterType = 'all' | 'image' | 'text'
 
 export interface HistoryItem {
   id: number
@@ -29,7 +30,8 @@ interface HistoryApiResponse {
 export interface HistoryListParams {
   page?: number
   limit?: number
-  query_type?: SearchQueryType
+  query_type?: 'image'
+  query_group?: 'text'
 }
 
 function mapHistoryItem(item: HistoryApiItem): HistoryItem {

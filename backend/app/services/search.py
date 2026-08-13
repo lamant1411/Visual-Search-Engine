@@ -65,6 +65,20 @@ def fuse_search_hits(
     return [e.image_id for e in sorted_entries]
 
 
+def should_prioritize_ocr(query: str, ocr_scores: list[float]) -> bool:
+    """Prefer OCR when a specific query has a near-exact text match.
+
+    A single common word remains semantic-first because it can describe either
+    the visual subject or printed text. Multi-word and long identifiers are
+    strong OCR signals when PostgreSQL reports an exact/normalized match.
+    """
+    normalized_query = _normalize_ocr_query(query)
+    tokens = normalized_query.split()
+    compact_length = len(normalized_query.replace(" ", ""))
+    is_specific_query = len(tokens) >= 2 or compact_length >= 12
+    return is_specific_query and any(score >= 90.0 for score in ocr_scores)
+
+
 # ---------------------------------------------------------------------------
 # CLIP Re-ranking
 # ---------------------------------------------------------------------------
@@ -171,6 +185,7 @@ async def build_search_response_from_hits(
                 thumbnail_url=image_url,
                 image_url=image_url,
                 similarity_score=round(hit.score * 100, 2),
+                created_at=image.created_at,
                 metadata=SearchResultMetadata(
                     width=image.width,
                     height=image.height,
@@ -249,6 +264,7 @@ async def build_search_response_from_ids(
                 thumbnail_url=image_url,
                 image_url=image_url,
                 similarity_score=display_score,
+                created_at=image.created_at,
                 metadata=SearchResultMetadata(
                     width=image.width,
                     height=image.height,
@@ -457,6 +473,7 @@ async def _build_ocr_search_response(
                 thumbnail_url=image_url,
                 image_url=image_url,
                 similarity_score=display_score,
+                created_at=image.created_at,
                 metadata=SearchResultMetadata(
                     width=image.width,
                     height=image.height,

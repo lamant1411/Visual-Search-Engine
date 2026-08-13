@@ -1,8 +1,8 @@
-# API Contract Draft
+# Bản nháp API Contract
 
-This draft is for frontend/backend alignment before real integration.
+Tài liệu dùng để Frontend và Backend thống nhất trước khi tích hợp API thật.
 
-## Auth
+## Xác thực
 
 ### POST /auth/register
 
@@ -45,20 +45,20 @@ Request:
 }
 ```
 
-Response is the same shape as register.
+Response có cùng cấu trúc với API đăng ký.
 
-## Search
+## Tìm kiếm
 
 ### POST /search/image
 
 Request:
 
 - `multipart/form-data`
-- `file`: optional JPG, PNG, or WebP image
-- `image_id`: optional existing image id
-- `imageUrl`: optional stored `/static` image URL
-- `page`: optional, default `1`
-- `limit`: optional, default `20`
+- `file`: ảnh JPG, PNG hoặc WebP, không bắt buộc
+- `image_id`: ID ảnh đã tồn tại, không bắt buộc
+- `imageUrl`: URL ảnh `/static` đã lưu, không bắt buộc
+- `page`: không bắt buộc, mặc định `1`
+- `limit`: không bắt buộc, mặc định `20`
 
 Response:
 
@@ -88,23 +88,22 @@ Response:
 
 Query params:
 
-- `q`: search query
-- `mode`: `semantic` or `ocr`
-- `page`: optional, default `1`
-- `limit`: optional, default `20`
+- `q`: nội dung tìm kiếm
+- `page`: không bắt buộc, mặc định `1`
+- `limit`: không bắt buộc, mặc định `20`
 
-Response is the same shape as image search.
+Response có cùng cấu trúc với Image Search. Backend tự kết hợp Semantic và OCR.
 
-## Bookmarks
+## Đánh dấu ảnh
 
-All bookmark endpoints require a bearer access token.
+Tất cả endpoint Bookmark đều yêu cầu Bearer access token.
 
 ### GET /bookmarks
 
 Query params:
 
-- `page`: optional, default `1`
-- `limit`: optional, default `20`, maximum `100`
+- `page`: không bắt buộc, mặc định `1`
+- `limit`: không bắt buộc, mặc định `20`, tối đa `100`
 
 Response:
 
@@ -127,8 +126,7 @@ Response:
 
 ### GET /bookmarks/image-ids
 
-Returns the current user's saved image IDs so search result cards can display
-their saved state.
+Trả về ID các ảnh người dùng hiện tại đã lưu để thẻ kết quả hiển thị đúng trạng thái.
 
 ```json
 {
@@ -138,8 +136,8 @@ their saved state.
 
 ### POST /bookmarks
 
-Saves an indexed image. The operation is idempotent: saving an existing bookmark
-returns the existing resource instead of creating a duplicate.
+Lưu một ảnh đã index. Thao tác có tính idempotent: lưu lại bookmark đã tồn tại
+sẽ trả về tài nguyên cũ thay vì tạo bản ghi trùng.
 
 ```json
 {
@@ -149,17 +147,17 @@ returns the existing resource instead of creating a duplicate.
 
 ### GET /bookmarks/{bookmarkId}
 
-Returns one saved image with its dimensions, source, and OCR text.
+Trả về một ảnh đã lưu cùng kích thước, nguồn và OCR text.
 
 ### DELETE /bookmarks/images/{imageId}
 
-Removes a bookmark from a search result using its image ID.
+Xóa bookmark từ kết quả tìm kiếm bằng ID ảnh.
 
 ### DELETE /bookmarks/{bookmarkId}
 
-Removes a bookmark using its bookmark resource ID.
+Xóa bookmark bằng ID tài nguyên bookmark.
 
-## Admin
+## Quản trị
 
 ### GET /admin/stats
 
@@ -199,14 +197,14 @@ Response:
 }
 ```
 
-## Error Shape
+## Định dạng lỗi
 
-All APIs should return this shape for handled errors:
+Các API nên trả cấu trúc sau đối với lỗi đã được xử lý:
 
 ```json
 {
   "code": "VALIDATION_ERROR",
-  "message": "Query is required",
+  "message": "Nội dung tìm kiếm là bắt buộc",
   "details": {
     "field": "q"
   }

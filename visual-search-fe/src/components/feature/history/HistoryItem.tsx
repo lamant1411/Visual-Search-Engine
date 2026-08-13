@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FileText, Image, RotateCcw, ScanText, ZoomIn } from 'lucide-react'
+import { FileText, Image, RotateCcw, ZoomIn } from 'lucide-react'
 import type { HistoryItem as HistoryItemType, SearchQueryType } from '@/lib/api/history'
 
 interface HistoryItemProps {
@@ -19,16 +19,22 @@ const typeConfig: Record<
     surfaceClass: 'border-sky-100 bg-sky-50',
   },
   semantic: {
-    label: 'Description',
+    label: 'Text',
     icon: FileText,
     iconClass: 'text-accent-700',
     surfaceClass: 'border-accent-100 bg-accent-50',
   },
   ocr: {
-    label: 'Text in image',
-    icon: ScanText,
-    iconClass: 'text-amber-700',
-    surfaceClass: 'border-amber-100 bg-amber-50',
+    label: 'Text',
+    icon: FileText,
+    iconClass: 'text-accent-700',
+    surfaceClass: 'border-accent-100 bg-accent-50',
+  },
+  hybrid: {
+    label: 'Text',
+    icon: FileText,
+    iconClass: 'text-accent-700',
+    surfaceClass: 'border-accent-100 bg-accent-50',
   },
 }
 
