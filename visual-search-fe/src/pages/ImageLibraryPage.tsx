@@ -693,352 +693,352 @@ export default function ImageLibraryPage() {
             ) : (
               <>
 
-        {!isDeletedView && failedResults.length > 0 && (
-          <section className="rounded-2xl border border-red-200 bg-red-50 p-4 shadow-sm shadow-red-100/50 sm:p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-600 text-white shadow-sm">
-                  <AlertCircle className="h-5 w-5" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-red-900 sm:text-base">
-                    Found {failedResults.length} image(s) with AI indexing errors
-                  </h2>
-                  <p className="mt-1 text-xs leading-5 text-red-700 sm:text-sm">
-                    These images are saved safely in the library, but vector/OCR indexing failed. They are marked with <span className="font-bold underline">Index Error</span> in red.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-
-        <section className="rounded-2xl border border-border bg-white p-4 shadow-sm shadow-slate-200/60 sm:p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold text-ink-primary">Upload to your library</p>
-              <p className="mt-1 text-xs leading-5 text-ink-secondary">
-                Add JPG, PNG, or WebP images to your private library. Each image must be 10MB or less; large selections are uploaded in 100MB chunks.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-              <input
-                ref={uploadInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                multiple
-                className="hidden"
-                onChange={handleUploadFileChange}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                className="min-h-11 rounded-xl shrink-0 whitespace-nowrap"
-                leftIcon={<Upload className="h-4 w-4" />}
-                disabled={isUploadingImages}
-                onClick={() => uploadInputRef.current?.click()}
-              >
-                Choose images
-              </Button>
-              <Button
-                type="button"
-                className="min-h-11 rounded-xl shrink-0 whitespace-nowrap"
-                leftIcon={isUploadingImages ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                disabled={selectedUploadFiles.length === 0 || isUploadingImages}
-                onClick={handleUploadSelectedFiles}
-              >
-                {isUploadingImages ? 'Uploading...' : 'Upload and index'}
-              </Button>
-            </div>
-          </div>
-
-          {(selectedUploadFiles.length > 0 || uploadStatusMessage || uploadErrorMessage || failedUploads.length > 0) && (
-            <div className="mt-4 space-y-3 rounded-2xl border border-border bg-surface-1/40 p-4">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm font-bold text-ink-primary">
-                  {selectedUploadFiles.length.toLocaleString('en-US')} selected image(s)
-                </p>
-                {selectedUploadFiles.length > 0 && !isUploadingImages && (
-                  <button
-                    type="button"
-                    className="text-xs font-bold text-ink-secondary underline underline-offset-2 hover:text-ink-primary"
-                    onClick={handleClearUploadFiles}
-                  >
-                    Clear selection
-                  </button>
-                )}
-              </div>
-
-              {selectedUploadFiles.length > 0 && (
-                <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto pr-1">
-                  {selectedUploadFiles.map((file, index) => (
-                    <span
-                      key={`${file.name}-${file.lastModified}-${index}`}
-                      className="inline-flex max-w-full items-center gap-2 rounded-full border border-border bg-white px-3 py-1.5 text-xs font-semibold text-ink-secondary"
-                    >
-                      <span className="max-w-48 truncate">{file.name}</span>
-                      {!isUploadingImages && (
-                        <button
-                          type="button"
-                          className="rounded-full p-0.5 text-ink-muted hover:bg-surface-1 hover:text-ink-primary"
-                          aria-label={`Remove ${file.name}`}
-                          onClick={() => handleRemoveUploadFile(index)}
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {(isUploadingImages || uploadProgress > 0) && (
-                <div className="space-y-1.5">
-                  <div className="h-2 overflow-hidden rounded-full bg-white">
-                    <div
-                      className="h-full rounded-full bg-accent-600 transition-all"
-                      style={{ width: `${uploadProgress}%` }}
-                    />
-                  </div>
-                  <p className="text-xs font-semibold text-ink-secondary">{uploadProgress}%</p>
-                </div>
-              )}
-
-              {uploadStatusMessage && (
-                <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
-                  {uploadStatusMessage}
-                </p>
-              )}
-
-              {uploadErrorMessage && (
-                <p className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
-                  {uploadErrorMessage}
-                </p>
-              )}
-
-              {failedUploads.length > 0 && (
-                <div className="space-y-2.5 rounded-xl border border-red-200 bg-red-50/80 p-3.5">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="flex items-center gap-2 text-xs font-bold text-red-800">
-                      <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
-                      {failedUploads.length} image(s) failed to upload
-                    </p>
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        className="text-xs font-bold text-red-700 underline underline-offset-2 hover:text-red-900"
-                        onClick={handleRetryFailedUploads}
-                      >
-                        Retry failed images
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-full p-1 text-red-500 hover:bg-red-100 hover:text-red-800"
-                        aria-label="Dismiss error notice"
-                        onClick={() => setFailedUploads([])}
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="max-h-36 space-y-1.5 overflow-y-auto pr-1">
-                    {failedUploads.map((item, idx) => (
-                      <div
-                        key={`${item.fileName}-${idx}`}
-                        className="flex items-center justify-between gap-2 rounded-lg border border-red-100 bg-white px-3 py-2 text-xs font-medium text-red-700 shadow-sm"
-                      >
-                        <span className="truncate font-semibold max-w-[200px] sm:max-w-xs">{item.fileName}</span>
-                        <span className="shrink-0 text-[11px] font-semibold text-red-500">{item.reason}</span>
+                {!isDeletedView && failedResults.length > 0 && (
+                  <section className="rounded-2xl border border-red-200 bg-red-50 p-4 shadow-sm shadow-red-100/50 sm:p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-600 text-white shadow-sm">
+                          <AlertCircle className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h2 className="text-sm font-bold text-red-900 sm:text-base">
+                            Found {failedResults.length} image(s) with AI indexing errors
+                          </h2>
+                          <p className="mt-1 text-xs leading-5 text-red-700 sm:text-sm">
+                            These images are saved safely in the library, but vector/OCR indexing failed. They are marked with <span className="font-bold underline">Index Error</span> in red.
+                          </p>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </section>
-
-        <section className="sticky top-16 z-30 -mx-4 border-y border-border bg-surface-0/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:rounded-2xl sm:border sm:bg-white sm:p-3 sm:shadow-sm sm:shadow-slate-200/60">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm font-bold text-ink-primary">
-              {isDeletedView ? 'Trash images' : 'Library images'}
-            </p>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                aria-label="Refresh image library"
-                type="button"
-                variant="outline"
-                className="min-h-11 rounded-xl"
-                leftIcon={<RefreshCw className={listQuery.isFetching ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />}
-                onClick={() => void listQuery.refetch()}
-              >
-                Refresh
-              </Button>
-
-              {canManageImages && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="min-h-11 rounded-xl"
-                  leftIcon={<CheckSquare className="h-4 w-4" />}
-                  onClick={handleSelectVisibleImages}
-                >
-                  Select visible
-                </Button>
-              )}
-
-              {canManageImages && selectedCount > 0 && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="min-h-11 rounded-xl"
-                  leftIcon={<X className="h-4 w-4" />}
-                  onClick={handleClearSelectedImages}
-                >
-                  Clear
-                </Button>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {canManageImages && selectedCount > 0 && (
-          <section className="flex flex-col gap-3 rounded-2xl border border-border bg-white p-4 shadow-sm shadow-slate-200/70 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-sm font-bold text-ink-primary">
-                {selectedCount.toLocaleString('vi-VN')} selected
-              </p>
-              <p className="mt-1 text-xs text-ink-secondary">
-                {selectedVisibleCount.toLocaleString('vi-VN')} selected from the current loaded view.
-              </p>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-              {isDeletedView ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="min-h-11 rounded-xl"
-                    disabled={isBulkMutating}
-                    leftIcon={<Undo2 className="h-4 w-4" />}
-                    onClick={handleRestoreSelectedImages}
-                  >
-                    {isBulkMutating ? 'Processing...' : 'Restore selected'}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="danger"
-                    className="min-h-11 rounded-xl"
-                    disabled={isBulkMutating}
-                    leftIcon={<Trash2 className="h-4 w-4" />}
-                    onClick={handlePermanentDeleteSelectedImages}
-                  >
-                    {isBulkMutating ? 'Deleting...' : 'Delete permanently'}
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="min-h-11 rounded-xl"
-                    disabled={isBulkMutating}
-                    leftIcon={<FolderPlus className="h-4 w-4" />}
-                    onClick={() => setIsAddSelectedToAlbumOpen(true)}
-                  >
-                    Add selected to album
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="danger"
-                    className="min-h-11 rounded-xl"
-                    disabled={isBulkMutating}
-                    leftIcon={<Trash2 className="h-4 w-4" />}
-                    onClick={handleSoftDeleteSelectedImages}
-                  >
-                    {isBulkMutating ? 'Moving...' : 'Move to deleted'}
-                  </Button>
-                </>
-              )}
-            </div>
-          </section>
-        )}
-
-        {listQuery.error ? (
-          <ErrorState onRetry={() => void listQuery.refetch()} />
-        ) : isInitialLoading ? (
-          <ResultGridSkeleton limit={IMAGE_LIBRARY_PAGE_LIMIT} />
-        ) : !hasResults ? (
-          <EmptyState
-            isBatchView={isBatchView}
-            isDeletedView={isDeletedView}
-          />
-        ) : (
-          <>
-            <div className="space-y-8">
-              {groupedResults.map((group) => (
-                <section key={group.key} className="space-y-3">
-                  <div className="flex items-center justify-between gap-3 border-b border-border pb-2">
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-wide text-ink-muted">Upload date</p>
-                      <h2 className="font-display text-xl font-bold text-ink-primary">{group.label}</h2>
                     </div>
-                    <span className="rounded-full border border-border bg-white px-3 py-1 text-xs font-bold text-ink-secondary shadow-sm">
-                      {group.items.length.toLocaleString('en-US')} image(s)
-                    </span>
+                  </section>
+                )}
+
+
+                <section className="rounded-2xl border border-border bg-white p-4 shadow-sm shadow-slate-200/60 sm:p-5">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-ink-primary">Upload to your library</p>
+                      <p className="mt-1 text-xs leading-5 text-ink-secondary">
+                        Add JPG, PNG, or WebP images to your private library. Each image must be 10MB or less; large selections are uploaded in 100MB chunks.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                      <input
+                        ref={uploadInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        multiple
+                        className="hidden"
+                        onChange={handleUploadFileChange}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="min-h-11 rounded-xl shrink-0 whitespace-nowrap"
+                        leftIcon={<Upload className="h-4 w-4" />}
+                        disabled={isUploadingImages}
+                        onClick={() => uploadInputRef.current?.click()}
+                      >
+                        Choose images
+                      </Button>
+                      <Button
+                        type="button"
+                        className="min-h-11 rounded-xl shrink-0 whitespace-nowrap"
+                        leftIcon={isUploadingImages ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                        disabled={selectedUploadFiles.length === 0 || isUploadingImages}
+                        onClick={handleUploadSelectedFiles}
+                      >
+                        {isUploadingImages ? 'Uploading...' : 'Upload and index'}
+                      </Button>
+                    </div>
                   </div>
-                  <ResultGrid
-                    results={group.items}
-                    isBookmarked={isDeletedView ? undefined : isBookmarked}
-                    showSimilarity={false}
-                    onBookmark={isDeletedView ? undefined : handleBookmark}
-                    onSelectResult={setSelectedResult}
-                    selectable={canManageImages}
-                    isSelected={(imageId) => selectedImageIds.has(imageId)}
-                    onToggleSelect={handleToggleSelect}
-                  />
+
+                  {(selectedUploadFiles.length > 0 || uploadStatusMessage || uploadErrorMessage || failedUploads.length > 0) && (
+                    <div className="mt-4 space-y-3 rounded-2xl border border-border bg-surface-1/40 p-4">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-sm font-bold text-ink-primary">
+                          {selectedUploadFiles.length.toLocaleString('en-US')} selected image(s)
+                        </p>
+                        {selectedUploadFiles.length > 0 && !isUploadingImages && (
+                          <button
+                            type="button"
+                            className="text-xs font-bold text-ink-secondary underline underline-offset-2 hover:text-ink-primary"
+                            onClick={handleClearUploadFiles}
+                          >
+                            Clear selection
+                          </button>
+                        )}
+                      </div>
+
+                      {selectedUploadFiles.length > 0 && (
+                        <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto pr-1">
+                          {selectedUploadFiles.map((file, index) => (
+                            <span
+                              key={`${file.name}-${file.lastModified}-${index}`}
+                              className="inline-flex max-w-full items-center gap-2 rounded-full border border-border bg-white px-3 py-1.5 text-xs font-semibold text-ink-secondary"
+                            >
+                              <span className="max-w-48 truncate">{file.name}</span>
+                              {!isUploadingImages && (
+                                <button
+                                  type="button"
+                                  className="rounded-full p-0.5 text-ink-muted hover:bg-surface-1 hover:text-ink-primary"
+                                  aria-label={`Remove ${file.name}`}
+                                  onClick={() => handleRemoveUploadFile(index)}
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {(isUploadingImages || uploadProgress > 0) && (
+                        <div className="space-y-1.5">
+                          <div className="h-2 overflow-hidden rounded-full bg-white">
+                            <div
+                              className="h-full rounded-full bg-accent-600 transition-all"
+                              style={{ width: `${uploadProgress}%` }}
+                            />
+                          </div>
+                          <p className="text-xs font-semibold text-ink-secondary">{uploadProgress}%</p>
+                        </div>
+                      )}
+
+                      {uploadStatusMessage && (
+                        <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+                          {uploadStatusMessage}
+                        </p>
+                      )}
+
+                      {uploadErrorMessage && (
+                        <p className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                          {uploadErrorMessage}
+                        </p>
+                      )}
+
+                      {failedUploads.length > 0 && (
+                        <div className="space-y-2.5 rounded-xl border border-red-200 bg-red-50/80 p-3.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="flex items-center gap-2 text-xs font-bold text-red-800">
+                              <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
+                              {failedUploads.length} image(s) failed to upload
+                            </p>
+                            <div className="flex items-center gap-3">
+                              <button
+                                type="button"
+                                className="text-xs font-bold text-red-700 underline underline-offset-2 hover:text-red-900"
+                                onClick={handleRetryFailedUploads}
+                              >
+                                Retry failed images
+                              </button>
+                              <button
+                                type="button"
+                                className="rounded-full p-1 text-red-500 hover:bg-red-100 hover:text-red-800"
+                                aria-label="Dismiss error notice"
+                                onClick={() => setFailedUploads([])}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="max-h-36 space-y-1.5 overflow-y-auto pr-1">
+                            {failedUploads.map((item, idx) => (
+                              <div
+                                key={`${item.fileName}-${idx}`}
+                                className="flex items-center justify-between gap-2 rounded-lg border border-red-100 bg-white px-3 py-2 text-xs font-medium text-red-700 shadow-sm"
+                              >
+                                <span className="truncate font-semibold max-w-[200px] sm:max-w-xs">{item.fileName}</span>
+                                <span className="shrink-0 text-[11px] font-semibold text-red-500">{item.reason}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </section>
-              ))}
-            </div>
 
-            {listQuery.isFetchingNextPage && (
-              <div className="mt-5">
-                <ResultGridSkeleton limit={8} />
-              </div>
-            )}
+                <section className="sticky top-16 z-30 -mx-4 border-y border-border bg-surface-0/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:rounded-2xl sm:border sm:bg-white sm:p-3 sm:shadow-sm sm:shadow-slate-200/60">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm font-bold text-ink-primary">
+                      {isDeletedView ? 'Trash images' : 'Library images'}
+                    </p>
 
-            {listQuery.isFetchNextPageError && (
-              <div className="flex flex-col items-center gap-3 rounded-2xl border border-red-100 bg-red-50 p-5 text-center">
-                <p className="text-sm font-semibold text-red-700">Unable to load more images.</p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  leftIcon={<RotateCcw className="h-4 w-4" />}
-                  onClick={() => void fetchNextImagePage()}
-                >
-                  Try again
-                </Button>
-              </div>
-            )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        aria-label="Refresh image library"
+                        type="button"
+                        variant="outline"
+                        className="min-h-11 rounded-xl"
+                        leftIcon={<RefreshCw className={listQuery.isFetching ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />}
+                        onClick={() => void listQuery.refetch()}
+                      >
+                        Refresh
+                      </Button>
 
-            {hasResults && (
-              <div
-                ref={loadMoreRef}
-                className="flex min-h-16 items-center justify-center rounded-2xl border border-border bg-white px-4 py-5 text-center text-sm font-semibold text-ink-muted shadow-sm shadow-slate-200/50"
-              >
-                {listQuery.hasNextPage
-                  ? listQuery.isFetchingNextPage
-                    ? 'Loading more images...'
-                    : 'Scroll to load more images'
-                  : `All ${loadedCount.toLocaleString('en-US')} images are loaded`}
-              </div>
+                      {canManageImages && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="min-h-11 rounded-xl"
+                          leftIcon={<CheckSquare className="h-4 w-4" />}
+                          onClick={handleSelectVisibleImages}
+                        >
+                          Select visible
+                        </Button>
+                      )}
+
+                      {canManageImages && selectedCount > 0 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="min-h-11 rounded-xl"
+                          leftIcon={<X className="h-4 w-4" />}
+                          onClick={handleClearSelectedImages}
+                        >
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </section>
+
+                {canManageImages && selectedCount > 0 && (
+                  <section className="flex flex-col gap-3 rounded-2xl border border-border bg-white p-4 shadow-sm shadow-slate-200/70 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <p className="text-sm font-bold text-ink-primary">
+                        {selectedCount.toLocaleString('vi-VN')} selected
+                      </p>
+                      <p className="mt-1 text-xs text-ink-secondary">
+                        {selectedVisibleCount.toLocaleString('vi-VN')} selected from the current loaded view.
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+                      {isDeletedView ? (
+                        <>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="min-h-11 rounded-xl"
+                            disabled={isBulkMutating}
+                            leftIcon={<Undo2 className="h-4 w-4" />}
+                            onClick={handleRestoreSelectedImages}
+                          >
+                            {isBulkMutating ? 'Processing...' : 'Restore selected'}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="danger"
+                            className="min-h-11 rounded-xl"
+                            disabled={isBulkMutating}
+                            leftIcon={<Trash2 className="h-4 w-4" />}
+                            onClick={handlePermanentDeleteSelectedImages}
+                          >
+                            {isBulkMutating ? 'Deleting...' : 'Delete permanently'}
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="min-h-11 rounded-xl"
+                            disabled={isBulkMutating}
+                            leftIcon={<FolderPlus className="h-4 w-4" />}
+                            onClick={() => setIsAddSelectedToAlbumOpen(true)}
+                          >
+                            Add selected to album
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="danger"
+                            className="min-h-11 rounded-xl"
+                            disabled={isBulkMutating}
+                            leftIcon={<Trash2 className="h-4 w-4" />}
+                            onClick={handleSoftDeleteSelectedImages}
+                          >
+                            {isBulkMutating ? 'Moving...' : 'Move to deleted'}
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </section>
+                )}
+
+                {listQuery.error ? (
+                  <ErrorState onRetry={() => void listQuery.refetch()} />
+                ) : isInitialLoading ? (
+                  <ResultGridSkeleton limit={IMAGE_LIBRARY_PAGE_LIMIT} />
+                ) : !hasResults ? (
+                  <EmptyState
+                    isBatchView={isBatchView}
+                    isDeletedView={isDeletedView}
+                  />
+                ) : (
+                  <>
+                    <div className="space-y-8">
+                      {groupedResults.map((group) => (
+                        <section key={group.key} className="space-y-3">
+                          <div className="flex items-center justify-between gap-3 border-b border-border pb-2">
+                            <div>
+                              {/* <p className="text-xs font-bold uppercase tracking-wide text-ink-muted">Upload date</p> */}
+                              <h2 className="italic text-sm text-ink-muted">{group.label}</h2>
+                            </div>
+                            <span className="rounded-full border border-border bg-white px-3 py-1 text-xs font-bold text-ink-secondary shadow-sm">
+                              {group.items.length.toLocaleString('en-US')} image(s)
+                            </span>
+                          </div>
+                          <ResultGrid
+                            results={group.items}
+                            isBookmarked={isDeletedView ? undefined : isBookmarked}
+                            showSimilarity={false}
+                            onBookmark={isDeletedView ? undefined : handleBookmark}
+                            onSelectResult={setSelectedResult}
+                            selectable={canManageImages}
+                            isSelected={(imageId) => selectedImageIds.has(imageId)}
+                            onToggleSelect={handleToggleSelect}
+                          />
+                        </section>
+                      ))}
+                    </div>
+
+                    {listQuery.isFetchingNextPage && (
+                      <div className="mt-5">
+                        <ResultGridSkeleton limit={8} />
+                      </div>
+                    )}
+
+                    {listQuery.isFetchNextPageError && (
+                      <div className="flex flex-col items-center gap-3 rounded-2xl border border-red-100 bg-red-50 p-5 text-center">
+                        <p className="text-sm font-semibold text-red-700">Unable to load more images.</p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          leftIcon={<RotateCcw className="h-4 w-4" />}
+                          onClick={() => void fetchNextImagePage()}
+                        >
+                          Try again
+                        </Button>
+                      </div>
+                    )}
+
+                    {hasResults && (
+                      <div
+                        ref={loadMoreRef}
+                        className="flex min-h-16 items-center justify-center rounded-2xl border border-border bg-white px-4 py-5 text-center text-sm font-semibold text-ink-muted shadow-sm shadow-slate-200/50"
+                      >
+                        {listQuery.hasNextPage
+                          ? listQuery.isFetchingNextPage
+                            ? 'Loading more images...'
+                            : 'Scroll to load more images'
+                          : `All ${loadedCount.toLocaleString('en-US')} images are loaded`}
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
             )}
-          </>
-        )}
-            </>
-          )}
           </main>
         </div>
       </PageContainer>
@@ -1122,11 +1122,11 @@ function groupResultsByUploadDate(results: SearchResult[]): UploadDateGroup[] {
     const key = hasValidDate ? parsedDate.toISOString().slice(0, 10) : 'unknown'
     const label = hasValidDate
       ? parsedDate.toLocaleDateString('en-US', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        })
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
       : 'Unknown upload date'
 
     const currentGroup = groups.get(key)
